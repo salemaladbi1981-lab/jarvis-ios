@@ -41,6 +41,7 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     func startListening() {
         eventPublisher.send(.listening)
         audio.onPCM = { [weak self] data in self?.sendAudio(pcm16: data) }
+        audio.onDiagnostics = { [weak self] msg in self?.trace("AEC diag: \(msg)") }
         do {
             try audio.start()
         } catch {

@@ -13,6 +13,7 @@ final class VoiceAudioEngine {
 
     // Mic tap (AEC-applied via voice-processing session)
     var onPCM: ((Data) -> Void)?
+    var onDiagnostics: ((String) -> Void)?
 
     // Playback coalescing
     private var queue: [Data] = []
@@ -30,9 +31,8 @@ final class VoiceAudioEngine {
         guard !started else { return }
         #if os(iOS)
         let session = AVAudioSession.sharedInstance()
-        // .default mode: gain طبيعي. (AEC الحقيقي يتطلب AVCaptureSession/VPIO —
-        // AVAudioEngine.inputNode يقرأ raw audio ولا يمر عبر voice-processing.)
-        try session.setCategory(.playAndRecord, mode: .default,
+        // Voice-processing mode (AEC عبر VPIO داخل AVAudioEngine).
+        try session.setCategory(.playAndRecord, mode: .voiceChat,
                                 options: [.allowBluetooth, .defaultToSpeaker])
         try session.setActive(true, options: [])
         #endif
@@ -42,6 +42,9 @@ final class VoiceAudioEngine {
         engine.connect(player, to: engine.mainMixerNode, format: format)
         player.volume = 1.0
         engine.mainMixerNode.outputVolume = 1.0
+
+        // AEC: فعّل voice processing على الـ I/O node قبل start (Apple official path)
+        try engine.inputNode.setVoiceProcessingEnabled(true)
 
         // Input tap (AEC-applied)
         let input = engine.inputNode
@@ -58,6 +61,14 @@ final class VoiceAudioEngine {
         try engine.start()
         player.play()
         started = true
+
+        #if os(iOS)
+        let vpEnabled = engine.inputNode.isVoiceProcessingEnabled
+        let vpBypassed = engine.inputNode.isVoiceProcessingBypassed
+        let route = session.currentRoute.outputs.first?.portType.rawValue ?? "?"
+        let sessionMode = session.mode.rawValue
+        onDiagnostics?("AEC vpEnabled=\(vpEnabled) vpBypassed=\(vpBypassed) mode=\(sessionMode) route=\(route) hwRate=\(Int(hwFormat.sampleRate))")
+        #endif
     }
 
     /// Enqueue PCM16 (24kHz mono). Coalesces small deltas into ~100ms buffers.
