@@ -16,6 +16,7 @@ APP_SOURCES = [
     "JARVIS/Core/JarvisHeroView.swift", "JARVIS/Core/ApprovalCardView.swift",
     "JARVIS/iPad/iPadLandscapeView.swift", "JARVIS/iPad/AdaptiveRootView.swift",
     "JARVIS/macOS/MacApp.swift", "JARVIS/macOS/MacHomeView.swift",
+    "JARVIS/Voice/VoiceSession.swift", "JARVIS/Voice/RealtimeVoiceSession.swift",
     "JARVIS/Cards/Cards.swift",
     "JARVIS/State/JarvisState.swift",
     "JARVIS/Agents/AgentRegistry.swift", "JARVIS/Agents/AgentStore.swift",
@@ -76,6 +77,7 @@ groups["Providers"] = subgroup("Providers", [p for p in APP_SOURCES if "/Provide
 groups["Mocks"] = subgroup("Mocks", [p for p in APP_SOURCES if "/Mocks/" in p])
 groups["iPad"] = subgroup("iPad", [p for p in APP_SOURCES if "/iPad/" in p])
 groups["macOS"] = subgroup("macOS", [p for p in APP_SOURCES if "/macOS/" in p])
+groups["Voice"] = subgroup("Voice", [p for p in APP_SOURCES if "/Voice/" in p])
 
 font_refs = [app_res_refs[p] for p in APP_RESOURCES if "Fonts" in p]
 json_refs = [app_res_refs[p] for p in APP_RESOURCES if "Resources" in p]
@@ -88,7 +90,7 @@ resources_group = group(sorted(json_refs), "Resources", "Resources")
 jarvis_group = group(
     [groups["App"], groups["Home"], groups["Core"], groups["Cards"],
      groups["State"], groups["Agents"], groups["DesignSystem"],
-     groups["Providers"], groups["Mocks"], groups["iPad"], groups["macOS"], assets_group, resources_group, plist_ref],
+     groups["Providers"], groups["Mocks"], groups["iPad"], groups["macOS"], groups["Voice"], assets_group, resources_group, plist_ref],
     "JARVIS", "JARVIS"
 )
 tests_group = group(sorted(test_refs.values()), "JARVISTests", "JARVISTests")
