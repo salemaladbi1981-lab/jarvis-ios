@@ -30,8 +30,9 @@ final class VoiceAudioEngine {
         guard !started else { return }
         #if os(iOS)
         let session = AVAudioSession.sharedInstance()
-        // AEC: voice-processing mode (يلغي echo من الـ speaker عبر VPIO).
-        try session.setCategory(.playAndRecord, mode: .voiceChat,
+        // .default mode: gain طبيعي. (AEC الحقيقي يتطلب AVCaptureSession/VPIO —
+        // AVAudioEngine.inputNode يقرأ raw audio ولا يمر عبر voice-processing.)
+        try session.setCategory(.playAndRecord, mode: .default,
                                 options: [.allowBluetooth, .defaultToSpeaker])
         try session.setActive(true, options: [])
         #endif
@@ -62,14 +63,18 @@ final class VoiceAudioEngine {
     /// Enqueue PCM16 (24kHz mono). Coalesces small deltas into ~100ms buffers.
     func enqueueAudio(_ data: Data) {
         queue.append(data)
-        drainQueue()
+        drainQueue(force: false)
     }
 
-    private func drainQueue() {
+    /// يُستدعى عند نهاية الرد — يفلش tail buffer المتبقي (<100ms) فوراً.
+    func flushTail() {
+        drainQueue(force: true)
+    }
+
+    private func drainQueue(force: Bool) {
         guard !isPlaying, !queue.isEmpty else { return }
-        // تجميع حتى ~100ms (jitter fix — لا scheduleBuffer لكل delta صغيرة).
         var collected = Data()
-        while !queue.isEmpty && collected.count < targetBufferBytes {
+        while !queue.isEmpty && (force || collected.count < targetBufferBytes) {
             collected.append(queue.removeFirst())
         }
         guard !collected.isEmpty, let buffer = Self.toBuffer(collected, format: format) else {
@@ -80,7 +85,7 @@ final class VoiceAudioEngine {
         player.scheduleBuffer(buffer) { [weak self] in
             guard let self else { return }
             self.isPlaying = false
-            self.drainQueue()
+            self.drainQueue(force: false)
             if self.queue.isEmpty {
                 self.onPlaybackDrained?()
             }

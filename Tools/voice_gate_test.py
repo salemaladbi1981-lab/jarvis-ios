@@ -20,12 +20,12 @@ check("shared engine: AVAudioPlayerNode", 'AVAudioPlayerNode' in vae)
 check("input tap (installTap)", 'installTap' in vae)
 check("24kHz PCM16", '24000' in vae and 'pcmFormatInt16' in vae)
 # AEC via voice-processing mode
-check("AEC: voiceChat mode", 'mode: .voiceChat' in vae)
+check("volume: .default mode (inputNode ليس AEC)", 'mode: .default' in vae)
 check("AEC: defaultToSpeaker", '.defaultToSpeaker' in vae)
 # C. Coalescing (jitter fix)
 check("coalescing: targetBufferBytes", 'targetBufferBytes' in vae)
-check("coalescing: drainQueue merge", 'collected.count < targetBufferBytes' in vae)
-check("continuous scheduling (completion→drain)", 'self.drainQueue()' in vae)
+check("coalescing tail flush (flushTail)", 'func flushTail()' in vae and 'drainQueue(force: true)' in vae)
+check("continuous scheduling (completion→drain)", 'self.drainQueue(force: false)' in vae)
 # B. Barge-in flush
 check("flush (barge-in)", 'func flush()' in vae and 'player.reset()' in vae)
 
@@ -33,8 +33,8 @@ check("flush (barge-in)", 'func flush()' in vae and 'player.reset()' in vae)
 check("session uses VoiceAudioEngine", 'VoiceAudioEngine()' in rvs)
 check("no MicrophoneCapture/AudioPlayback (merged)", 'MicrophoneCapture' not in rvs and 'AudioPlayback' not in rvs)
 check("full-duplex: no pauseMic/resumeMic", 'pauseMic' not in rvs and 'resumeMic' not in rvs)
-check("barge-in: isSpeaking + bargeIn on speech_started", 'isSpeaking' in rvs and 'bargeIn' in rvs and 'speech_started' in rvs)
-check("barge-in flushes audio", 'audio.flush()' in rvs)
+check("no auto-bargeIn on speech_started (echo-safe)", 'speech_started' in rvs and 'bargeIn' in rvs)
+check("flushTail on response.done", 'audio.flushTail()' in rvs)
 check("no manual commit (server VAD owns)", 'input_audio_buffer.commit' not in rvs)
 
 # mic permission

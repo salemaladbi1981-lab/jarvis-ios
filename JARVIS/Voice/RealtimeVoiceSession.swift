@@ -115,11 +115,10 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                 }
                 eventPublisher.send(.speaking)
             case "input_audio_buffer.speech_started":
+                // لا bargeIn تلقائي هنا — الـ echo (بدون AEC عبر inputNode) يسبب
+                // false speech_started كان يقطع رد جارفس نفسه. الـ model native
+                // interrupt_response هو المسؤول عن barge-in الحقيقي.
                 trace("VAD speech_started payload: \(text)")
-                // Barge-in: كلام المستخدم أثناء رد جارفس → إلغاء الرد الجاري.
-                if isSpeaking {
-                    bargeIn()
-                }
             case "input_audio_buffer.speech_stopped":
                 trace("VAD speech_stopped payload: \(text)")
             case "conversation.item.input_audio_transcription.completed":
@@ -133,6 +132,7 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                 break
             case "response.done":
                 isSpeaking = false
+                audio.flushTail()   // يفلش tail buffer المتبقي (<100ms)
                 eventPublisher.send(.connected)
             case "response.function_call_arguments.done":
                 eventPublisher.send(.toolExecuting)
