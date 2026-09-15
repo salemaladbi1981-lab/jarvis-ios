@@ -16,7 +16,8 @@ final class AudioPlayback {
     func start() throws {
         #if os(iOS)
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.playAndRecord, mode: .voiceChat,
+        // .default mode (بدل .voiceChat) — يمنع خفض الـ speaker gain.
+        try session.setCategory(.playAndRecord, mode: .default,
                                 options: [.allowBluetooth, .defaultToSpeaker])
         try session.setActive(true, options: [])
         #endif
@@ -25,6 +26,8 @@ final class AudioPlayback {
             engine.connect(player, to: engine.mainMixerNode, format: format)
             ready = true
         }
+        player.volume = 1.0
+        engine.mainMixerNode.outputVolume = 1.0
         engine.prepare()
         try engine.start()
         player.play()
