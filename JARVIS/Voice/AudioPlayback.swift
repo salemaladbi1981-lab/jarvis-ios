@@ -42,6 +42,10 @@ final class AudioPlayback {
     func stop() {
         player.stop()
         engine.stop()
+        #if os(iOS)
+        // deactivation هنا فقط (full stop) — وليس في mic.pause.
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        #endif
     }
 
     private static func toBuffer(_ data: Data, format: AVAudioFormat) -> AVAudioPCMBuffer? {

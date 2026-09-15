@@ -57,5 +57,18 @@ import re as _re
 _m = _re.search(r'private func handleAudio\(.*?\n    \}', rvs2, _re.DOTALL)
 check("handleAudio no duplicate .speaking", _m is not None and 'eventPublisher.send(.speaking)' not in _m.group(0))
 
+
+# BUG#6.2: mic.stop must NOT kill shared AVAudioSession (playback silence)
+mic2 = read('Voice/MicrophoneCapture.swift')
+play2 = read('Voice/AudioPlayback.swift')
+def _stop_block(src, name):
+    import re
+    m = re.search(r'func stop\(\) \{.*?\n    \}', src, re.DOTALL)
+    return m.group(0) if m else ''
+_mic_stop = _stop_block(mic2, 'Mic')
+_play_stop = _stop_block(play2, 'Play')
+check("mic.stop does NOT deactivate AudioSession", 'setActive(false' not in _mic_stop)
+check("playback.stop owns AudioSession deactivation", 'setActive(false' in _play_stop)
+
 print(f"\n== RESULT: {PASS} PASS / {FAIL} FAIL ==")
 sys.exit(1 if FAIL else 0)

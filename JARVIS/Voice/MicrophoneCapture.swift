@@ -37,11 +37,9 @@ final class MicrophoneCapture {
     }
 
     func stop() {
+        // إيقاف الالتقاط فقط — لا نوقف AVAudioSession (مشترك مع الـ playback).
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
-        #if os(iOS)
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-        #endif
     }
 
     private func convert(_ buffer: AVAudioPCMBuffer, using conv: AVAudioConverter) -> Data? {
