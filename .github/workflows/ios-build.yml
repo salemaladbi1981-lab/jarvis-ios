@@ -15,14 +15,18 @@ jobs:
         run: |
           xcodebuild build \
             -project JARVIS.xcodeproj \
-            -target JARVIS \
+            -scheme JARVIS \
             -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
+          echo "=== Built products ==="
+          find build -name "*.app" -type d 2>/dev/null
+          find build -name "JARVIS" -type f 2>/dev/null | head
 
       - name: Boot simulator + install + launch + screenshot
         run: |
-          APP=$(find ~/Library/Developer/Xcode/DerivedData -name "JARVIS.app" -type d 2>/dev/null | head -1)
+          APP=$(find build -name "JARVIS.app" -type d 2>/dev/null | head -1)
           echo "APP=$APP"
           xcrun simctl boot "iPhone 15" 2>/dev/null || true
           xcrun simctl install "iPhone 15" "$APP"
