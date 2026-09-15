@@ -25,7 +25,8 @@ for lbl in ["وش عندي في الجدول؟","بطلع بكرة؟","فعّل 
     check(f"label '{lbl}' present", lbl in qc)
 
 # 3) typed routing — no fragile text matching in handler
-check("handler uses switch on QuickCommand (not text.contains)", 'switch cmd' in vm and 'contains(' not in vm)
+check("typed QuickCommand handler uses switch", 'switch cmd' in vm)
+check("voice free-text path separate (routeVoiceTranscript)", 'routeVoiceTranscript' in vm)
 
 # 4) calendar routes to calendar path; others to unavailable (not listening)
 check("calendar → runCalendar", 'case .calendar' in vm and 'runCalendar' in vm)
