@@ -58,16 +58,11 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     /// إيقاف الالتقاط أثناء رد النموذج (half-duplex) — يمنع echo/تداخل الـ turn.
     private func pauseMic() {
         guard micActive else { return }
-        trace("pauseMic — mic.stop + commit")
+        trace("pauseMic — mic.stop")
         mic.stop()
         micActive = false
-        // إغلاق الـ input buffer صراحة — لا مزيد من الـ audio يُعالج.
-        commitInputBuffer()
-    }
-
-    private func commitInputBuffer() {
-        let commit = #"{"type":"input_audio_buffer.commit"}"#
-        ws?.send(.string(commit)) { _ in }
+        // لا manual commit هنا — الـ server VAD (semantic_vad) يملك الـ commit
+        // (مساران commit لنفس الـ turn → input_audio_buffer_commit_empty error).
     }
 
     /// إعادة الاستماع بعد اكتمال الرد.
