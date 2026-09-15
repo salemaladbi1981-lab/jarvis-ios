@@ -66,19 +66,15 @@ final class HomeViewModel: ObservableObject {
     }
 
 
-    // MARK: Quick commands (calendar/reminders real read path)
-    func handleQuickCommand(_ text: String) async {
-        let t = text.lowercased()
-        if t.contains("جدول") || t.contains("موعد") || t.contains("calendar") || t.contains("schedule") {
+    // MARK: Quick commands (typed routing — no fragile text matching)
+    func handleQuickCommand(_ cmd: QuickCommand) async {
+        switch cmd {
+        case .calendar:
             await runCalendar(kind: "today")
-        } else if t.contains("تذكير") || t.contains("reminder") {
-            await runReminders()
-        } else {
-            // أمر عام غير مرتبط بأداة — يعرض حالة فكرية ثم يرجع.
-            state = .thinking
-            calendarMessage = nil
-            try? await Task.sleep(nanoseconds: 250_000_000)
-            state = .idle
+        case .tomorrow, .focus, .doorCamera, .calmMedia:
+            // لا مسار تنفيذ حقيقي بعد — اعرض الحالة الصادقة، ولا تشغّل صوت/استماع.
+            state = .alert
+            calendarMessage = "\(cmd.label)\nالحالة: \(cmd.capabilityStatus.rawValue) — \(cmd.unavailableReason)"
         }
     }
 

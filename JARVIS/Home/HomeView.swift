@@ -6,14 +6,6 @@ struct HomeView: View {
     @StateObject private var vm = HomeViewModel()
     @State private var selectedTab = "home"
 
-    private let suggestions = [
-        "وش عندي في الجدول؟",
-        "فعّل وضع التركيز",
-        "ورّني كاميرا الباب",
-        "شغّل شي هادي",
-        "بطلع بكرة؟",
-    ]
-
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -34,8 +26,8 @@ struct HomeView: View {
 
                     MediaCard(track: vm.mediaTrack ?? MediaTrack(title: "Blinding Lights", artist: "The Weeknd", current: "2:06", duration: "3:20"))
 
-                    QuickSuggestions(suggestions: suggestions) { text in
-                        Task { await vm.handleQuickCommand(text) }
+                    QuickSuggestions(commands: QuickCommand.allCases) { cmd in
+                        Task { await vm.handleQuickCommand(cmd) }
                     }
 
                     VoiceInputBar(isListening: vm.isListening) { vm.cycleState() }

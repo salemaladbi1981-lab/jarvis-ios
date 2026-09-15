@@ -6,14 +6,6 @@ struct iPadLandscapeView: View {
     @StateObject private var vm = HomeViewModel()
     @State private var selectedTab = "home"
 
-    private let suggestions = [
-        "وش عندي في الجدول؟",
-        "فعّل وضع التركيز",
-        "ورّني كاميرا الباب",
-        "شغّل شي هادي",
-        "بطلع بكرة؟",
-    ]
-
     var body: some View {
         VStack(spacing: 0) {
             HeaderView()
@@ -41,8 +33,8 @@ struct iPadLandscapeView: View {
                         SecurityCard(status: vm.securityStatus ?? SecurityStatus(systemsNormal: true, doorsLocked: true, camerasActive: true))
                             .onTapGesture { vm.requestAction(agentID: "core_home", action: "unlock-door") }
                         MediaCard(track: vm.mediaTrack ?? MediaTrack(title: "Blinding Lights", artist: "The Weeknd", current: "2:06", duration: "3:20"))
-                        QuickSuggestions(suggestions: suggestions) { text in
-                            Task { await vm.handleQuickCommand(text) }
+                        QuickSuggestions(commands: QuickCommand.allCases) { cmd in
+                            Task { await vm.handleQuickCommand(cmd) }
                         }
                     }
                 }

@@ -9,14 +9,6 @@ struct MacHomeView: View {
     @StateObject private var vm = HomeViewModel()
     @State private var selectedTab = "home"
 
-    private let suggestions = [
-        "وش عندي في الجدول؟",
-        "فعّل وضع التركيز",
-        "ورّني كاميرا الباب",
-        "شغّل شي هادي",
-        "بطلع بكرة؟",
-    ]
-
     var body: some View {
         HStack(spacing: 0) {
             // LEFT zone — nav + cards
@@ -47,8 +39,8 @@ struct MacHomeView: View {
 
                     JarvisWaveformStatusView(vm: vm)
 
-                    QuickSuggestions(suggestions: suggestions) { text in
-                            Task { await vm.handleQuickCommand(text) }
+                    QuickSuggestions(commands: QuickCommand.allCases) { cmd in
+                            Task { await vm.handleQuickCommand(cmd) }
                         }
 
                     VoiceInputBar(isListening: vm.isListening) { vm.cycleState() }
