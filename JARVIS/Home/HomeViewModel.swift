@@ -15,6 +15,7 @@ final class HomeViewModel: ObservableObject {
     @Published private(set) var securityStatus: SecurityStatus?
     @Published private(set) var mediaTrack: MediaTrack?
     @Published private(set) var isListening = false
+    @Published var calendarMessage: String?
 
     // Dependencies
     private let smartHome: SmartHomeProvider
@@ -23,6 +24,8 @@ final class HomeViewModel: ObservableObject {
     private let voice: VoiceProvider
     private var approval: ApprovalPolicyEvaluator?
     private(set) var registry: AgentRegistry?
+    private let calendarTools = CalendarTools(useMock: false)
+    private let calendarProvider = AppleEventKitProvider()
 
     init(
         smartHome: SmartHomeProvider = MockSmartHomeProvider(),
@@ -60,6 +63,83 @@ final class HomeViewModel: ObservableObject {
                 }
             }
         }
+    }
+
+
+    // MARK: Quick commands (calendar/reminders real read path)
+    func handleQuickCommand(_ text: String) async {
+        let t = text.lowercased()
+        if t.contains("جدول") || t.contains("موعد") || t.contains("calendar") || t.contains("schedule") {
+            await runCalendar(kind: "today")
+        } else if t.contains("تذكير") || t.contains("reminder") {
+            await runReminders()
+        } else {
+            // أمر عام غير مرتبط بأداة — يعرض حالة فكرية ثم يرجع.
+            state = .thinking
+            calendarMessage = nil
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            state = .idle
+        }
+    }
+
+    private func runCalendar(kind: String) async {
+        state = .executing
+        // OS permission flow: عند notDetermined اطلب الصلاحية فعليًا
+        var access = await calendarProvider.eventAccess()
+        if access == .notDetermined {
+            access = await calendarProvider.requestEvents()
+        }
+        guard access == .authorized else {
+            state = .alert
+            calendarMessage = access == .denied
+                ? "صلاحية التقويم مرفوضة — فعّلها من إعدادات النظام"
+                : "التقويم غير متاح"
+            return
+        }
+        let result = await calendarTools.today()
+        state = .idle
+        if result.ok {
+            calendarMessage = Self.formatEvents(result.events)
+        } else {
+            state = .alert
+            calendarMessage = "التقويم غير متاح"
+        }
+    }
+
+    private func runReminders() async {
+        state = .executing
+        var access = await calendarProvider.reminderAccess()
+        if access == .notDetermined {
+            access = await calendarProvider.requestReminders()
+        }
+        guard access == .authorized else {
+            state = .alert
+            calendarMessage = access == .denied
+                ? "صلاحية التذكيرات مرفوضة — فعّلها من إعدادات النظام"
+                : "التذكيرات غير متاحة"
+            return
+        }
+        let result = await calendarTools.upcomingReminders()
+        state = .idle
+        if result.ok {
+            calendarMessage = Self.formatReminders(result.reminders)
+        } else {
+            state = .alert
+            calendarMessage = "التذكيرات غير متاحة"
+        }
+    }
+
+    private static func formatEvents(_ events: [JarvisCalendarEvent]) -> String {
+        guard !events.isEmpty else { return "لا توجد مواعيد اليوم" }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "ar_QA")
+        f.dateFormat = "h:mm a"
+        return events.prefix(5).map { "\(f.string(from: $0.start)) — \($0.title)" }.joined(separator: "\n")
+    }
+
+    private static func formatReminders(_ reminders: [JarvisReminderItem]) -> String {
+        guard !reminders.isEmpty else { return "لا توجد تذكيرات" }
+        return reminders.prefix(5).map { "• \($0.title)" }.joined(separator: "\n")
     }
 
     // MARK: Agents

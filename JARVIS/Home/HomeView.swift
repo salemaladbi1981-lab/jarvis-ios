@@ -34,9 +34,21 @@ struct HomeView: View {
 
                     MediaCard(track: vm.mediaTrack ?? MediaTrack(title: "Blinding Lights", artist: "The Weeknd", current: "2:06", duration: "3:20"))
 
-                    QuickSuggestions(suggestions: suggestions)
+                    QuickSuggestions(suggestions: suggestions) { text in
+                        Task { await vm.handleQuickCommand(text) }
+                    }
 
                     VoiceInputBar(isListening: vm.isListening) { vm.cycleState() }
+
+                    if let msg = vm.calendarMessage {
+                        Text(msg)
+                            .font(.system(size: 14))
+                            .foregroundColor(JarvisColor.text_primary)
+                            .padding(JarvisSpacing.md)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(RoundedRectangle(cornerRadius: JarvisRadius.card).fill(JarvisColor.bg_1.opacity(0.45)))
+                            .overlay(RoundedRectangle(cornerRadius: JarvisRadius.card).stroke(JarvisColor.primary_blue.opacity(0.16), lineWidth: 1))
+                    }
 
                     if let approval = vm.pendingApproval {
                         ApprovalCardView(vm: vm, action: approval)

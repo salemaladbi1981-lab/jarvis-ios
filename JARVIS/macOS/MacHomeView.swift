@@ -47,7 +47,9 @@ struct MacHomeView: View {
 
                     JarvisWaveformStatusView(vm: vm)
 
-                    QuickSuggestions(suggestions: suggestions)
+                    QuickSuggestions(suggestions: suggestions) { text in
+                            Task { await vm.handleQuickCommand(text) }
+                        }
 
                     VoiceInputBar(isListening: vm.isListening) { vm.cycleState() }
 
