@@ -1,0 +1,194 @@
+{
+  "version": "1.0",
+  "typography": {
+    "arabic_ui": "IBM Plex Sans Arabic",
+    "arabic_ui_fallback": "Segoe UI, system-ui, sans-serif",
+    "english_display": "Cormorant Garamond",
+    "numerals": "western-tabular",
+    "english_display_weight": 600,
+    "english_display_bundled": "base64 (offline)",
+    "english_display_fallback": "Georgia, serif"
+  },
+  "type_scale_px": {
+    "display_jarvis": {
+      "desktop": [
+        30,
+        38
+      ],
+      "mobile": [
+        22,
+        28
+      ]
+    },
+    "arabic_hero_title": {
+      "desktop": [
+        30,
+        40
+      ],
+      "mobile": [
+        26,
+        34
+      ]
+    },
+    "section_title": {
+      "desktop": [
+        18,
+        22
+      ],
+      "mobile": [
+        16,
+        20
+      ]
+    },
+    "card_title": [
+      15,
+      18
+    ],
+    "body": [
+      13,
+      16
+    ],
+    "meta": [
+      11,
+      13
+    ],
+    "compact_chip": [
+      11,
+      13
+    ]
+  },
+  "colors": {
+    "bg_0": "#050A12",
+    "bg_1": "#08101A",
+    "surface": "#08101A",
+    "card": "rgba(8,14,24,0.45)",
+    "border": "rgba(150,200,255,0.16)",
+    "primary_blue": "#8EC5FF",
+    "highlight_blue": "#B8DFFF",
+    "text_primary": "#F5F8FF",
+    "text_secondary": "rgba(245,248,255,0.72)",
+    "text_muted": "rgba(180,205,235,0.58)",
+    "success": "#63D9A0",
+    "warning_demo": "#F0B25F",
+    "danger": "#FF6B6B"
+  },
+  "glass": {
+    "panel_fill": "rgba(8,14,24,0.45)",
+    "panel_border": "rgba(150,200,255,0.16)",
+    "backdrop_blur_px": 16
+  },
+  "radii_px": {
+    "card": 20,
+    "control": 14,
+    "pill": 999
+  },
+  "borders_px": 1,
+  "spacing_px": [
+    4,
+    8,
+    12,
+    16,
+    24,
+    32,
+    40,
+    48
+  ],
+  "glow": {
+    "primary_glow": {
+      "color": "#8EC5FF",
+      "opacity": 0.28,
+      "blur_radius": 18,
+      "spread": 0,
+      "layers": 1
+    },
+    "active_icon": {
+      "color": "#8EC5FF",
+      "opacity": 0.35,
+      "blur_radius": 10,
+      "spread": 0,
+      "layers": 1
+    },
+    "core_glow": {
+      "color": "#8EC5FF",
+      "opacity": 0.42,
+      "blur_radius": 28,
+      "spread": 6,
+      "layers": 3
+    },
+    "agent_active": {
+      "chip_fill": "rgba(8,14,24,0.82)",
+      "chip_border": "#8EC5FF",
+      "node_color": "#B8DFFF",
+      "node_opacity": 1.0,
+      "glow_blur": 14,
+      "scale": 1.04,
+      "radial_connection_opacity": 0.28
+    },
+    "agent_inactive": {
+      "chip_fill": "rgba(8,14,24,0.45)",
+      "chip_border": "rgba(150,200,255,0.16)",
+      "node_color": "rgba(150,210,255,0.5)",
+      "node_opacity": 0.5,
+      "glow_blur": 0,
+      "scale": 1.0,
+      "radial_connection_opacity": 0.0
+    },
+    "cards_default": {
+      "shadow_opacity": 0.0,
+      "border_opacity": 0.16,
+      "surface_opacity": 0.45
+    }
+  },
+  "icons": {
+    "stroke_px": 1.5,
+    "sizes_px": {
+      "xs": 14,
+      "sm": 18,
+      "md": 22,
+      "lg": 28
+    },
+    "style": "thin outline, geometric, rounded caps/joins, cyan/ice-blue",
+    "active_color": "rgba(184,223,255,0.95)",
+    "inactive_color": "rgba(180,205,235,0.58)"
+  },
+  "states": [
+    "خامل",
+    "استماع",
+    "تفكير",
+    "يتكلم",
+    "تنفيذ",
+    "تنبيه",
+    "موافقة"
+  ],
+  "state_behavior": {
+    "خامل": "low core motion, low waveform, soft glow",
+    "استماع": "waveform reacts to input, stronger blue pulse",
+    "تفكير": "orbital motion increases, waveform reduces",
+    "يتكلم": "waveform follows speech, core pulse tracks energy",
+    "تنفيذ": "active target card/agent indicates execution",
+    "تنبيه": "restrained warning emphasis, no full recolor",
+    "موافقة": "execution pauses, clear approval indicator"
+  },
+  "motion_ms": {
+    "micro": 150,
+    "control": 220,
+    "group_transition": 480,
+    "panel_reveal": 320,
+    "core_idle_pulse": 3200
+  },
+  "orbit": {
+    "core_node_count": 8,
+    "system_node_count": 5,
+    "content_node_count": 8,
+    "transition_ms": [
+      350,
+      600
+    ],
+    "active_agent_glow": "ref: glow.agent_active"
+  },
+  "agent_groups": [
+    "core",
+    "system",
+    "content"
+  ]
+}

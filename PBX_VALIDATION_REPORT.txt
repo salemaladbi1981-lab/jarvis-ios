@@ -1,0 +1,36 @@
+JARVIS — P2.2 Xcode PBXFileReference Fix Validation Report
+Generated from the extracted V2 ZIP (self-contained, no external files)
+=====================================================================
+
+PBXFileReferences checked: 32
+Resolved successfully: 32
+Missing references: 0
+Invalid group-relative paths: 0
+
+PBXSourcesBuildPhase: PASS
+PBXResourcesBuildPhase: PASS
+Test target membership: PASS
+
+Self-contained extracted ZIP validation: PASS
+External dependency required: NO
+
+---- Fix detail ----
+Root cause: PBXFileReference paths previously used full paths
+  (e.g. "JARVIS/App/JARVISApp.swift") while parent groups already carry the
+  directory (JARVIS group path="JARVIS", App group path="App"). Xcode would
+  have resolved these as JARVIS/App/JARVIS/App/JARVISApp.swift.
+Fix: every <group>-relative PBXFileReference now stores the basename only
+  (e.g. "JARVISApp.swift"). Effective path = accumulated group dirs + basename.
+Verification: validate_pbx_file_references.py resolves the group hierarchy and
+  confirms all 32 effective paths exist inside the extracted project.
+
+---- Build phase integrity (preserved) ----
+App target sources: 20 Swift files (PBXSourcesBuildPhase)
+App target resources: 3 fonts + 2 JSON (PBXResourcesBuildPhase)
+Test target: 3 Swift test files (PBXSourcesBuildPhase, unit-test bundle)
+Info.plist: INFOPLIST_FILE = JARVIS/Info.plist
+Deployment target: iOS 17.0
+
+---- Honesty note ----
+Environment is Linux (no Xcode). PBX references/structure/phases validated at
+the file level only. Actual Xcode compile + runtime remain the next macOS gate.

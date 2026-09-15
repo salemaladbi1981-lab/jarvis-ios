@@ -1,0 +1,578 @@
+{
+  "version": "1.0",
+  "groups": {
+    "core": {
+      "label": "الأساسية",
+      "node_count": 8,
+      "default": true
+    },
+    "system": {
+      "label": "النظام",
+      "node_count": 5
+    },
+    "content": {
+      "label": "المحتوى",
+      "node_count": 8
+    }
+  },
+  "agents": [
+    {
+      "id": "core_coordinator",
+      "name": "المنسق",
+      "group": "core",
+      "role": "تنسيق المهام والسياق بين الإيجنتات",
+      "tools": [
+        "orchestration",
+        "context-handoff"
+      ],
+      "risk": "low",
+      "position": 0,
+      "icon": "orbit",
+      "capabilities": [
+        "orchestration",
+        "context-handoff"
+      ],
+      "active_visual": "brighter chip + brighter node + subtle radial connection to core",
+      "inactive_visual": "dim chip + dim node",
+      "orbit_strategy": "position 0 of 8, even radial distribution",
+      "approval_policy": {
+        "default": "none",
+        "required_actions": []
+      },
+      "approval_required_fallback": "none"
+    },
+    {
+      "id": "core_watcher",
+      "name": "المراقب",
+      "group": "core",
+      "role": "مراقبة استباقية وتنبيهات",
+      "tools": [
+        "monitoring",
+        "alerts"
+      ],
+      "risk": "low",
+      "position": 1,
+      "icon": "eye",
+      "capabilities": [
+        "monitoring",
+        "alerts"
+      ],
+      "active_visual": "brighter chip + brighter node + subtle radial connection to core",
+      "inactive_visual": "dim chip + dim node",
+      "orbit_strategy": "position 1 of 8, even radial distribution",
+      "approval_policy": {
+        "default": "none",
+        "required_actions": []
+      },
+      "approval_required_fallback": "none"
+    },
+    {
+      "id": "core_producer",
+      "name": "المنتج",
+      "group": "core",
+      "role": "إنتاج الريلز والعروض والمحتوى",
+      "tools": [
+        "video-production",
+        "decks"
+      ],
+      "risk": "low",
+      "position": 2,
+      "icon": "film",
+      "capabilities": [
+        "video-production",
+        "decks"
+      ],
+      "active_visual": "brighter chip + brighter node + subtle radial connection to core",
+      "inactive_visual": "dim chip + dim node",
+      "orbit_strategy": "position 2 of 8, even radial distribution",
+      "approval_policy": {
+        "default": "none",
+        "required_actions": []
+      },
+      "approval_required_fallback": "none"
+    },
+    {
+      "id": "core_dealmaker",
+      "name": "الصفقات",
+      "group": "core",
+      "role": "الصفقات والاستثمارات",
+      "tools": [
+        "deals",
+        "investments"
+      ],
+      "risk": "medium",
+      "position": 3,
+      "icon": "briefcase",
+      "capabilities": [
+        "deals",
+        "investments"
+      ],
+      "active_visual": "brighter chip + brighter node + subtle radial connection to core",
+      "inactive_visual": "dim chip + dim node",
+      "orbit_strategy": "position 3 of 8, even radial distribution",
+      "approval_policy": {
+        "default": "none",
+        "required_actions": [
+          "financial-commitment",
+          "contractual-obligation"
+        ]
+      },
+      "approval_required_fallback": "only for required_actions; default none"
+    },
+    {
+      "id": "core_guardian",
+      "name": "الحارس",
+      "group": "core",
+      "role": "الأمن والسمعة",
+      "tools": [
+        "security",
+        "reputation"
+      ],
+      "risk": "high",
+      "position": 4,
+      "icon": "shield",
+      "capabilities": [
+        "security",
+        "reputation"
+      ],
+      "active_visual": "brighter chip + brighter node + subtle radial connection to core",
+      "inactive_visual": "dim chip + dim node",
+      "orbit_strategy": "position 4 of 8, even radial distribution",
+      "approval_policy": {
+        "default": "none",
+        "required_actions": [
+          "security-change",
+          "disable-camera",
+          "disable-alarm"
+        ]
+      },
+      "approval_required_fallback": "only for required_actions; default none"
+    },
+    {
+      "id": "core_writer",
+      "name": "الكاتب",
+      "group": "core",
+      "role": "النصوص والنسخ والبرومبت",
+      "tools": [
+        "copywriting",
+        "prompting"
+      ],
+      "risk": "low",
+      "position": 5,
+      "icon": "pen",
+      "capabilities": [
+        "copywriting",
+        "prompting"
+      ],
+      "active_visual": "brighter chip + brighter node + subtle radial connection to core",
+      "inactive_visual": "dim chip + dim node",
+      "orbit_strategy": "position 5 of 8, even radial distribution",
+      "approval_policy": {
+        "default": "none",
+        "required_actions": []
+      },
+      "approval_required_fallback": "none"
+    },
+    {
+      "id": "core_reviewer",
+      "name": "المراجع",
+      "group": "core",
+      "role": "مراجعة الجودة والأداء",
+      "tools": [
+        "qc",
+        "review"
+      ],
+      "risk": "low",
+      "position": 6,
+      "icon": "check",
+      "capabilities": [
+        "qc",
+        "review"
+      ],
+      "active_visual": "brighter chip + brighter node + subtle radial connection to core",
+      "inactive_visual": "dim chip + dim node",
+      "orbit_strategy": "position 6 of 8, even radial distribution",
+      "approval_policy": {
+        "default": "none",
+        "required_actions": []
+      },
+      "approval_required_fallback": "none"
+    },
+    {
+      "id": "core_home",
+      "name": "البيت",
+      "group": "core",
+      "role": "المنزل الذكي (Home Assistant)",
+      "tools": [
+        "smart-home",
+        "scenes"
+      ],
+      "risk": "high",
+      "position": 7,
+      "icon": "home",
+      "capabilities": [
+        "smart-home",
+        "scenes"
+      ],
+      "active_visual": "brighter chip + brighter node + subtle radial connection to core",
+      "inactive_visual": "dim chip + dim node",
+      "orbit_strategy": "position 7 of 8, even radial distribution",
+      "approval_policy": {
+        "default": "none",
+        "required_actions": [
+          "unlock-door",
+          "open-gate",
+          "disable-camera",
+          "disable-alarm",
+          "disable-safety-automation"
+        ]
+      },
+      "approval_required_fallback": "only for required_actions; default none"
+    },
+    {
+      "id": "sys_builder",
+      "name": "البناء",
+      "group": "system",
+      "role": "تنفيذ مهام البناء وتطبيق التغييرات",
+      "tools": [
+        "build",
+        "code",
+        "deliverables"
+      ],
+      "risk": "medium",
+      "position": 0,
+      "icon": "hammer",
+      "capabilities": [
+        "build",
+        "code",
+        "deliverables"
+      ],
+      "active_visual": "brighter chip + brighter node + subtle radial connection to core",
+      "inactive_visual": "dim chip + dim node",
+      "orbit_strategy": "position 0 of 5, even radial distribution",
+      "approval_policy": {
+        "default": "none",
+        "required_actions": [
+          "destructive-change",
+          "external-impact"
+        ]
+      },
+      "approval_required_fallback": "only for required_actions; default none"
+    },
+    {
+      "id": "sys_coach",
+      "name": "المدرب",
+      "group": "system",
+      "role": "التعليم وضبط السلوك والروتين",
+      "tools": [
+        "coaching",
+        "routines"
+      ],
+      "risk": "low",
+      "position": 1,
+      "icon": "target",
+      "capabilities": [
+        "coaching",
+        "routines"
+      ],
+      "active_visual": "brighter chip + brighter node + subtle radial connection to core",
+      "inactive_visual": "dim chip + dim node",
+      "orbit_strategy": "position 1 of 5, even radial distribution",
+      "approval_policy": {
+        "default": "none",
+        "required_actions": []
+      },
+      "approval_required_fallback": "none"
+    },
+    {
+      "id": "sys_circle",
+      "name": "الربع",
+      "group": "system",
+      "role": "سياق الدائرة الموثوقة والتنسيق",
+      "tools": [
+        "trusted-circle",
+        "coordination"
+      ],
+      "risk": "high",
+      "position": 2,
+      "icon": "users",
+      "capabilities": [
+        "trusted-circle",
+        "coordination"
+      ],
+      "active_visual": "brighter chip + brighter node + subtle radial connection to core",
+      "inactive_visual": "dim chip + dim node",
+      "orbit_strategy": "position 2 of 5, even radial distribution",
+      "approval_policy": {
+        "default": "none",
+        "required_actions": [
+          "share-trusted-context",
+          "external-coordination"
+        ]
+      },
+      "approval_required_fallback": "only for required_actions; default none"
+    },
+    {
+      "id": "sys_server",
+      "name": "الخادم",
+      "group": "system",
+      "role": "البنية التحتية والخدمات الخلفية",
+      "tools": [
+        "backend",
+        "integrations",
+        "health"
+      ],
+      "risk": "medium",
+      "position": 3,
+      "icon": "server",
+      "capabilities": [
+        "backend",
+        "integrations",
+        "health"
+      ],
+      "active_visual": "brighter chip + brighter node + subtle radial connection to core",
+      "inactive_visual": "dim chip + dim node",
+      "orbit_strategy": "position 3 of 5, even radial distribution",
+      "approval_policy": {
+        "default": "none",
+        "required_actions": [
+          "restart-critical-service",
+          "destructive-config",
+          "credential-change"
+        ]
+      },
+      "approval_required_fallback": "only for required_actions; default none"
+    },
+    {
+      "id": "sys_architect",
+      "name": "معمار",
+      "group": "system",
+      "role": "المعمارية التقنية والتخطيط",
+      "tools": [
+        "architecture",
+        "topology",
+        "platform"
+      ],
+      "risk": "low",
+      "position": 4,
+      "icon": "blueprint",
+      "capabilities": [
+        "architecture",
+        "topology",
+        "platform"
+      ],
+      "active_visual": "brighter chip + brighter node + subtle radial connection to core",
+      "inactive_visual": "dim chip + dim node",
+      "orbit_strategy": "position 4 of 5, even radial distribution",
+      "approval_policy": {
+        "default": "none",
+        "required_actions": []
+      },
+      "approval_required_fallback": "none"
+    },
+    {
+      "id": "ct_account",
+      "name": "مدير العميل",
+      "group": "content",
+      "role": "استلام البريف وتوضيح التسليمات",
+      "tools": [
+        "brief-intake",
+        "clarification"
+      ],
+      "risk": "low",
+      "position": 0,
+      "icon": "folder",
+      "capabilities": [
+        "brief-intake",
+        "clarification"
+      ],
+      "active_visual": "brighter chip + brighter node + subtle radial connection to core",
+      "inactive_visual": "dim chip + dim node",
+      "orbit_strategy": "position 0 of 8, even radial distribution",
+      "approval_policy": {
+        "default": "none",
+        "required_actions": []
+      },
+      "approval_required_fallback": "none"
+    },
+    {
+      "id": "ct_creative",
+      "name": "المدير الإبداعي",
+      "group": "content",
+      "role": "المفهوم والاتجاه الإبداعي",
+      "tools": [
+        "concept",
+        "creative-direction"
+      ],
+      "risk": "low",
+      "position": 1,
+      "icon": "bulb",
+      "capabilities": [
+        "concept",
+        "creative-direction"
+      ],
+      "active_visual": "brighter chip + brighter node + subtle radial connection to core",
+      "inactive_visual": "dim chip + dim node",
+      "orbit_strategy": "position 1 of 8, even radial distribution",
+      "approval_policy": {
+        "default": "none",
+        "required_actions": []
+      },
+      "approval_required_fallback": "none"
+    },
+    {
+      "id": "ct_director",
+      "name": "المخرج",
+      "group": "content",
+      "role": "تنفيذ المشاهد وقائمة اللقطات",
+      "tools": [
+        "shot-list",
+        "framing"
+      ],
+      "risk": "low",
+      "position": 2,
+      "icon": "clapper",
+      "capabilities": [
+        "shot-list",
+        "framing"
+      ],
+      "active_visual": "brighter chip + brighter node + subtle radial connection to core",
+      "inactive_visual": "dim chip + dim node",
+      "orbit_strategy": "position 2 of 8, even radial distribution",
+      "approval_policy": {
+        "default": "none",
+        "required_actions": []
+      },
+      "approval_required_fallback": "none"
+    },
+    {
+      "id": "ct_scriptwriter",
+      "name": "كاتب السيناريو",
+      "group": "content",
+      "role": "السيناريو والحوار والهوك",
+      "tools": [
+        "script",
+        "dialogue",
+        "hook"
+      ],
+      "risk": "low",
+      "position": 3,
+      "icon": "script",
+      "capabilities": [
+        "script",
+        "dialogue",
+        "hook"
+      ],
+      "active_visual": "brighter chip + brighter node + subtle radial connection to core",
+      "inactive_visual": "dim chip + dim node",
+      "orbit_strategy": "position 3 of 8, even radial distribution",
+      "approval_policy": {
+        "default": "none",
+        "required_actions": []
+      },
+      "approval_required_fallback": "none"
+    },
+    {
+      "id": "ct_prompteng",
+      "name": "مهندس البرومبت",
+      "group": "content",
+      "role": "برومبتات الصور والفيديو والصوت",
+      "tools": [
+        "prompting",
+        "model-adaptation"
+      ],
+      "risk": "low",
+      "position": 4,
+      "icon": "terminal",
+      "capabilities": [
+        "prompting",
+        "model-adaptation"
+      ],
+      "active_visual": "brighter chip + brighter node + subtle radial connection to core",
+      "inactive_visual": "dim chip + dim node",
+      "orbit_strategy": "position 4 of 8, even radial distribution",
+      "approval_policy": {
+        "default": "none",
+        "required_actions": []
+      },
+      "approval_required_fallback": "none"
+    },
+    {
+      "id": "ct_motion",
+      "name": "مصمم الحركة",
+      "group": "content",
+      "role": "الإيقاع والانتقالات وتوجيه الحركة",
+      "tools": [
+        "pacing",
+        "transitions",
+        "motion"
+      ],
+      "risk": "low",
+      "position": 5,
+      "icon": "waveform",
+      "capabilities": [
+        "pacing",
+        "transitions",
+        "motion"
+      ],
+      "active_visual": "brighter chip + brighter node + subtle radial connection to core",
+      "inactive_visual": "dim chip + dim node",
+      "orbit_strategy": "position 5 of 8, even radial distribution",
+      "approval_policy": {
+        "default": "none",
+        "required_actions": []
+      },
+      "approval_required_fallback": "none"
+    },
+    {
+      "id": "ct_qc",
+      "name": "مراقب الجودة",
+      "group": "content",
+      "role": "الفحص البصري والاستمرارية والامتثال",
+      "tools": [
+        "visual-qa",
+        "continuity"
+      ],
+      "risk": "low",
+      "position": 6,
+      "icon": "check-circle",
+      "capabilities": [
+        "visual-qa",
+        "continuity"
+      ],
+      "active_visual": "brighter chip + brighter node + subtle radial connection to core",
+      "inactive_visual": "dim chip + dim node",
+      "orbit_strategy": "position 6 of 8, even radial distribution",
+      "approval_policy": {
+        "default": "none",
+        "required_actions": []
+      },
+      "approval_required_fallback": "none"
+    },
+    {
+      "id": "ct_mkt",
+      "name": "مراجع التسويق",
+      "group": "content",
+      "role": "ملاءمة الجمهور وCTA والفعالية",
+      "tools": [
+        "audience-fit",
+        "campaign"
+      ],
+      "risk": "low",
+      "position": 7,
+      "icon": "megaphone",
+      "capabilities": [
+        "audience-fit",
+        "campaign"
+      ],
+      "active_visual": "brighter chip + brighter node + subtle radial connection to core",
+      "inactive_visual": "dim chip + dim node",
+      "orbit_strategy": "position 7 of 8, even radial distribution",
+      "approval_policy": {
+        "default": "none",
+        "required_actions": []
+      },
+      "approval_required_fallback": "none"
+    }
+  ]
+}

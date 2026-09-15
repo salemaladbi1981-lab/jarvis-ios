@@ -1,0 +1,35 @@
+name: iOS Build + Screenshot
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build app (xcodebuild)
+        run: |
+          xcodebuild build \
+            -project JARVIS.xcodeproj \
+            -target JARVIS \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Boot simulator + install + launch + screenshot
+        run: |
+          xcrun simctl boot "iPhone 15" 2>/dev/null || true
+          xcrun simctl install "iPhone 15" build/Build/Products/Debug-iphonesimulator/JARVIS.app
+          xcrun simctl launch "iPhone 15" com.salemai.jarvis
+          sleep 10
+          xcrun simctl io "iPhone 15" screenshot core_group.png
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jarvis-screenshot
+          path: '*.png'
