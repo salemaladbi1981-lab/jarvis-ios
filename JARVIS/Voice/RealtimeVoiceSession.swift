@@ -97,12 +97,13 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
         // Parse minimal JSON: extract type + transcript text.
         if let t = Self.jsonStringField(text, "type") {
             switch t {
-            case "response.audio.delta":
+            case "response.output_audio.delta":
                 if let b64 = Self.jsonStringField(text, "delta") {
                     if let data = Data(base64Encoded: b64) { handleAudio(data) }
                 }
                 eventPublisher.send(.speaking)
-            case "conversation.item.input_audio_transcription.completed":
+            case "conversation.item.input_audio_transcription.completed",
+                 "response.output_audio_transcript.done":
                 if let txt = Self.transcriptText(text) { onTranscript?(txt) }
             case "response.done":
                 eventPublisher.send(.connected)
@@ -128,11 +129,15 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
 
     private static func transcriptText(_ text: String) -> String? {
         guard let data = text.data(using: .utf8),
-              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let item = obj["item"] as? [String: Any],
-              let content = item["content"] as? [[String: Any]] else { return nil }
-        for c in content where c["type"] as? String == "input_text" || c["type"] as? String == "text" {
-            if let t = c["text"] as? String, !t.isEmpty { return t }
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        // GA: transcript field مباشر
+        if let t = obj["transcript"] as? String, !t.isEmpty { return t }
+        // fallback: item.content
+        if let item = obj["item"] as? [String: Any],
+           let content = item["content"] as? [[String: Any]] {
+            for c in content where c["type"] as? String == "input_text" || c["type"] as? String == "text" {
+                if let t = c["text"] as? String, !t.isEmpty { return t }
+            }
         }
         return nil
     }
