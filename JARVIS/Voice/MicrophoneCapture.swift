@@ -2,9 +2,10 @@ import Foundation
 import AVFoundation
 
 /// Real microphone capture: AVAudioEngine input tap → 24kHz mono PCM16.
-/// Streams raw PCM16 to a callback (for realtime transport). No fake waveform.
+/// Recreates the engine on every start so repeated pause/resume is idempotent
+/// (installTap on a fresh engine — never a duplicated tap on bus 0).
 final class MicrophoneCapture {
-    private let engine = AVAudioEngine()
+    private var engine: AVAudioEngine?
     private let targetFormat: AVAudioFormat
     var onPCM: ((Data) -> Void)?
 
@@ -13,9 +14,15 @@ final class MicrophoneCapture {
                                      sampleRate: 24000, channels: 1, interleaved: true)!
     }
 
-    var isRunning: Bool { engine.isRunning }
+    var isRunning: Bool { engine?.isRunning ?? false }
 
     func start() throws {
+        // لا نعيد التثبيت إذا كان يعمل — idempotent.
+        if engine?.isRunning == true { return }
+
+        let engine = AVAudioEngine()
+        self.engine = engine
+
         #if os(iOS)
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.playAndRecord, mode: .default,
@@ -25,7 +32,6 @@ final class MicrophoneCapture {
 
         let input = engine.inputNode
         let hwFormat = input.outputFormat(forBus: 0)
-        // تحديث converter إلى hw format الفعلي
         let conv = AVAudioConverter(from: hwFormat, to: targetFormat)!
         input.installTap(onBus: 0, bufferSize: 2048, format: hwFormat) { [weak self] buffer, _ in
             guard let self else { return }
@@ -38,8 +44,9 @@ final class MicrophoneCapture {
 
     func stop() {
         // إيقاف الالتقاط فقط — لا نوقف AVAudioSession (مشترك مع الـ playback).
-        engine.inputNode.removeTap(onBus: 0)
-        engine.stop()
+        engine?.inputNode.removeTap(onBus: 0)
+        engine?.stop()
+        engine = nil
     }
 
     private func convert(_ buffer: AVAudioPCMBuffer, using conv: AVAudioConverter) -> Data? {

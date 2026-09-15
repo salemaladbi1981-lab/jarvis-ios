@@ -70,5 +70,13 @@ _play_stop = _stop_block(play2, 'Play')
 check("mic.stop does NOT deactivate AudioSession", 'setActive(false' not in _mic_stop)
 check("playback.stop owns AudioSession deactivation", 'setActive(false' in _play_stop)
 
+
+# BUG#6.3: repeated pause/resume must not crash (engine recreated, idempotent)
+mic3 = read('Voice/MicrophoneCapture.swift')
+check("engine is optional (recreated per start)", 'var engine: AVAudioEngine?' in mic3)
+check("start creates fresh engine", 'let engine = AVAudioEngine()' in mic3)
+check("start is idempotent (guard isRunning)", 'engine?.isRunning == true { return }' in mic3)
+check("stop nils engine (clean state)", 'engine = nil' in mic3)
+
 print(f"\n== RESULT: {PASS} PASS / {FAIL} FAIL ==")
 sys.exit(1 if FAIL else 0)
