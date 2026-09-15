@@ -14,9 +14,7 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
 
     private var ws: URLSessionWebSocketTask?
     private var session = URLSession(configuration: .default)
-    private let mic = MicrophoneCapture()
-    private let playback = AudioPlayback()
-    private var micActive = false
+    private let audio = VoiceAudioEngine()
     private var isSpeaking = false
 
     func connect(baseURL: URL) async throws {
@@ -42,19 +40,16 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
 
     func startListening() {
         eventPublisher.send(.listening)
-        mic.onPCM = { [weak self] data in self?.sendAudio(pcm16: data) }
+        audio.onPCM = { [weak self] data in self?.sendAudio(pcm16: data) }
         do {
-            try mic.start()
-            try playback.start()
-            micActive = true
+            try audio.start()
         } catch {
             eventPublisher.send(.error("mic_unavailable"))
         }
     }
 
     func stopListening() {
-        mic.stop()
-        playback.stop()
+        audio.stop()
     }
 
     /// Barge-in: إلغاء الرد الجاري + مسح الـ playback (الـ mic يبقى شغّالاً).
@@ -62,7 +57,7 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
         trace("bargeIn — response.cancel + flush playback")
         let cancel = #"{"type":"response.cancel"}"#
         ws?.send(.string(cancel)) { _ in }
-        playback.flush()
+        audio.flush()
         eventPublisher.send(.interrupted)
     }
 
@@ -116,7 +111,7 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
             case "response.output_audio.delta":
                 isSpeaking = true
                 if let b64 = Self.jsonStringField(text, "delta") {
-                    if let data = Data(base64Encoded: b64) { playback.enqueue(pcm16: data) }
+                    if let data = Data(base64Encoded: b64) { audio.enqueueAudio(data) }
                 }
                 eventPublisher.send(.speaking)
             case "input_audio_buffer.speech_started":
@@ -151,7 +146,7 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     }
 
     private func handleAudio(_ data: Data) {
-        playback.enqueue(pcm16: data)
+        audio.enqueueAudio(data)
     }
 
     private static func jsonStringField(_ text: String, _ key: String) -> String? {
