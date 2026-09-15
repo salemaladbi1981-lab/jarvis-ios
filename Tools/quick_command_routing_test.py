@@ -15,9 +15,9 @@ qs = read('Home/QuickSuggestions.swift')
 
 # 1) 5 stable unique IDs
 cases = re.findall(r'^    case (\w+)$', qc, re.M)   # enum cases only (no '.')
-check("5 quick commands defined", len(cases) == 5)
-check("command IDs unique", len(set(cases)) == 5)
-for c in ["calendar","tomorrow","focus","doorCamera","calmMedia"]:
+check("6 quick commands defined", len(cases) == 6)
+check("command IDs unique", len(set(cases)) == 6)
+for c in ["calendar","reminders","tomorrow","focus","doorCamera","calmMedia"]:
     check(f"has '{c}'", c in cases)
 
 # 2) labels present (Arabic displayed text is not the routing key)

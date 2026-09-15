@@ -11,6 +11,7 @@ enum CapabilityStatus: String {
 /// Typed quick command: stable ID (not text matching), label, honest status.
 enum QuickCommand: String, CaseIterable, Identifiable {
     case calendar
+    case reminders
     case tomorrow
     case focus
     case doorCamera
@@ -21,6 +22,7 @@ enum QuickCommand: String, CaseIterable, Identifiable {
     var label: String {
         switch self {
         case .calendar:   return "وش عندي في الجدول؟"
+        case .reminders: return "وش عندي من تذكيرات؟"
         case .tomorrow:   return "بطلع بكرة؟"
         case .focus:      return "فعّل وضع التركيز"
         case .doorCamera: return "ورّني كاميرا الباب"
@@ -31,6 +33,7 @@ enum QuickCommand: String, CaseIterable, Identifiable {
     var capabilityStatus: CapabilityStatus {
         switch self {
         case .calendar:   return .verified
+        case .reminders: return .devicePending
         case .tomorrow:   return .unavailable
         case .focus:      return .unavailable
         case .doorCamera: return .experimental
@@ -41,6 +44,7 @@ enum QuickCommand: String, CaseIterable, Identifiable {
     var unavailableReason: String {
         switch self {
         case .calendar:   return ""
+        case .reminders: return ""
         case .tomorrow:   return "يحتاج تكامل بيانات الغد (جدول + طقس)"
         case .focus:      return "يحتاج تكامل نظام التركيز"
         case .doorCamera: return "لا يوجد تكامل كاميرا حقيقي بعد"

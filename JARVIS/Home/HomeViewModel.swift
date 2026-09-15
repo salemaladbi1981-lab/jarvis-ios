@@ -71,6 +71,8 @@ final class HomeViewModel: ObservableObject {
         switch cmd {
         case .calendar:
             await runCalendar(kind: "today")
+        case .reminders:
+            await runReminders()
         case .tomorrow, .focus, .doorCamera, .calmMedia:
             // لا مسار تنفيذ حقيقي بعد — اعرض الحالة الصادقة، ولا تشغّل صوت/استماع.
             state = .alert
@@ -134,7 +136,7 @@ final class HomeViewModel: ObservableObject {
     }
 
     private static func formatReminders(_ reminders: [JarvisReminderItem]) -> String {
-        guard !reminders.isEmpty else { return "لا توجد تذكيرات" }
+        guard !reminders.isEmpty else { return "لا توجد تذكيرات قادمة" }
         return reminders.prefix(5).map { "• \($0.title)" }.joined(separator: "\n")
     }
 
