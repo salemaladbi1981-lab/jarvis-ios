@@ -14,6 +14,7 @@ struct JarvisHeroView: View {
                 activeAgentID: vm.state == .executing ? vm.agents(in: vm.activeGroup).first?.id : nil
             )
         }
+        .allowsHitTesting(false)
         .frame(maxWidth: .infinity)
         .frame(height: coreSize * 1.28)
         .id(vm.activeGroup)

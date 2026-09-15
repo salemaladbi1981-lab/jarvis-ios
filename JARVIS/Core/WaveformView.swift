@@ -18,6 +18,7 @@ struct WaveformView: View {
             }
             .frame(height: 40)
         }
+        .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
 

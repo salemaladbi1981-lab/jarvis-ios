@@ -18,13 +18,14 @@ struct JarvisCoreView: View {
     private let ringRadii: [CGFloat] = [0.62, 0.72, 0.82, 0.90]
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { timeline in
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
             let t = reduceMotion ? 0.0 : timeline.date.timeIntervalSinceReferenceDate
             Canvas { ctx, size in
                 draw(canvas: &ctx, size: size, time: t)
             }
         }
         .frame(width: size, height: size)
+        .allowsHitTesting(false)
         .accessibilityLabel("نواة جارفس")
     }
 
