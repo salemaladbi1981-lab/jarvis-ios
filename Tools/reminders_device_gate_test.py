@@ -14,7 +14,7 @@ vm = read('Home/HomeViewModel.swift')
 check("reminders is a typed QuickCommand case", 'case reminders' in qc)
 check("reminders label 'وش عندي من تذكيرات؟'", 'وش عندي من تذكيرات؟' in qc)
 # 2) status = IMPLEMENTED / DEVICE-PENDING (ليس verified بعد)
-check("reminders status = devicePending (not verified)", 'case .reminders: return .devicePending' in qc)
+check("reminders status = verified (M3.4 closed)", 'case .reminders: return .verified' in qc)
 # 3) tap → handler → runReminders
 check("reminders routes to runReminders", 'case .reminders' in vm and 'runReminders' in vm)
 # 4) real provider (ليس mock)

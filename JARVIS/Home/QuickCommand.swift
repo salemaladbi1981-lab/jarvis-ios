@@ -33,7 +33,7 @@ enum QuickCommand: String, CaseIterable, Identifiable {
     var capabilityStatus: CapabilityStatus {
         switch self {
         case .calendar:   return .verified
-        case .reminders: return .devicePending
+        case .reminders: return .verified
         case .tomorrow:   return .unavailable
         case .focus:      return .unavailable
         case .doorCamera: return .experimental
