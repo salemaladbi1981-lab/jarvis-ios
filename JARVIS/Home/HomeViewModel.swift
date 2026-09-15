@@ -123,8 +123,8 @@ final class HomeViewModel: ObservableObject {
             await runCalendar(kind: "today")
             speakResult()
         } else {
-            // غير موجه لأداة — دع النموذج الصوتي يرد مباشرة على النص.
-            voiceSession.sendText(text)
+            // محادثة مباشرة — النموذج رد بالفعل من الصوت، لا نعيد إرسال النص
+            // (منع الرد المزدوج/loop). لا شيء هنا.
         }
     }
 

@@ -102,9 +102,12 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                     if let data = Data(base64Encoded: b64) { handleAudio(data) }
                 }
                 eventPublisher.send(.speaking)
-            case "conversation.item.input_audio_transcription.completed",
-                 "response.output_audio_transcript.done":
+            case "conversation.item.input_audio_transcription.completed":
+                // نص المستخدم فقط — للتوجيه (tool routing). لا نوجّه نص الرد.
                 if let txt = Self.transcriptText(text) { onTranscript?(txt) }
+            case "response.output_audio_transcript.done":
+                // نص رد جارفس — لا يُعاد توجيهه (يمنع الـ loop).
+                break
             case "response.done":
                 eventPublisher.send(.connected)
             case "response.function_call_arguments.done":

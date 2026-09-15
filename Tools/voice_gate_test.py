@@ -36,11 +36,18 @@ check("HomeViewModel binds eventPublisher→state", 'bindVoice' in vm and 'Jarvi
 check("toggleVoice starts real session", 'toggleVoice' in vm and 'connect(baseURL' in vm)
 check("voice transcript routes calendar", 'routeVoiceTranscript' in vm and 'runCalendar' in vm)
 check("voice transcript routes reminders", 'routeVoiceTranscript' in vm and 'runReminders' in vm)
-check("unknown voice → sendText (not listening)", 'voiceSession.sendText(text)' in vm)
+check("unknown voice → no action (no re-send, no listening)", 'voiceSession.sendText(text)' not in vm and 'state = .listening' not in vm)
 # production path not mock
 check("uses RealtimeVoiceSession (not MockVoiceProvider)", 'RealtimeVoiceSession()' in vm)
 # approval not bypassed
 check("approval flow intact (requestAction)", 'requestAction' in vm and 'approval' in vm)
+
+
+# M3.5 loop regression (bug: assistant transcript re-routed → infinite loop)
+rvs2 = read('Voice/RealtimeVoiceSession.swift')
+vm2 = read('Home/HomeViewModel.swift')
+check("assistant transcript.done does NOT call onTranscript", 'response.output_audio_transcript.done' in rvs2 and 'break' in rvs2)
+check("direct conversation does NOT re-send text", 'voiceSession.sendText(text)' not in vm2)
 
 print(f"\n== RESULT: {PASS} PASS / {FAIL} FAIL ==")
 sys.exit(1 if FAIL else 0)
