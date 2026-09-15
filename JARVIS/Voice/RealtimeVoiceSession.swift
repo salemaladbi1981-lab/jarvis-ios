@@ -4,7 +4,7 @@ import Combine
 /// WebSocket-backed live voice session. Mic → backend proxy → OpenAI Realtime,
 /// streamed audio out → playback. Holds no provider secrets.
 final class RealtimeVoiceSession: NSObject, VoiceSession {
-    static var backendBaseURL: String = "https://jarvis.qeyas.app"
+    static var backendBaseURL: String = "https://jarvis-api.qeyas.app"
 
     let eventPublisher = PassthroughSubject<VoiceSessionEvent, Never>()
     /// Final user transcript (e.g. "وش عندي اليوم؟") for local tool routing.
