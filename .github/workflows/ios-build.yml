@@ -47,15 +47,15 @@ jobs:
           shot portrait_idle
           shot portrait_approval -state approval
 
-          # Landscape (rotate simulator + two-zone layout)
-          xcrun simctl ui "$DEVICE" orientation landscapeLeft
-          sleep 2
+          # Landscape (rotate via Simulator keyboard shortcut + two-zone layout)
+          osascript -e 'tell application "Simulator" to activate' -e 'delay 1' -e 'tell application "System Events" to key code 124 using command down' 2>/dev/null || true
+          sleep 3
           shot landscape_core     -landscape
           shot landscape_system   -landscape -group system
           shot landscape_content  -landscape -group content
           shot landscape_listening -landscape -state listening
           shot landscape_approval -landscape -state approval
-          xcrun simctl ui "$DEVICE" orientation portrait
+          osascript -e 'tell application "Simulator" to activate' -e 'delay 1' -e 'tell application "System Events" to key code 123 using command down' 2>/dev/null || true
 
           ls -la *.png
 
