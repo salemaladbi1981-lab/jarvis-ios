@@ -57,7 +57,10 @@ async def openai_realtime_proxy(client_ws, session_config: dict):
                             rid = resp.get("id", "")
                         elif isinstance(d.get("response_id"), str):
                             rid = d.get("response_id")
-                        print(f"[TRACE u2c] {d.get('type')} rid={rid}", flush=True)
+                        if d.get('type') == 'error':
+                            print(f"[TRACE u2c] error {json.dumps(d.get('error', {}))[:200]}", flush=True)
+                        else:
+                            print(f"[TRACE u2c] {d.get('type')} rid={rid}", flush=True)
                     except Exception:
                         pass
                     await client_ws.send_text(msg)

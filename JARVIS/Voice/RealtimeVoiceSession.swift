@@ -144,6 +144,11 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                     if let data = Data(base64Encoded: b64) { playback.enqueue(pcm16: data) }
                 }
                 eventPublisher.send(.speaking)
+            case "input_audio_buffer.speech_started":
+                // VAD metadata — لمعرفة سبب اكتشاف الكلام الوهمي.
+                trace("VAD speech_started payload: \(text)")
+            case "input_audio_buffer.speech_stopped":
+                trace("VAD speech_stopped payload: \(text)")
             case "conversation.item.input_audio_transcription.completed":
                 // نص المستخدم فقط — للتوجيه (tool routing). لا نوجّه نص الرد.
                 if let txt = Self.transcriptText(text) {
@@ -163,6 +168,8 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
             case "response.function_call_arguments.done":
                 eventPublisher.send(.toolExecuting)
             case "error":
+                // تسجيل الـ error code/message كاملاً (كان مخفياً).
+                trace("recv error payload: \(text)")
                 eventPublisher.send(.error("realtime_error"))
             default: break
             }
