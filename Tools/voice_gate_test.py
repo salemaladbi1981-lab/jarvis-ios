@@ -49,5 +49,13 @@ vm2 = read('Home/HomeViewModel.swift')
 check("assistant transcript.done does NOT call onTranscript", 'response.output_audio_transcript.done' in rvs2 and 'break' in rvs2)
 check("direct conversation does NOT re-send text", 'voiceSession.sendText(text)' not in vm2)
 
+
+# BUG#6: half-duplex (mic pause/resume) — يمنع echo/تداخل turn
+check("mic pauses on response.output_audio.delta", 'pauseMic()' in rvs2 and 'response.output_audio.delta' in rvs2)
+check("mic resumes on response.done", 'resumeMic()' in rvs2 and 'response.done' in rvs2)
+import re as _re
+_m = _re.search(r'private func handleAudio\(.*?\n    \}', rvs2, _re.DOTALL)
+check("handleAudio no duplicate .speaking", _m is not None and 'eventPublisher.send(.speaking)' not in _m.group(0))
+
 print(f"\n== RESULT: {PASS} PASS / {FAIL} FAIL ==")
 sys.exit(1 if FAIL else 0)
