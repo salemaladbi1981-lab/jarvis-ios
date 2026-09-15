@@ -23,12 +23,8 @@ final class MicrophoneCapture {
         let engine = AVAudioEngine()
         self.engine = engine
 
-        #if os(iOS)
-        let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.playAndRecord, mode: .default,
-                                options: [.allowBluetooth, .defaultToSpeaker])
-        try session.setActive(true, options: [])
-        #endif
+        // لا نعيد تهيئة AVAudioSession هنا — يملكها AudioPlayback.start()
+        // (إعادة setCategory/setActive كل resume تسبب gain/route discontinuity).
 
         let input = engine.inputNode
         let hwFormat = input.outputFormat(forBus: 0)

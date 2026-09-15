@@ -78,5 +78,14 @@ check("start creates fresh engine", 'let engine = AVAudioEngine()' in mic3)
 check("start is idempotent (guard isRunning)", 'engine?.isRunning == true { return }' in mic3)
 check("stop nils engine (clean state)", 'engine = nil' in mic3)
 
+
+# M3.5 turn-integrity: 1 turn → 1 response → drained → resume (no echo loop)
+rvs3 = read('Voice/RealtimeVoiceSession.swift')
+mic4 = read('Voice/MicrophoneCapture.swift')
+check("resumeMic gated on playback drained (onPlaybackFinished)", 'playback.onPlaybackFinished' in rvs3 and 'resumeMic' in rvs3)
+check("response.done does NOT resume if buffers pending", 'hasPendingBuffers' in rvs3)
+check("commit input buffer on pauseMic", 'commitInputBuffer' in rvs3 and 'input_audio_buffer.commit' in rvs3)
+check("mic.start does NOT reconfigure AudioSession", 'session.setCategory' not in mic4)
+
 print(f"\n== RESULT: {PASS} PASS / {FAIL} FAIL ==")
 sys.exit(1 if FAIL else 0)

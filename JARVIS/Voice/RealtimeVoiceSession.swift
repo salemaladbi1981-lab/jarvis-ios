@@ -42,6 +42,10 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     func startListening() {
         eventPublisher.send(.listening)
         mic.onPCM = { [weak self] data in self?.sendAudio(pcm16: data) }
+        playback.onPlaybackFinished = { [weak self] in
+            // لا نعيد الميكروفون إلا بعد انتهاء تشغيل الصوت فعلياً (لا echo).
+            self?.resumeMic()
+        }
         do {
             try mic.start()
             try playback.start()
@@ -54,13 +58,22 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     /// إيقاف الالتقاط أثناء رد النموذج (half-duplex) — يمنع echo/تداخل الـ turn.
     private func pauseMic() {
         guard micActive else { return }
+        trace("pauseMic — mic.stop + commit")
         mic.stop()
         micActive = false
+        // إغلاق الـ input buffer صراحة — لا مزيد من الـ audio يُعالج.
+        commitInputBuffer()
+    }
+
+    private func commitInputBuffer() {
+        let commit = #"{"type":"input_audio_buffer.commit"}"#
+        ws?.send(.string(commit)) { _ in }
     }
 
     /// إعادة الاستماع بعد اكتمال الرد.
     private func resumeMic() {
         guard !micActive else { return }
+        trace("resumeMic — mic.start")
         do {
             try mic.start()
             micActive = true
@@ -96,6 +109,11 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
         ws?.send(.string(msg)) { _ in }
     }
 
+    private func trace(_ msg: String) {
+        let ts = Date().timeIntervalSinceReferenceDate
+        print("[JARVIS-TRACE] \(String(format: "%.3f", ts)) \(msg)")
+    }
+
     private func receiveLoop() {
         ws?.receive { [weak self] result in
             guard let self else { return }
@@ -116,6 +134,9 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     private func handleServer(_ text: String) {
         // Parse minimal JSON: extract type + transcript text.
         if let t = Self.jsonStringField(text, "type") {
+            if t != "response.output_audio.delta" {
+                trace("recv \(t)")
+            }
             switch t {
             case "response.output_audio.delta":
                 pauseMic()   // half-duplex: أوقف الالتقاط أثناء الرد
@@ -125,12 +146,19 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                 eventPublisher.send(.speaking)
             case "conversation.item.input_audio_transcription.completed":
                 // نص المستخدم فقط — للتوجيه (tool routing). لا نوجّه نص الرد.
-                if let txt = Self.transcriptText(text) { onTranscript?(txt) }
+                if let txt = Self.transcriptText(text) {
+                    trace("user_transcript: \(txt)")
+                    onTranscript?(txt)
+                }
             case "response.output_audio_transcript.done":
                 // نص رد جارفس — لا يُعاد توجيهه (يمنع الـ loop).
                 break
             case "response.done":
-                resumeMic()   // العودة للاستماع للـ turn التالي
+                // لا نعيد الميكروفون إلا إذا انتهى الـ playback فعلياً
+                // (وإلا نلتقط آخر صوت جارفس كـ echo → turn جديد).
+                if !playback.hasPendingBuffers {
+                    resumeMic()
+                }
                 eventPublisher.send(.connected)
             case "response.function_call_arguments.done":
                 eventPublisher.send(.toolExecuting)

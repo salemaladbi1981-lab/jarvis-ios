@@ -7,6 +7,9 @@ final class AudioPlayback {
     private let player = AVAudioPlayerNode()
     private let format: AVAudioFormat
     private var ready = false
+    private var pendingBuffers = 0
+    /// يُستدعى عند انتهاء تشغيل كل الـ buffers فعلياً (playback drained).
+    var onPlaybackFinished: (() -> Void)?
 
     init() {
         format = AVAudioFormat(commonFormat: .pcmFormatInt16,
@@ -34,9 +37,18 @@ final class AudioPlayback {
     }
 
     /// Enqueue raw PCM16 bytes (24kHz mono) for immediate playback.
+    var hasPendingBuffers: Bool { pendingBuffers > 0 }
+
     func enqueue(pcm16: Data) {
         guard ready, let buffer = Self.toBuffer(pcm16, format: format) else { return }
-        player.scheduleBuffer(buffer, completionHandler: nil)
+        pendingBuffers += 1
+        player.scheduleBuffer(buffer) { [weak self] in
+            guard let self else { return }
+            self.pendingBuffers -= 1
+            if self.pendingBuffers == 0 {
+                self.onPlaybackFinished?()
+            }
+        }
     }
 
     func stop() {

@@ -36,6 +36,11 @@ async def openai_realtime_proxy(client_ws, session_config: dict):
             try:
                 while True:
                     txt = await client_ws.receive_text()
+                    try:
+                        d = json.loads(txt)
+                        print(f"[TRACE c2u] {d.get('type')}", flush=True)
+                    except Exception:
+                        pass
                     await upstream.send(txt)
             except Exception:
                 pass  # client disconnected
@@ -44,6 +49,17 @@ async def openai_realtime_proxy(client_ws, session_config: dict):
             # upstream → client (session events, audio/text deltas)
             try:
                 async for msg in upstream:
+                    try:
+                        d = json.loads(msg)
+                        rid = ""
+                        resp = d.get("response")
+                        if isinstance(resp, dict):
+                            rid = resp.get("id", "")
+                        elif isinstance(d.get("response_id"), str):
+                            rid = d.get("response_id")
+                        print(f"[TRACE u2c] {d.get('type')} rid={rid}", flush=True)
+                    except Exception:
+                        pass
                     await client_ws.send_text(msg)
             except Exception:
                 pass
