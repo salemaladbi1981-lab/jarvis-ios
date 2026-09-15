@@ -4,7 +4,7 @@ import Foundation
 struct MockEventKitProvider {
     var mode: CalendarProviderMode { .mock }
 
-    func todayEvents() async -> [JarvisCalendarEvent] {
+    func todayEvents() -> [JarvisCalendarEvent] {
         let cal = Calendar.current
         func mk(_ h: Int, _ t: String) -> JarvisCalendarEvent {
             let d = cal.date(bySettingHour: h, minute: 0, second: 0, of: Date()) ?? Date()
@@ -15,9 +15,9 @@ struct MockEventKitProvider {
         return [mk(9, "Marketing Meeting — 09:00"), mk(11, "Project Review — 11:30")]
     }
 
-    func nextEvent() async -> JarvisCalendarEvent? { await todayEvents().first }
+    func nextEvent() -> JarvisCalendarEvent? { todayEvents().first }
 
-    func upcomingReminders() async -> [JarvisReminderItem] {
+    func upcomingReminders() -> [JarvisReminderItem] {
         [JarvisReminderItem(id: UUID().uuidString, title: "Review document",
                             dueDate: Date().addingTimeInterval(7200), isCompleted: false, listName: nil)]
     }

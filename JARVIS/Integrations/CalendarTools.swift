@@ -25,7 +25,7 @@ struct CalendarTools {
 
     func today() async -> CalendarToolResult {
         if useMock {
-            let e = await mockProvider.todayEvents()
+            let e = mockProvider.todayEvents()
             return CalendarToolResult(ok: true, kind: "today", events: e, reminders: [], error: nil, mock: true, providerMode: "mock", providerName: "MockEventKitProvider")
         }
         let access = await provider.eventAccess()
@@ -43,7 +43,7 @@ struct CalendarTools {
 
     func nextEvent() async -> CalendarToolResult {
         if useMock {
-            let e = await mockProvider.nextEvent()
+            let e = mockProvider.nextEvent()
             return CalendarToolResult(ok: true, kind: "next_event", events: e.map { [$0] } ?? [], reminders: [], error: nil, mock: true, providerMode: "mock", providerName: "MockEventKitProvider")
         }
         let access = await provider.eventAccess()
@@ -60,7 +60,7 @@ struct CalendarTools {
 
     func upcomingReminders() async -> CalendarToolResult {
         if useMock {
-            let r = await mockProvider.upcomingReminders()
+            let r = mockProvider.upcomingReminders()
             return CalendarToolResult(ok: true, kind: "reminders", events: [], reminders: r, error: nil, mock: true, providerMode: "mock", providerName: "MockEventKitProvider")
         }
         let access = await provider.reminderAccess()

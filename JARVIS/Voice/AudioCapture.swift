@@ -38,7 +38,7 @@ enum AudioCapture {
         #if os(iOS)
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.playAndRecord, mode: .voiceChat,
-                                options: [.allowBluetoothHFP, .allowBluetoothA2DP, .defaultToSpeaker])
+                                options: [.allowBluetooth, .defaultToSpeaker])
         try session.setActive(true, options: [])
         #else
         // macOS: mic/output selection handled by the system; no AVAudioSession.
