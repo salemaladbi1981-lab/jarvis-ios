@@ -15,8 +15,7 @@ struct HomeView: View {
     ]
 
     var body: some View {
-        VStack(spacing: 0) {
-            ScrollView {
+        ScrollView {
                 VStack(alignment: .leading, spacing: JarvisSpacing.lg) {
                     HeaderView()
 
@@ -24,9 +23,10 @@ struct HomeView: View {
 
                     titleAndGreeting
 
-                    WaveformView(state: vm.state)
-
-                    statusLine
+                    VStack(spacing: 4) {
+                        WaveformView(state: vm.state)
+                        statusLine
+                    }
 
                     SmartHomeCard(devices: vm.homeDevices)
                         .onTapGesture { vm.requestAction(agentID: "core_home", action: "read-temperature") }
@@ -47,6 +47,7 @@ struct HomeView: View {
                 .padding(JarvisSpacing.lg)
             }
 
+        .safeAreaInset(edge: .bottom) {
             BottomNavBar(selected: $selectedTab)
         }
         .background(

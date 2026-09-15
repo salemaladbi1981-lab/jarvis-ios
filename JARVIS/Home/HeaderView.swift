@@ -1,7 +1,8 @@
 import SwiftUI
 import Combine
 
-/// Quiet top header: location, live date/time, JARVIS wordmark.
+/// Header: Doha + Arabic date/time on the LEFT, JARVIS wordmark on the RIGHT
+/// (matches MOBILE IMAGE A — header composition is not mirrored by RTL).
 struct HeaderView: View {
     var body: some View {
         HStack(alignment: .center) {
@@ -22,15 +23,25 @@ struct HeaderView: View {
                 .tracking(3)
                 .foregroundColor(JarvisColor.highlight_blue)
         }
+        .environment(\.layoutDirection, .leftToRight)
     }
 }
 
+/// Live Arabic date/time with Western numerals (locale ar_QA = Qatar/Doha).
 struct LiveClockView: View {
     @State private var now = Date()
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
+    private static let formatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "ar_QA")
+        f.calendar = Calendar(identifier: .gregorian)
+        f.dateFormat = "E، d MMM، h:mm a"
+        return f
+    }()
+
     var body: some View {
-        Text(now, format: .dateTime.hour().minute().weekday(.abbreviated).day().month(.abbreviated))
+        Text(Self.formatter.string(from: now))
             .font(.system(size: 11))
             .foregroundColor(JarvisColor.text_muted)
             .onReceive(timer) { now = $0 }
