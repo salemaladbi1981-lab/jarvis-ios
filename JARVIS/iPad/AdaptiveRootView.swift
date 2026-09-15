@@ -17,5 +17,18 @@ struct AdaptiveRootView: View {
                 HomeView()
             }
         }
+        .onAppear {
+            if forceLandscape {
+                forceLandscapeOrientation()
+            }
+        }
+    }
+
+    /// iOS 16+ — request the window scene rotate to landscape (true landscape runtime).
+    private func forceLandscapeOrientation() {
+        guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene else { return }
+        if #available(iOS 16.0, *) {
+            scene.requestGeometryUpdate(.iOS(interfaceOrientations: .landscapeRight))
+        }
     }
 }
