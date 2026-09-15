@@ -42,6 +42,24 @@ final class HomeViewModel: ObservableObject {
         homeDevices = await smartHome.readDevices()
         securityStatus = await security.status()
         mediaTrack = await media.nowPlaying()
+        applyLaunchArguments()
+    }
+
+    /// Read launch arguments for deterministic screenshots:
+    ///   -group core|system|content, -state idle|listening|...|approval
+    private func applyLaunchArguments() {
+        let args = ProcessInfo.processInfo.arguments
+        if let gi = args.firstIndex(of: "-group"), gi + 1 < args.count {
+            activeGroup = args[gi + 1]
+        }
+        if let si = args.firstIndex(of: "-state"), si + 1 < args.count {
+            if let st = JarvisState(rawValue: args[si + 1]) {
+                state = st
+                if st == .approval {
+                    requestAction(agentID: "core_home", action: "unlock-door")
+                }
+            }
+        }
     }
 
     // MARK: Agents

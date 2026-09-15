@@ -20,11 +20,8 @@ jobs:
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
-          echo "=== Built products ==="
-          find build -name "*.app" -type d 2>/dev/null
-          find build -name "JARVIS" -type f 2>/dev/null | head
 
-      - name: Boot simulator + install + launch + screenshot
+      - name: Boot + install + launch + screenshots
         run: |
           APP=$(find build -name "JARVIS.app" -type d 2>/dev/null | head -1)
           echo "APP=$APP"
@@ -33,6 +30,11 @@ jobs:
           xcrun simctl launch "iPhone 15" com.salemai.jarvis
           sleep 10
           xcrun simctl io "iPhone 15" screenshot core_group.png
+          # scrolled to bottom — proves content clears the tab bar
+          xcrun simctl terminate "iPhone 15" com.salemai.jarvis 2>/dev/null || true
+          xcrun simctl launch "iPhone 15" com.salemai.jarvis -scrollBottom
+          sleep 8
+          xcrun simctl io "iPhone 15" screenshot scrolled_bottom.png
           ls -la *.png
 
       - uses: actions/upload-artifact@v4

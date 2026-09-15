@@ -15,6 +15,7 @@ struct HomeView: View {
     ]
 
     var body: some View {
+        ScrollViewReader { proxy in
         ScrollView {
                 VStack(alignment: .leading, spacing: JarvisSpacing.lg) {
                     HeaderView()
@@ -43,9 +44,16 @@ struct HomeView: View {
                     if let approval = vm.pendingApproval {
                         approvalCard(approval)
                     }
+                    Color.clear.frame(height: 1).id("bottom")
                 }
                 .padding(JarvisSpacing.lg)
             }
+            .onAppear {
+                if ProcessInfo.processInfo.arguments.contains("-scrollBottom") {
+                    proxy.scrollTo("bottom", anchor: .bottom)
+                }
+            }
+        }
 
         .safeAreaInset(edge: .bottom) {
             BottomNavBar(selected: $selectedTab)

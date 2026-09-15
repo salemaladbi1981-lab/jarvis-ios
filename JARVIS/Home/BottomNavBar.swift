@@ -31,6 +31,10 @@ struct BottomNavBar: View {
         }
         .padding(.vertical, JarvisSpacing.md)
         .padding(.horizontal, JarvisSpacing.lg)
-        .background(JarvisColor.bg_0.opacity(0.9))
+        .frame(maxWidth: .infinity)
+        .background(
+            JarvisColor.bg_0
+                .ignoresSafeArea(edges: .bottom)
+        )
     }
 }
