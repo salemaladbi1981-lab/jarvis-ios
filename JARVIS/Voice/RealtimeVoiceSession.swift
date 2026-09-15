@@ -78,8 +78,8 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
         // Minimal parsing: response.audio.delta → speaking, response.done → idle,
         // function_call_arguments.done → executing / approval.
         if text.contains("response.audio.delta") { eventPublisher.send(.speaking) }
-        else if text.contains("response.done") { eventPublisher.send(.idle) }
-        else if text.contains("response.audio_transcript.done") { eventPublisher.send(.idle) }
+        else if text.contains("response.done") { eventPublisher.send(.connected) }
+        else if text.contains("response.audio_transcript.done") { eventPublisher.send(.connected) }
         else if text.contains("function_call") { eventPublisher.send(.toolExecuting) }
     }
 
