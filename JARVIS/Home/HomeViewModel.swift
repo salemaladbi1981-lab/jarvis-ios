@@ -49,8 +49,11 @@ final class HomeViewModel: ObservableObject {
             .sink { [weak self] event in
                 guard let self else { return }
                 self.state = JarvisStateMapper.state(for: event)
-                if event == .listening { self.isListening = true }
-                if event == .disconnected || event == .connected { self.isListening = false }
+                switch event {
+                case .listening: self.isListening = true
+                case .disconnected, .connected: self.isListening = false
+                default: break
+                }
             }
             .store(in: &cancellables)
         voiceSession.onTranscript = { [weak self] text in

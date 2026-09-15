@@ -5,15 +5,12 @@ import AVFoundation
 /// Streams raw PCM16 to a callback (for realtime transport). No fake waveform.
 final class MicrophoneCapture {
     private let engine = AVAudioEngine()
-    private let converter: AVAudioConverter
     private let targetFormat: AVAudioFormat
     var onPCM: ((Data) -> Void)?
 
     init() {
         targetFormat = AVAudioFormat(commonFormat: .pcmFormatInt16,
                                      sampleRate: 24000, channels: 1, interleaved: true)!
-        converter = AVAudioConverter(from: AVAudioFormat(standardFormatWithSampleRate: 48000, channels: 1)!,
-                                     to: targetFormat)
     }
 
     var isRunning: Bool { engine.isRunning }
