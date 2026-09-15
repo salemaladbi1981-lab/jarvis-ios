@@ -112,9 +112,14 @@ final class HomeViewModel: ObservableObject {
         }
         guard access == .authorized else {
             state = .alert
-            calendarMessage = access == .denied
-                ? "صلاحية التذكيرات مرفوضة — فعّلها من إعدادات النظام"
-                : "التذكيرات غير متاحة"
+            switch access {
+            case .denied:
+                calendarMessage = "صلاحية التذكيرات مرفوضة — فعّلها من إعدادات النظام"
+            case .restricted:
+                calendarMessage = "الوصول إلى التذكيرات مقيد"
+            default:
+                calendarMessage = "التذكيرات غير متاحة — حالة: " + AppleEventKitProvider.accessDebugString(.reminder)
+            }
             return
         }
         let result = await calendarTools.upcomingReminders()
@@ -123,7 +128,12 @@ final class HomeViewModel: ObservableObject {
             calendarMessage = Self.formatReminders(result.reminders)
         } else {
             state = .alert
-            calendarMessage = "التذكيرات غير متاحة"
+            if result.error == "permission_denied" {
+                calendarMessage = "صلاحية التذكيرات مرفوضة — فعّلها من إعدادات النظام"
+            } else {
+                let diag = result.debugReason.map { " (" + $0 + ")" } ?? ""
+                calendarMessage = "التذكيرات غير متاحة" + diag
+            }
         }
     }
 

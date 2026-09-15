@@ -6,25 +6,41 @@ final class AppleEventKitProvider {
     private let store = EKEventStore()
 
     func eventAccess() -> CalendarPermissionState {
-        switch EKEventStore.authorizationStatus(for: .event) {
-        case .notDetermined: return .notDetermined
-        case .fullAccess: return .authorized
-        case .writeOnly: return .restricted
-        case .denied: return .denied
-        case .restricted: return .restricted
-        @unknown default: return .unavailable
-        }
+        Self.map(EKEventStore.authorizationStatus(for: .event))
     }
 
     func reminderAccess() -> CalendarPermissionState {
-        switch EKEventStore.authorizationStatus(for: .reminder) {
+        Self.map(EKEventStore.authorizationStatus(for: .reminder))
+    }
+
+    /// Single mapping for every EKAuthorizationStatus (includes legacy .authorized).
+    static func map(_ s: EKAuthorizationStatus) -> CalendarPermissionState {
+        switch s {
         case .notDetermined: return .notDetermined
-        case .fullAccess: return .authorized
-        case .writeOnly: return .restricted
-        case .denied: return .denied
-        case .restricted: return .restricted
-        @unknown default: return .unavailable
+        case .authorized:    return .authorized   // legacy alias (iOS <17 shape)
+        case .fullAccess:    return .authorized
+        case .writeOnly:     return .restricted
+        case .denied:        return .denied
+        case .restricted:    return .restricted
+        @unknown default:    return .unavailable
         }
+    }
+
+    /// Safe diagnostic string (no personal data) — for device debugging.
+    static func accessDebugString(_ entity: EKEntityType) -> String {
+        let s = EKEventStore.authorizationStatus(for: entity)
+        let raw = s.rawValue
+        let name: String
+        switch s {
+        case .notDetermined: name = "notDetermined"
+        case .authorized:    name = "authorized(legacy)"
+        case .fullAccess:    name = "fullAccess"
+        case .writeOnly:     name = "writeOnly"
+        case .denied:        name = "denied"
+        case .restricted:    name = "restricted"
+        @unknown default:    name = "unknown"
+        }
+        return "\(name) [raw \(raw)]"
     }
 
     func requestEvents() async -> CalendarPermissionState {
