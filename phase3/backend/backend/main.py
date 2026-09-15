@@ -64,7 +64,11 @@ class ApproveReq(BaseModel):
 
 @app.get("/health")
 def health():
-    return {"ok": True, "provider": config.REALTIME_PROVIDER}
+    return {
+        "ok": True,
+        "provider": config.REALTIME_PROVIDER,
+        "realtime": "available" if config.OPENAI_API_KEY else "unavailable",
+    }
 
 @app.post("/session")
 def create_session():

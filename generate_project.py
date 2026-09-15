@@ -19,6 +19,7 @@ APP_SOURCES = [
     "JARVIS/Voice/VoiceSession.swift", "JARVIS/Voice/RealtimeVoiceSession.swift", "JARVIS/Voice/AudioCapture.swift",
     "JARVIS/Integrations/EventKitModels.swift", "JARVIS/Integrations/AppleEventKitProvider.swift",
     "JARVIS/Integrations/MockCalendarProvider.swift", "JARVIS/Integrations/CalendarTools.swift",
+    "JARVIS/Diagnostics/PreflightDiagnostics.swift",
     "JARVIS/Cards/Cards.swift",
     "JARVIS/State/JarvisState.swift",
     "JARVIS/Agents/AgentRegistry.swift", "JARVIS/Agents/AgentStore.swift",
@@ -81,6 +82,7 @@ groups["iPad"] = subgroup("iPad", [p for p in APP_SOURCES if "/iPad/" in p])
 groups["macOS"] = subgroup("macOS", [p for p in APP_SOURCES if "/macOS/" in p])
 groups["Voice"] = subgroup("Voice", [p for p in APP_SOURCES if "/Voice/" in p])
 groups["Integrations"] = subgroup("Integrations", [p for p in APP_SOURCES if "/Integrations/" in p])
+groups["Diagnostics"] = subgroup("Diagnostics", [p for p in APP_SOURCES if "/Diagnostics/" in p])
 
 font_refs = [app_res_refs[p] for p in APP_RESOURCES if "Fonts" in p]
 json_refs = [app_res_refs[p] for p in APP_RESOURCES if "Resources" in p]
@@ -93,7 +95,7 @@ resources_group = group(sorted(json_refs), "Resources", "Resources")
 jarvis_group = group(
     [groups["App"], groups["Home"], groups["Core"], groups["Cards"],
      groups["State"], groups["Agents"], groups["DesignSystem"],
-     groups["Providers"], groups["Mocks"], groups["iPad"], groups["macOS"], groups["Voice"], groups["Integrations"], assets_group, resources_group, plist_ref],
+     groups["Providers"], groups["Mocks"], groups["iPad"], groups["macOS"], groups["Voice"], groups["Integrations"], groups["Diagnostics"], assets_group, resources_group, plist_ref],
     "JARVIS", "JARVIS"
 )
 tests_group = group(sorted(test_refs.values()), "JARVISTests", "JARVISTests")
@@ -129,6 +131,9 @@ mac_settings = {
     "MARKETING_VERSION": "0.1.0", "PRODUCT_BUNDLE_IDENTIFIER": "com.salemai.jarvis.mac",
     "PRODUCT_NAME": "JARVIS Mac", "SDKROOT": "macosx", "SWIFT_VERSION": "5.0",
     "ENABLE_HARDENED_RUNTIME": "YES",
+    "INFOPLIST_KEY_NSMicrophoneUsageDescription": "جارفس يحتاج الميكروفون للمحادثة الصوتية.",
+    "INFOPLIST_KEY_NSCalendarsUsageDescription": "جارفس يحتاج التقويم لعرض مواعيدك.",
+    "INFOPLIST_KEY_NSRemindersUsageDescription": "جارفس يحتاج التذكيرات لعرض مهامك.",
 }
 proj_common = {"MACOSX_DEPLOYMENT_TARGET": "14.0", "IPHONEOS_DEPLOYMENT_TARGET": "17.0", "SDKROOT": "macosx", "CLANG_ENABLE_MODULES": "YES"}
 app_debug = add("XCBuildConfiguration", buildSettings=dict(app_settings), name="Debug")

@@ -4,6 +4,9 @@ import Combine
 /// WebSocket-backed live voice session. Connects to the trusted control plane
 /// (which proxies to OpenAI Realtime), never holding provider secrets itself.
 final class RealtimeVoiceSession: NSObject, VoiceSession {
+    /// Control-plane base URL. No secrets here — the server holds the credential.
+    static var backendBaseURL: String = "https://jarvis.qeyas.app"
+
     let eventPublisher = PassthroughSubject<VoiceSessionEvent, Never>()
     private var ws: URLSessionWebSocketTask?
     private var session = URLSession(configuration: .default)
