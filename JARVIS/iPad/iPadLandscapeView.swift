@@ -18,7 +18,7 @@ struct iPadLandscapeView: View {
                     JarvisHeroView(vm: vm, coreSize: 300)
                     JarvisTitleGreetingView()
                     JarvisWaveformStatusView(vm: vm)
-                    VoiceInputBar(isListening: vm.isListening) { vm.cycleState() }
+                    VoiceInputBar(isListening: vm.isListening) { vm.toggleVoice() }
                     if let approval = vm.pendingApproval {
                         ApprovalCardView(vm: vm, action: approval)
                     }

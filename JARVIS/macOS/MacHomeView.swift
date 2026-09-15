@@ -43,7 +43,7 @@ struct MacHomeView: View {
                             Task { await vm.handleQuickCommand(cmd) }
                         }
 
-                    VoiceInputBar(isListening: vm.isListening) { vm.cycleState() }
+                    VoiceInputBar(isListening: vm.isListening) { vm.toggleVoice() }
 
                     if let approval = vm.pendingApproval {
                         ApprovalCardView(vm: vm, action: approval)

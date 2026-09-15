@@ -30,7 +30,7 @@ struct HomeView: View {
                         Task { await vm.handleQuickCommand(cmd) }
                     }
 
-                    VoiceInputBar(isListening: vm.isListening) { vm.cycleState() }
+                    VoiceInputBar(isListening: vm.isListening) { vm.toggleVoice() }
 
                     if let msg = vm.calendarMessage {
                         Text(msg)

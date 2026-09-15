@@ -26,6 +26,9 @@ final class HomeViewModel: ObservableObject {
     private(set) var registry: AgentRegistry?
     private let calendarTools = CalendarTools(useMock: false)
     private let calendarProvider = AppleEventKitProvider()
+    private let voiceSession = RealtimeVoiceSession()
+    private var cancellables = Set<AnyCancellable>()
+    private var isVoiceActive = false
 
     init(
         smartHome: SmartHomeProvider = MockSmartHomeProvider(),
@@ -37,6 +40,22 @@ final class HomeViewModel: ObservableObject {
         self.security = security
         self.media = media
         self.voice = voice
+        bindVoice()
+    }
+
+    private func bindVoice() {
+        voiceSession.eventPublisher
+            .receive(on: RunLoop.main)
+            .sink { [weak self] event in
+                guard let self else { return }
+                self.state = JarvisStateMapper.state(for: event)
+                if event == .listening { self.isListening = true }
+                if event == .disconnected || event == .connected { self.isListening = false }
+            }
+            .store(in: &cancellables)
+        voiceSession.onTranscript = { [weak self] text in
+            Task { await self?.routeVoiceTranscript(text) }
+        }
     }
 
     func load() async {
@@ -65,6 +84,52 @@ final class HomeViewModel: ObservableObject {
         }
     }
 
+
+    // MARK: Live voice (M3.5)
+    func toggleVoice() {
+        if isVoiceActive {
+            voiceSession.stopListening()
+            isVoiceActive = false
+            isListening = false
+            state = .idle
+        } else {
+            Task {
+                do {
+                    guard let url = URL(string: RealtimeVoiceSession.backendBaseURL) else {
+                        state = .alert; calendarMessage = "عنوان الخادم غير صالح"; return
+                    }
+                    try await voiceSession.connect(baseURL: url)
+                    voiceSession.startListening()
+                    isVoiceActive = true
+                    isListening = true
+                } catch {
+                    state = .alert
+                    calendarMessage = "تعذّر الاتصال بالخادم الصوتي"
+                }
+            }
+        }
+    }
+
+    /// Voice transcript (free text from speech) → local tool route → spoken result.
+    func routeVoiceTranscript(_ text: String) async {
+        let t = text.lowercased()
+        if t.contains("تذكير") || t.contains("reminder") {
+            await runReminders()
+            speakResult()
+        } else if t.contains("جدول") || t.contains("موعد") || t.contains("اليوم") || t.contains("بكرة") || t.contains("calendar") {
+            await runCalendar(kind: "today")
+            speakResult()
+        } else {
+            // غير موجه لأداة — دع النموذج الصوتي يرد مباشرة على النص.
+            voiceSession.sendText(text)
+        }
+    }
+
+    private func speakResult() {
+        if let msg = calendarMessage {
+            voiceSession.sendText(msg)
+        }
+    }
 
     // MARK: Quick commands (typed routing — no fragile text matching)
     func handleQuickCommand(_ cmd: QuickCommand) async {

@@ -1,15 +1,21 @@
 import Foundation
 import Combine
 
-/// WebSocket-backed live voice session. Connects to the trusted control plane
-/// (which proxies to OpenAI Realtime), never holding provider secrets itself.
+/// WebSocket-backed live voice session. Mic → backend proxy → OpenAI Realtime,
+/// streamed audio out → playback. Holds no provider secrets.
 final class RealtimeVoiceSession: NSObject, VoiceSession {
-    /// Control-plane base URL. No secrets here — the server holds the credential.
     static var backendBaseURL: String = "https://jarvis.qeyas.app"
 
     let eventPublisher = PassthroughSubject<VoiceSessionEvent, Never>()
+    /// Final user transcript (e.g. "وش عندي اليوم؟") for local tool routing.
+    var onTranscript: ((String) -> Void)?
+    /// Tool-result text to speak back (calendar/reminders result).
+    var onNeedSpokenResponse: (() -> Void)?
+
     private var ws: URLSessionWebSocketTask?
     private var session = URLSession(configuration: .default)
+    private let mic = MicrophoneCapture()
+    private let playback = AudioPlayback()
 
     func connect(baseURL: URL) async throws {
         eventPublisher.send(.connecting)
@@ -26,6 +32,7 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     }
 
     func disconnect() {
+        stopListening()
         ws?.cancel(with: .goingAway, reason: nil)
         ws = nil
         eventPublisher.send(.disconnected)
@@ -33,13 +40,25 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
 
     func startListening() {
         eventPublisher.send(.listening)
-        // Mic capture feeds PCM16 chunks via sendAudio (platform adapter).
+        mic.onPCM = { [weak self] data in self?.sendAudio(pcm16: data) }
+        do {
+            try mic.start()
+            try playback.start()
+        } catch {
+            eventPublisher.send(.error("mic_unavailable"))
+        }
     }
 
-    /// Barge-in: cancel the in-flight assistant response, stop output, → Listening.
+    func stopListening() {
+        mic.stop()
+        playback.stop()
+    }
+
+    /// Barge-in: cancel in-flight assistant response, stop output, → Listening.
     func interrupt() {
         let cancel = #"{"type":"response.cancel"}"#
         ws?.send(.string(cancel)) { _ in }
+        playback.stop()
         eventPublisher.send(.interrupted)
     }
 
@@ -52,7 +71,6 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     }
 
     func sendAudio(pcm16: Data) {
-        // base64 PCM16 → input_audio_buffer.append
         let b64 = pcm16.base64EncodedString()
         let msg = #"{"type":"input_audio_buffer.append","audio":"\#(b64)"}"#
         ws?.send(.string(msg)) { _ in }
@@ -64,10 +82,8 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
             switch result {
             case .success(let message):
                 switch message {
-                case .string(let text):
-                    self.handleServer(text)
-                case .data(let data):
-                    self.handleAudio(data)
+                case .string(let text): self.handleServer(text)
+                case .data(let data): self.handleAudio(data)
                 @unknown default: break
                 }
                 self.receiveLoop()
@@ -78,16 +94,46 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     }
 
     private func handleServer(_ text: String) {
-        // Minimal parsing: response.audio.delta → speaking, response.done → idle,
-        // function_call_arguments.done → executing / approval.
-        if text.contains("response.audio.delta") { eventPublisher.send(.speaking) }
-        else if text.contains("response.done") { eventPublisher.send(.connected) }
-        else if text.contains("response.audio_transcript.done") { eventPublisher.send(.connected) }
-        else if text.contains("function_call") { eventPublisher.send(.toolExecuting) }
+        // Parse minimal JSON: extract type + transcript text.
+        if let t = Self.jsonStringField(text, "type") {
+            switch t {
+            case "response.audio.delta":
+                if let b64 = Self.jsonStringField(text, "delta") {
+                    if let data = Data(base64Encoded: b64) { handleAudio(data) }
+                }
+                eventPublisher.send(.speaking)
+            case "conversation.item.input_audio_transcription.completed":
+                if let txt = Self.transcriptText(text) { onTranscript?(txt) }
+            case "response.done":
+                eventPublisher.send(.connected)
+            case "response.function_call_arguments.done":
+                eventPublisher.send(.toolExecuting)
+            case "error":
+                eventPublisher.send(.error("realtime_error"))
+            default: break
+            }
+        }
     }
 
     private func handleAudio(_ data: Data) {
-        // Platform adapter enqueues decoded audio for playback.
+        playback.enqueue(pcm16: data)
         eventPublisher.send(.speaking)
+    }
+
+    private static func jsonStringField(_ text: String, _ key: String) -> String? {
+        guard let data = text.data(using: .utf8),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        return obj[key] as? String
+    }
+
+    private static func transcriptText(_ text: String) -> String? {
+        guard let data = text.data(using: .utf8),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let item = obj["item"] as? [String: Any],
+              let content = item["content"] as? [[String: Any]] else { return nil }
+        for c in content where c["type"] as? String == "input_text" || c["type"] as? String == "text" {
+            if let t = c["text"] as? String, !t.isEmpty { return t }
+        }
+        return nil
     }
 }

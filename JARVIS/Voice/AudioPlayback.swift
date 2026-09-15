@@ -1,0 +1,55 @@
+import Foundation
+import AVFoundation
+
+/// Real streaming audio output: enqueue 24kHz mono PCM16 buffers to speaker.
+final class AudioPlayback {
+    private let engine = AVAudioEngine()
+    private let player = AVAudioPlayerNode()
+    private let format: AVAudioFormat
+    private var ready = false
+
+    init() {
+        format = AVAudioFormat(commonFormat: .pcmFormatInt16,
+                               sampleRate: 24000, channels: 1, interleaved: true)!
+    }
+
+    func start() throws {
+        #if os(iOS)
+        let session = AVAudioSession.sharedInstance()
+        try session.setCategory(.playAndRecord, mode: .voiceChat,
+                                options: [.allowBluetooth, .defaultToSpeaker])
+        try session.setActive(true, options: [])
+        #endif
+        if !ready {
+            engine.attach(player)
+            engine.connect(player, to: engine.mainMixerNode, format: format)
+            ready = true
+        }
+        engine.prepare()
+        try engine.start()
+        player.play()
+    }
+
+    /// Enqueue raw PCM16 bytes (24kHz mono) for immediate playback.
+    func enqueue(pcm16: Data) {
+        guard ready, let buffer = Self.toBuffer(pcm16, format: format) else { return }
+        player.scheduleBuffer(buffer, completionHandler: nil)
+    }
+
+    func stop() {
+        player.stop()
+        engine.stop()
+    }
+
+    private static func toBuffer(_ data: Data, format: AVAudioFormat) -> AVAudioPCMBuffer? {
+        let frames = AVAudioFrameCount(data.count / MemoryLayout<Int16>.size)
+        guard frames > 0, let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames) else { return nil }
+        buffer.frameLength = frames
+        data.withUnsafeBytes { raw in
+            guard let base = raw.bindMemory(to: Int16.self).baseAddress,
+                  let dst = buffer.int16ChannelData?[0] else { return }
+            dst.update(from: base, count: Int(frames))
+        }
+        return buffer
+    }
+}
