@@ -17,6 +17,7 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     private let mic = MicrophoneCapture()
     private let playback = AudioPlayback()
     private var micActive = false
+    private var isSpeaking = false
 
     func connect(baseURL: URL) async throws {
         eventPublisher.send(.connecting)
@@ -42,35 +43,9 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     func startListening() {
         eventPublisher.send(.listening)
         mic.onPCM = { [weak self] data in self?.sendAudio(pcm16: data) }
-        playback.onPlaybackFinished = { [weak self] in
-            // لا نعيد الميكروفون إلا بعد انتهاء تشغيل الصوت فعلياً (لا echo).
-            self?.resumeMic()
-        }
         do {
             try mic.start()
             try playback.start()
-            micActive = true
-        } catch {
-            eventPublisher.send(.error("mic_unavailable"))
-        }
-    }
-
-    /// إيقاف الالتقاط أثناء رد النموذج (half-duplex) — يمنع echo/تداخل الـ turn.
-    private func pauseMic() {
-        guard micActive else { return }
-        trace("pauseMic — mic.stop")
-        mic.stop()
-        micActive = false
-        // لا manual commit هنا — الـ server VAD (semantic_vad) يملك الـ commit
-        // (مساران commit لنفس الـ turn → input_audio_buffer_commit_empty error).
-    }
-
-    /// إعادة الاستماع بعد اكتمال الرد.
-    private func resumeMic() {
-        guard !micActive else { return }
-        trace("resumeMic — mic.start")
-        do {
-            try mic.start()
             micActive = true
         } catch {
             eventPublisher.send(.error("mic_unavailable"))
@@ -82,12 +57,17 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
         playback.stop()
     }
 
-    /// Barge-in: cancel in-flight assistant response, stop output, → Listening.
-    func interrupt() {
+    /// Barge-in: إلغاء الرد الجاري + مسح الـ playback (الـ mic يبقى شغّالاً).
+    private func bargeIn() {
+        trace("bargeIn — response.cancel + flush playback")
         let cancel = #"{"type":"response.cancel"}"#
         ws?.send(.string(cancel)) { _ in }
-        playback.stop()
+        playback.flush()
         eventPublisher.send(.interrupted)
+    }
+
+    func interrupt() {
+        bargeIn()
     }
 
     func sendText(_ text: String) {
@@ -134,14 +114,17 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
             }
             switch t {
             case "response.output_audio.delta":
-                pauseMic()   // half-duplex: أوقف الالتقاط أثناء الرد
+                isSpeaking = true
                 if let b64 = Self.jsonStringField(text, "delta") {
                     if let data = Data(base64Encoded: b64) { playback.enqueue(pcm16: data) }
                 }
                 eventPublisher.send(.speaking)
             case "input_audio_buffer.speech_started":
-                // VAD metadata — لمعرفة سبب اكتشاف الكلام الوهمي.
                 trace("VAD speech_started payload: \(text)")
+                // Barge-in: كلام المستخدم أثناء رد جارفس → إلغاء الرد الجاري.
+                if isSpeaking {
+                    bargeIn()
+                }
             case "input_audio_buffer.speech_stopped":
                 trace("VAD speech_stopped payload: \(text)")
             case "conversation.item.input_audio_transcription.completed":
@@ -154,11 +137,7 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                 // نص رد جارفس — لا يُعاد توجيهه (يمنع الـ loop).
                 break
             case "response.done":
-                // لا نعيد الميكروفون إلا إذا انتهى الـ playback فعلياً
-                // (وإلا نلتقط آخر صوت جارفس كـ echo → turn جديد).
-                if !playback.hasPendingBuffers {
-                    resumeMic()
-                }
+                isSpeaking = false
                 eventPublisher.send(.connected)
             case "response.function_call_arguments.done":
                 eventPublisher.send(.toolExecuting)

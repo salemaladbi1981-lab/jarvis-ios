@@ -30,7 +30,10 @@ async def openai_realtime_proxy(client_ws, session_config: dict):
         session.setdefault("audio", {}).setdefault("output", {})["voice"] = config.REALTIME_VOICE
         # تفعيل input audio transcription — لجعل user transcript قابل للملاحظة
         # transcription مفعّل بوجود model (لا حقل enabled في GA)
-        session.setdefault("audio", {}).setdefault("input", {})["transcription"] = {"model": "whisper-1"}
+        inp = session.setdefault("audio", {}).setdefault("input", {})
+        inp["transcription"] = {"model": "whisper-1"}
+        # barge-in native: الـ model يلغي الرد عند كلام المستخدم أثناء speaking
+        inp["turn_detection"] = {"type": "semantic_vad", "interrupt_response": True, "create_response": True}
         session.setdefault("instructions", config.REALTIME_INSTRUCTIONS)
         await upstream.send(json.dumps({"type": "session.update", "session": session}))
         # bidirectional relay

@@ -51,6 +51,14 @@ final class AudioPlayback {
         }
     }
 
+    /// Barge-in: إيقاف فوري + مسح كل الـ buffers المعلقة (لا يكمل الرد القديم).
+    func flush() {
+        player.stop()
+        player.reset()
+        pendingBuffers = 0
+        player.play()
+    }
+
     func stop() {
         player.stop()
         engine.stop()

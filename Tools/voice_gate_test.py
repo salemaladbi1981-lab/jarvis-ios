@@ -51,8 +51,8 @@ check("direct conversation does NOT re-send text", 'voiceSession.sendText(text)'
 
 
 # BUG#6: half-duplex (mic pause/resume) — يمنع echo/تداخل turn
-check("mic pauses on response.output_audio.delta", 'pauseMic()' in rvs2 and 'response.output_audio.delta' in rvs2)
-check("mic resumes on response.done", 'resumeMic()' in rvs2 and 'response.done' in rvs2)
+check("full-duplex: no pauseMic on audio delta", 'pauseMic' not in rvs2)
+check("barge-in: isSpeaking + bargeIn on speech_started", 'isSpeaking' in rvs2 and 'bargeIn' in rvs2 and 'speech_started' in rvs2)
 import re as _re
 _m = _re.search(r'private func handleAudio\(.*?\n    \}', rvs2, _re.DOTALL)
 check("handleAudio no duplicate .speaking", _m is not None and 'eventPublisher.send(.speaking)' not in _m.group(0))
@@ -82,8 +82,8 @@ check("stop nils engine (clean state)", 'engine = nil' in mic3)
 # M3.5 turn-integrity: 1 turn → 1 response → drained → resume (no echo loop)
 rvs3 = read('Voice/RealtimeVoiceSession.swift')
 mic4 = read('Voice/MicrophoneCapture.swift')
-check("resumeMic gated on playback drained (onPlaybackFinished)", 'playback.onPlaybackFinished' in rvs3 and 'resumeMic' in rvs3)
-check("response.done does NOT resume if buffers pending", 'hasPendingBuffers' in rvs3)
+check("no resumeMic (full-duplex keeps mic on)", 'resumeMic' not in rvs3)
+check("response.done clears isSpeaking", 'isSpeaking = false' in rvs3)
 check("no manual commit (server VAD owns commit)", 'input_audio_buffer.commit' not in rvs3)
 check("mic.start does NOT reconfigure AudioSession", 'session.setCategory' not in mic4)
 
