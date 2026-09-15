@@ -84,7 +84,7 @@ rvs3 = read('Voice/RealtimeVoiceSession.swift')
 mic4 = read('Voice/MicrophoneCapture.swift')
 check("resumeMic gated on playback drained (onPlaybackFinished)", 'playback.onPlaybackFinished' in rvs3 and 'resumeMic' in rvs3)
 check("response.done does NOT resume if buffers pending", 'hasPendingBuffers' in rvs3)
-check("commit input buffer on pauseMic", 'commitInputBuffer' in rvs3 and 'input_audio_buffer.commit' in rvs3)
+check("no manual commit (server VAD owns commit)", 'input_audio_buffer.commit' not in rvs3)
 check("mic.start does NOT reconfigure AudioSession", 'session.setCategory' not in mic4)
 
 print(f"\n== RESULT: {PASS} PASS / {FAIL} FAIL ==")
