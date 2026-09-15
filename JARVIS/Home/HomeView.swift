@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// P2.2 native iOS Home — approved hierarchy, provider-driven data,
-/// registry-driven approval, generated design tokens.
+/// Single-column Home (iPhone + iPad portrait + narrow split view).
+/// Reuses shared hero/title/waveform components.
 struct HomeView: View {
     @StateObject private var vm = HomeViewModel()
     @State private var selectedTab = "home"
@@ -16,18 +16,15 @@ struct HomeView: View {
 
     var body: some View {
         ScrollViewReader { proxy in
-        ScrollView {
+            ScrollView {
                 VStack(alignment: .leading, spacing: JarvisSpacing.lg) {
                     HeaderView()
 
-                    hero
+                    JarvisHeroView(vm: vm)
 
-                    titleAndGreeting
+                    JarvisTitleGreetingView()
 
-                    VStack(spacing: 4) {
-                        WaveformView(state: vm.state)
-                        statusLine
-                    }
+                    JarvisWaveformStatusView(vm: vm)
 
                     SmartHomeCard(devices: vm.homeDevices)
                         .onTapGesture { vm.requestAction(agentID: "core_home", action: "read-temperature") }
@@ -42,7 +39,7 @@ struct HomeView: View {
                     VoiceInputBar(isListening: vm.isListening) { vm.cycleState() }
 
                     if let approval = vm.pendingApproval {
-                        approvalCard(approval)
+                        ApprovalCardView(vm: vm, action: approval)
                     }
                     Color.clear.frame(height: 1).id("bottom")
                 }
@@ -54,7 +51,6 @@ struct HomeView: View {
                 }
             }
         }
-
         .safeAreaInset(edge: .bottom) {
             BottomNavBar(selected: $selectedTab)
         }
@@ -65,82 +61,4 @@ struct HomeView: View {
         .task { await vm.load() }
     }
 
-    private var hero: some View {
-        ZStack {
-            JarvisCoreView(state: vm.state, size: 250)
-            JarvisOrbitView(
-                agents: vm.agents(in: vm.activeGroup),
-                coreSize: 250,
-                activeAgentID: vm.state == .executing ? vm.agents(in: vm.activeGroup).first?.id : nil
-            )
-        }
-        .frame(maxWidth: .infinity)
-        .frame(height: 320)
-        .id(vm.activeGroup)
-        .transition(.opacity)
-        .animation(.easeInOut(duration: JarvisMotion.groupTransition), value: vm.activeGroup)
-        .contentShape(Rectangle())
-        .gesture(
-            DragGesture(minimumDistance: 40)
-                .onEnded { g in
-                    if g.translation.width < 0 { vm.nextGroup() } else { vm.prevGroup() }
-                }
-        )
-        .accessibilityLabel("مدار الإيجنتات — مجموعة \(vm.activeGroup)")
-    }
-
-    private var titleAndGreeting: some View {
-        VStack(spacing: 4) {
-            Text("جارفس")
-                .font(.custom("IBMPlexSansArabic-Bold", size: 30))
-                .foregroundColor(JarvisColor.text_primary)
-            Text("مساء الخير يا دكتور.")
-                .font(.system(size: 16))
-                .foregroundColor(JarvisColor.text_secondary)
-            Text("كل شيء تحت السيطرة.")
-                .font(.system(size: 13))
-                .foregroundColor(JarvisColor.text_muted)
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    private var statusLine: some View {
-        HStack {
-            Circle()
-                .fill(JarvisColor.primary_blue)
-                .frame(width: 8, height: 8)
-            Text(vm.statusText)
-                .font(.system(size: 13))
-                .foregroundColor(JarvisColor.text_secondary)
-        }
-        .accessibilityLabel(vm.statusText)
-    }
-
-    private func approvalCard(_ action: String) -> some View {
-        JarvisCard {
-            VStack(alignment: .leading, spacing: JarvisSpacing.md) {
-                HStack {
-                    Image(systemName: JarvisIconResolver.symbol(for: "util.alert"))
-                        .foregroundColor(JarvisColor.warning_demo)
-                    Text("طلب موافقة")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundColor(JarvisColor.text_primary)
-                    Spacer()
-                    DemoBadge()
-                }
-                Text("الإجراء: \(action)")
-                    .font(.system(size: 13))
-                    .foregroundColor(JarvisColor.text_secondary)
-                HStack(spacing: JarvisSpacing.md) {
-                    Button("موافقة") { vm.approve() }
-                        .buttonStyle(.borderedProminent)
-                        .tint(JarvisColor.success)
-                    Button("رفض") { vm.reject() }
-                        .buttonStyle(.bordered)
-                        .tint(JarvisColor.danger)
-                }
-            }
-        }
-        .transition(.opacity)
-    }
 }

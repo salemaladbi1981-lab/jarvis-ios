@@ -13,6 +13,8 @@ APP_SOURCES = [
     "JARVIS/Home/HeaderView.swift", "JARVIS/Home/QuickSuggestions.swift",
     "JARVIS/Home/VoiceInputBar.swift", "JARVIS/Home/BottomNavBar.swift",
     "JARVIS/Core/JarvisCoreView.swift", "JARVIS/Core/JarvisOrbitView.swift", "JARVIS/Core/WaveformView.swift",
+    "JARVIS/Core/JarvisHeroView.swift", "JARVIS/Core/ApprovalCardView.swift",
+    "JARVIS/iPad/iPadLandscapeView.swift", "JARVIS/iPad/AdaptiveRootView.swift",
     "JARVIS/Cards/Cards.swift",
     "JARVIS/State/JarvisState.swift",
     "JARVIS/Agents/AgentRegistry.swift", "JARVIS/Agents/AgentStore.swift",
@@ -70,6 +72,7 @@ groups["Agents"] = subgroup("Agents", [p for p in APP_SOURCES if "/Agents/" in p
 groups["DesignSystem"] = subgroup("DesignSystem", [p for p in APP_SOURCES if "/DesignSystem/" in p])
 groups["Providers"] = subgroup("Providers", [p for p in APP_SOURCES if "/Providers/" in p])
 groups["Mocks"] = subgroup("Mocks", [p for p in APP_SOURCES if "/Mocks/" in p])
+groups["iPad"] = subgroup("iPad", [p for p in APP_SOURCES if "/iPad/" in p])
 
 font_refs = [app_res_refs[p] for p in APP_RESOURCES if "Fonts" in p]
 json_refs = [app_res_refs[p] for p in APP_RESOURCES if "Resources" in p]
@@ -82,7 +85,7 @@ resources_group = group(sorted(json_refs), "Resources", "Resources")
 jarvis_group = group(
     [groups["App"], groups["Home"], groups["Core"], groups["Cards"],
      groups["State"], groups["Agents"], groups["DesignSystem"],
-     groups["Providers"], groups["Mocks"], assets_group, resources_group, plist_ref],
+     groups["Providers"], groups["Mocks"], groups["iPad"], assets_group, resources_group, plist_ref],
     "JARVIS", "JARVIS"
 )
 tests_group = group(sorted(test_refs.values()), "JARVISTests", "JARVISTests")

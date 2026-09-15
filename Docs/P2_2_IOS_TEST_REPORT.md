@@ -1,49 +1,51 @@
-# JARVIS — P2.2 iOS Test Report
+# JARVIS — P2.2 iOS Test Report (Runtime)
 
-## Build status
-**NOT COMPILED** — this host is Linux (no Xcode). The SwiftUI project cannot be
-built or run here. Compilation must be performed on macOS/Xcode 15+.
-An Xcode-ready project (`JARVIS.xcodeproj`) is now included for direct opening.
+## Environment
+- Build host: GitHub Actions `macos-14` runner (Xcode 15.4, iOS 17.5 SDK)
+- Simulator: iPhone 15 (iOS 17.5)
+- Evidence: 10 deterministic screenshots captured via launch arguments
 
-## Added in this pass (source-level, verified here)
-- `ApprovalPolicyEvaluatorTests` (Swift) + `approval_policy_test.py` (Python):
-  6/6 PASS — core_home+unlock-door, core_home+read-temperature,
-  core_guardian+disable-camera, core_dealmaker+financial-commitment,
-  sys_server+destructive-config, unknown→fail-safe.
-- `token_usage_check.py`: PASS — no hard-coded approved colors in views.
-- Provider wiring: HomeViewModel initializes with mock providers (unit test).
-
-## What WAS verified here (logic-level, from the P2.1 foundation)
-The shared foundation tests run on this host and pass (these cover the registry,
-tokens, and state model that the iOS app consumes):
+## Results
 
 | Test | Result |
 |---|---|
-| token_parity_test.py (115 fields) | PASS (115/115, 0 failed, 0 missing) |
-| registry_decode_test.py (21 agents, 3 groups) | PASS (0 failures) |
-| state_parity_test.py (7 states) | PASS (7/7) |
+| Xcode build | PASS |
+| iOS Simulator launch | PASS |
+| Core group (8) | PASS |
+| System group (5) | PASS |
+| Content group (8) | PASS |
+| Idle state | PASS |
+| Listening state | PASS |
+| Thinking state | PASS |
+| Speaking state | PASS |
+| Executing state | PASS |
+| Alert state | PASS |
+| Approval state | PASS |
+| Approval flow (core_home + unlock-door) | PASS |
+| Safe read without approval (core_home + read-temperature) | PASS |
+| RTL (forced `.layoutDirection = .rightToLeft`) | PASS |
+| Arabic date/time (locale ar_QA, Western numerals) | PASS |
+| Fonts (IBM Plex Sans Arabic + Cormorant bundled) | PASS |
+| Icons (SF Symbols via JarvisIconResolver) | PASS |
+| Bottom-nav overlap fix | PASS |
+| Offline launch (airplane mode) | NOT VERIFIED |
+| Reduced Motion | NOT VERIFIED |
+| VoiceOver / accessibility | NOT VERIFIED |
 
-## What was NOT verified here (requires macOS/Xcode/simulator)
-- Xcode build success
-- offline (airplane-mode) launch
-- RTL visual correctness
-- all 3 agent groups rendering
-- all 7 state transitions visually
-- approval mock flow
-- scrolling
-- reduced-motion behavior
-- VoiceOver labels
-- screenshot parity vs MOBILE IMAGE A
+## Approval flow (verified)
+- `core_home + unlock-door` → registry policy requires approval → state = Approval,
+  "طلب موافقة" card with Approve/Reject appears (see `10_approval.png`).
+- `core_home + read-temperature` → default policy = none → no approval (executes).
+- Unit test `ApprovalPolicyEvaluatorTests` + `approval_policy_test.py` (6/6 PASS).
 
-## Known issues / risks (honest)
-1. **SF Symbol names** (`house.fill`, `square.grid.2x2.fill`, `car.fill`,
-   `waveform`, `ellipsis`, `shield.fill`, `video.fill`, `lock.fill`, etc.)
-   should be verified on Xcode — if any symbol is renamed in the target iOS
-   version it must be corrected.
-2. **Font PostScript names** (`IBMPlexSansArabic-Bold`,
-   `CormorantGaramond-SemiBold`) must be confirmed against the actual bundled
-   .ttf files; adjust the `.custom(...)` calls if they differ.
-3. **`JarvisMotion` / `JarvisRadius` / `JarvisSpacing`** are referenced in views
-   as bare members of the generated enums; if Xcode's target membership is
-   missing for `JarvisTokens.swift` the build will fail — ensure it is added to
-   the app target.
+## Known issues / honest limitations
+1. **Arabic OCR is unreliable on this host** — the assistant cannot verify each
+   agent display name pixel-perfectly from the screenshots; group counts and
+   layout were verified, and the owner reviewed the screenshots visually.
+2. **Offline / Reduced Motion / VoiceOver** were not exercised in CI (the
+   screenshot workflow does not toggle airplane mode, Reduce Motion, or
+   VoiceOver). They are implemented in source but remain runtime-unverified.
+3. **Runtime fixes applied this phase**: added `CFBundleExecutable`/
+   `CFBundlePackageType`/`CFBundleInfoDictionaryVersion` to Info.plist;
+   opaque bottom nav background covering the bottom safe area;
+   `safeAreaInset(edge: .bottom)`; header LTR placement; Arabic date formatter.

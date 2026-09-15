@@ -4,7 +4,7 @@ import SwiftUI
 struct JARVISApp: App {
     var body: some Scene {
         WindowGroup {
-            HomeView()
+            AdaptiveRootView()
                 .environment(\.layoutDirection, .rightToLeft)
                 .preferredColorScheme(.dark)
         }

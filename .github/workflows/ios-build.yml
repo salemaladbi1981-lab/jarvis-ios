@@ -21,35 +21,42 @@ jobs:
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
 
-      - name: Boot + install + deterministic screenshots
+      - name: List simulators
+        run: xcrun simctl list devices available | grep -i ipad | head
+
+      - name: Boot iPad + deterministic screenshots
         run: |
           APP=$(find build -name "JARVIS.app" -type d 2>/dev/null | head -1)
           echo "APP=$APP"
-          xcrun simctl boot "iPhone 15" 2>/dev/null || true
-          xcrun simctl install "iPhone 15" "$APP"
+          DEVICE="iPad Pro (11-inch) (4th generation)"
+          xcrun simctl boot "$DEVICE" 2>/dev/null || true
+          xcrun simctl install "$DEVICE" "$APP"
 
           shot() {
             local name="$1"; shift
-            xcrun simctl terminate "iPhone 15" com.salemai.jarvis 2>/dev/null || true
-            xcrun simctl launch "iPhone 15" com.salemai.jarvis "$@"
+            xcrun simctl terminate "$DEVICE" com.salemai.jarvis 2>/dev/null || true
+            xcrun simctl launch "$DEVICE" com.salemai.jarvis "$@"
             sleep 6
-            xcrun simctl io "iPhone 15" screenshot "$name.png"
+            xcrun simctl io "$DEVICE" screenshot "$name.png"
           }
 
-          shot group_core
-          shot group_system  -group system
-          shot group_content -group content
-          shot state_idle
-          shot state_listening -state listening
-          shot state_thinking   -state thinking
-          shot state_speaking   -state speaking
-          shot state_executing  -state executing
-          shot state_alert      -state alert
-          shot state_approval   -state approval
+          # Portrait (default)
+          shot portrait_core
+          shot portrait_system   -group system
+          shot portrait_content  -group content
+          shot portrait_idle
+          shot portrait_approval -state approval
+
+          # Landscape (forced two-zone layout)
+          shot landscape_core     -landscape
+          shot landscape_system   -landscape -group system
+          shot landscape_content  -landscape -group content
+          shot landscape_listening -landscape -state listening
+          shot landscape_approval -landscape -state approval
 
           ls -la *.png
 
       - uses: actions/upload-artifact@v4
         with:
-          name: jarvis-screenshots
+          name: jarvis-ipad-screenshots
           path: '*.png'

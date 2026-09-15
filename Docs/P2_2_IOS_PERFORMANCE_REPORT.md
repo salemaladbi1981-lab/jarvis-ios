@@ -1,32 +1,32 @@
 # JARVIS — P2.2 iOS Performance Report
 
-## Status: NOT MEASURED (blocked by environment)
+## Status: NOT MEASURED
 
-This build was authored on a **Linux host with no Xcode / no iOS simulator**,
-so it is impossible to honestly measure iOS runtime performance here.
+The runtime screenshots were produced on a GitHub Actions macOS runner via
+headless `simctl` launch + screenshot. **No Instruments / Core Animation
+profiling was attached to the CI workflow**, so the following are NOT MEASURED:
 
-Per the project's honesty principle, no FPS/memory/startup figures are
-fabricated. The following measurements are **required on macOS/Xcode** and are
-listed as pending, not as results:
+| Metric | Result |
+|---|---|
+| FPS — Idle | NOT MEASURED |
+| FPS — Listening | NOT MEASURED |
+| FPS — Thinking | NOT MEASURED |
+| FPS — Speaking | NOT MEASURED |
+| FPS — group transition | NOT MEASURED |
+| FPS — vertical scroll | NOT MEASURED |
+| Memory usage | NOT MEASURED |
+| Startup time | NOT MEASURED |
+| Obvious frame drops | NOT MEASURED |
+| Reduced-motion behavior | NOT MEASURED |
 
-| Metric | Target | Measured |
-|---|---|---|
-| Average FPS (idle) | 60 | NOT MEASURED |
-| Average FPS (listening/thinking/speaking mock) | 60 | NOT MEASURED |
-| Average FPS (group transition) | 60 | NOT MEASURED |
-| Average FPS (scroll) | 60 | NOT MEASURED |
-| Worst visible frame drop | none | NOT MEASURED |
-| Memory | — | NOT MEASURED |
-| Startup time | — | NOT MEASURED |
-| Reduced-motion behavior | reduced | NOT MEASURED |
+## Why not measured
+- The CI pipeline builds + launches + screenshots; it does not run Xcode
+  Instruments or a frame-capture harness.
+- No values are fabricated. Real FPS/memory measurement requires a local macOS
+  session with Instruments (Core Animation template) or a Metal frame counter.
 
-## Design choices made to protect performance (in code)
-- Core/orbit/waveform use `TimelineView(.animation)` + `Canvas` (no SceneKit/RealityKit).
-- Particle count fixed at 15; ring count fixed at 4; bar count fixed at 40.
-- Reduced Motion: `@Environment(\.accessibilityReduceMotion)` disables pulse/wobble
-  and freezes timeline-driven motion (see JarvisCoreView / WaveformView).
-- Idle core pulse is a low-cost sin() scale, not a shader or video loop.
-
-## How to complete this report
-Run on macOS with Xcode Instruments (Core Animation / Time Profiler), record the
-values above, and replace the "NOT MEASURED" cells.
+## Design choices made to protect performance (in source)
+- Core/orbit/waveform use `Canvas` + `TimelineView(.animation)`; no SceneKit/RealityKit.
+- Fixed particle count (15), ring count (4), waveform bars (40).
+- `@Environment(\.accessibilityReduceMotion)` disables pulse/wobble and freezes motion.
+- No video loops, no heavy shaders.
