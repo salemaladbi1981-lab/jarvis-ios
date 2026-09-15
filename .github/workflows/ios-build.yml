@@ -18,16 +18,18 @@ jobs:
             -target JARVIS \
             -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath build \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
 
       - name: Boot simulator + install + launch + screenshot
         run: |
+          APP=$(find ~/Library/Developer/Xcode/DerivedData -name "JARVIS.app" -type d 2>/dev/null | head -1)
+          echo "APP=$APP"
           xcrun simctl boot "iPhone 15" 2>/dev/null || true
-          xcrun simctl install "iPhone 15" build/Build/Products/Debug-iphonesimulator/JARVIS.app
+          xcrun simctl install "iPhone 15" "$APP"
           xcrun simctl launch "iPhone 15" com.salemai.jarvis
           sleep 10
           xcrun simctl io "iPhone 15" screenshot core_group.png
+          ls -la *.png
 
       - uses: actions/upload-artifact@v4
         with:
