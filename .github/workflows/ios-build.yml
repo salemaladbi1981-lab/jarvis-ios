@@ -61,7 +61,7 @@ jobs:
 
       - name: Launch macOS + screenshots
         run: |
-          APP=$(find ~/Library/Developer/Xcode/DerivedData -name "JARVIS Mac.app" -type d 2>/dev/null | head -1)
+          APP=$(find build ~/Library/Developer/Xcode/DerivedData -name "JARVIS Mac.app" -type d 2>/dev/null | head -1)
           echo "APP=$APP"
           shot() {
             local name="$1"; shift
