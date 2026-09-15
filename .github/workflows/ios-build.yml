@@ -1,4 +1,4 @@
-name: iOS Build + Screenshots
+name: iOS + macOS Build + Screenshots
 
 on:
   push:
@@ -6,12 +6,12 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  ios:
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build app (xcodebuild)
+      - name: Build iOS app
         run: |
           xcodebuild build \
             -project JARVIS.xcodeproj \
@@ -21,17 +21,12 @@ jobs:
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
 
-      - name: List simulators
-        run: xcrun simctl list devices available | grep -i ipad | head
-
-      - name: Boot iPad + deterministic screenshots
+      - name: Boot iPad + iOS screenshots
         run: |
           APP=$(find build -name "JARVIS.app" -type d 2>/dev/null | head -1)
-          echo "APP=$APP"
           DEVICE="iPad Pro (11-inch) (4th generation)"
           xcrun simctl boot "$DEVICE" 2>/dev/null || true
           xcrun simctl install "$DEVICE" "$APP"
-
           shot() {
             local name="$1"; shift
             xcrun simctl terminate "$DEVICE" com.salemai.jarvis 2>/dev/null || true
@@ -39,25 +34,55 @@ jobs:
             sleep 6
             xcrun simctl io "$DEVICE" screenshot "$name.png"
           }
-
-          # Portrait (default)
           shot portrait_core
-          shot portrait_system   -group system
-          shot portrait_content  -group content
+          shot portrait_system -group system
+          shot portrait_content -group content
           shot portrait_idle
           shot portrait_approval -state approval
-
-          # Landscape (app requests landscape orientation via requestGeometryUpdate + two-zone layout)
-          sleep 2
-          shot landscape_core     -landscape
-          shot landscape_system   -landscape -group system
-          shot landscape_content  -landscape -group content
-          shot landscape_listening -landscape -state listening
-          shot landscape_approval -landscape -state approval
-
           ls -la *.png
 
       - uses: actions/upload-artifact@v4
         with:
-          name: jarvis-ipad-screenshots
+          name: ios-screenshots
+          path: '*.png'
+
+  mac:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build macOS app
+        run: |
+          xcodebuild build \
+            -project JARVIS.xcodeproj \
+            -target "JARVIS Mac" \
+            -sdk macosx \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Launch macOS + screenshots
+        run: |
+          APP=$(find ~/Library/Developer/Xcode/DerivedData -name "JARVIS Mac.app" -type d 2>/dev/null | head -1)
+          echo "APP=$APP"
+          shot() {
+            local name="$1"; shift
+            pkill -f "JARVIS Mac" 2>/dev/null || true
+            sleep 1
+            open "$APP" --args "$@"
+            sleep 6
+            screencapture -x "$name.png"
+          }
+          shot mac_core
+          shot mac_system -group system
+          shot mac_content -group content
+          shot mac_listening -state listening
+          shot mac_thinking -state thinking
+          shot mac_speaking -state speaking
+          shot mac_executing -state executing
+          shot mac_alert -state alert
+          shot mac_approval -state approval
+          ls -la *.png
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac-screenshots
           path: '*.png'

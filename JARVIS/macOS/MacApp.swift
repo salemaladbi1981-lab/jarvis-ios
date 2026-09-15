@@ -1,13 +1,14 @@
 import SwiftUI
 
-#if os(iOS)
+#if os(macOS)
 @main
-struct JARVISApp: App {
+struct MacApp: App {
     var body: some Scene {
         WindowGroup {
             AdaptiveRootView()
                 .environment(\.layoutDirection, .rightToLeft)
                 .preferredColorScheme(.dark)
+                .frame(minWidth: 1000, minHeight: 640)
         }
     }
 }

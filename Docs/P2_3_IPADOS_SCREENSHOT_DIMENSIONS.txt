@@ -1,0 +1,25 @@
+P2.3 iPadOS Screenshot Dimensions (actual pixel sizes from CI Simulator)
+
+portrait_core.png:     1668 × 2388 — PASS portrait (height > width)
+portrait_system.png:   1668 × 2388 — PASS portrait
+portrait_content.png:  1668 × 2388 — PASS portrait
+portrait_idle.png:     1668 × 2388 — PASS portrait
+portrait_approval.png: 1668 × 2388 — PASS portrait
+
+landscape_core.png:     1668 × 2388 — FAIL landscape (still portrait frame)
+landscape_system.png:   1668 × 2388 — FAIL landscape
+landscape_content.png:  1668 × 2388 — FAIL landscape
+landscape_listening.png: 1668 × 2388 — FAIL landscape
+landscape_approval.png: 1668 × 2388 — FAIL landscape
+
+Honest note:
+- The landscape screenshots show the correct two-zone LAYOUT (Hero + cards
+  side-by-side), but were captured in a portrait frame (1668×2388) because the
+  headless CI Simulator cannot be rotated (tried simctl ui orientation,
+  osascript Cmd+arrow, and requestGeometryUpdate — all unsupported in headless).
+- True landscape (width > height) requires manual rotation on a local Mac:
+  Device → Rotate Right / Cmd+Right, then screenshot.
+
+Acceptance rule:
+- Portrait: height > width  → PASS (all 5)
+- Landscape: width > height → PENDING (manual capture required)
