@@ -10,7 +10,7 @@ def uid():
 APP_SOURCES = [
     "JARVIS/App/JARVISApp.swift", "JARVIS/App/ContentView.swift",
     "JARVIS/Home/HomeView.swift", "JARVIS/Home/HomeViewModel.swift",
-    "JARVIS/Home/HeaderView.swift", "JARVIS/Home/QuickSuggestions.swift",
+    "JARVIS/Home/HeaderView.swift", "JARVIS/Home/QuickSuggestions.swift", "JARVIS/Home/QuickCommand.swift",
     "JARVIS/Home/VoiceInputBar.swift", "JARVIS/Home/BottomNavBar.swift",
     "JARVIS/Core/JarvisCoreView.swift", "JARVIS/Core/JarvisOrbitView.swift", "JARVIS/Core/WaveformView.swift",
     "JARVIS/Core/JarvisHeroView.swift", "JARVIS/Core/ApprovalCardView.swift",
