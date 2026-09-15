@@ -1,29 +1,23 @@
 import Foundation
 
 /// Calendar/Reminders read-only tools (typed contracts, provider-injected).
-enum CalendarToolID {
-    static let today = "calendar.today"
-    static let nextEvent = "calendar.next_event"
-    static let upcomingReminders = "reminders.upcoming"
-}
-
 struct CalendarToolResult: Equatable {
     let ok: Bool
-    let kind: String          // today | next_event | reminders
-    let events: [CalendarEvent]
-    let reminders: [ReminderItem]
-    let error: String?        // permission_denied | unavailable | ...
+    let kind: String
+    let events: [JarvisCalendarEvent]
+    let reminders: [JarvisReminderItem]
+    let error: String?
     let mock: Bool
 }
 
 struct CalendarTools {
     var provider: AppleEventKitProvider
-    var mockProvider: MockCalendarProvider
+    var mockProvider: MockEventKitProvider
     var useMock: Bool
 
     init(useMock: Bool = false) {
         self.provider = AppleEventKitProvider()
-        self.mockProvider = MockCalendarProvider()
+        self.mockProvider = MockEventKitProvider()
         self.useMock = useMock
     }
 

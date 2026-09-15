@@ -1,26 +1,24 @@
 import Foundation
 
-/// Mock Calendar/Reminders provider — explicitly mock, never confused with real.
-struct MockCalendarProvider {
+/// Mock EventKit provider — explicitly mock, never confused with real.
+struct MockEventKitProvider {
     var mode: CalendarProviderMode { .mock }
 
-    func todayEvents() async -> [CalendarEvent] {
+    func todayEvents() async -> [JarvisCalendarEvent] {
         let cal = Calendar.current
-        let mk = { (h: Int, t: String) -> CalendarEvent in
+        func mk(_ h: Int, _ t: String) -> JarvisCalendarEvent {
             let d = cal.date(bySettingHour: h, minute: 0, second: 0, of: Date()) ?? Date()
-            return CalendarEvent(id: UUID().uuidString, title: t, start: d,
-                                 end: d.addingTimeInterval(3600), isAllDay: false,
-                                 calendarName: nil, location: nil)
+            return JarvisCalendarEvent(id: UUID().uuidString, title: t, start: d,
+                                       end: d.addingTimeInterval(3600), isAllDay: false,
+                                       calendarName: nil, location: nil)
         }
         return [mk(9, "Marketing Meeting — 09:00"), mk(11, "Project Review — 11:30")]
     }
 
-    func nextEvent() async -> CalendarEvent? {
-        todayEvents().first
-    }
+    func nextEvent() async -> JarvisCalendarEvent? { await todayEvents().first }
 
-    func upcomingReminders() async -> [ReminderItem] {
-        [ReminderItem(id: UUID().uuidString, title: "Review document",
-                      dueDate: Date().addingTimeInterval(7200), isCompleted: false, listName: nil)]
+    func upcomingReminders() async -> [JarvisReminderItem] {
+        [JarvisReminderItem(id: UUID().uuidString, title: "Review document",
+                            dueDate: Date().addingTimeInterval(7200), isCompleted: false, listName: nil)]
     }
 }

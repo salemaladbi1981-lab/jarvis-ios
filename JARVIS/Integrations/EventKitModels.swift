@@ -1,7 +1,7 @@
 import Foundation
 
-/// Typed JARVIS domain models (never raw EventKit objects past this boundary).
-struct CalendarEvent: Identifiable, Equatable {
+/// Typed JARVIS domain models (unique names; never raw EventKit objects).
+struct JarvisCalendarEvent: Identifiable, Equatable {
     let id: String
     let title: String
     let start: Date
@@ -11,7 +11,7 @@ struct CalendarEvent: Identifiable, Equatable {
     let location: String?
 }
 
-struct ReminderItem: Identifiable, Equatable {
+struct JarvisReminderItem: Identifiable, Equatable {
     let id: String
     let title: String
     let dueDate: Date?

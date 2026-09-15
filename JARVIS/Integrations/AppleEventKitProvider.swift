@@ -2,13 +2,10 @@ import Foundation
 import EventKit
 
 /// Real Apple Calendar + Reminders provider (READ-ONLY).
-/// Normalizes EventKit objects into typed JARVIS domain models.
 final class AppleEventKitProvider {
     private let store = EKEventStore()
 
-    // MARK: Permission
-
-    func eventAccess() async -> CalendarPermissionState {
+    func eventAccess() -> CalendarPermissionState {
         switch EKEventStore.authorizationStatus(for: .event) {
         case .notDetermined: return .notDetermined
         case .fullAccess: return .authorized
@@ -19,7 +16,7 @@ final class AppleEventKitProvider {
         }
     }
 
-    func reminderAccess() async -> CalendarPermissionState {
+    func reminderAccess() -> CalendarPermissionState {
         switch EKEventStore.authorizationStatus(for: .reminder) {
         case .notDetermined: return .notDetermined
         case .fullAccess: return .authorized
@@ -31,36 +28,26 @@ final class AppleEventKitProvider {
     }
 
     func requestEvents() async -> CalendarPermissionState {
-        do {
-            let ok = try await store.requestFullAccessToEvents()
-            return ok ? .authorized : .denied
-        } catch {
-            return .denied
-        }
+        do { return try await store.requestFullAccessToEvents() ? .authorized : .denied }
+        catch { return .denied }
     }
 
     func requestReminders() async -> CalendarPermissionState {
-        do {
-            let ok = try await store.requestFullAccessToReminders()
-            return ok ? .authorized : .denied
-        } catch {
-            return .denied
-        }
+        do { return try await store.requestFullAccessToReminders() ? .authorized : .denied }
+        catch { return .denied }
     }
 
-    // MARK: Reads
-
-    func todayEvents() async throws -> [CalendarEvent] {
+    func todayEvents() async throws -> [JarvisCalendarEvent] {
         let cal = Calendar.current
         let start = cal.startOfDay(for: Date())
         guard let end = cal.date(byAdding: .day, value: 1, to: start) else { return [] }
         let predicate = store.predicateForEvents(withStart: start, end: end, calendars: nil)
         return store.events(matching: predicate)
             .sorted { $0.startDate < $1.startDate }
-            .map(CalendarEvent.init(ek:))
+            .map { JarvisCalendarEvent(ek: $0) }
     }
 
-    func nextEvent() async throws -> CalendarEvent? {
+    func nextEvent() async throws -> JarvisCalendarEvent? {
         let cal = Calendar.current
         let now = Date()
         guard let horizon = cal.date(byAdding: .day, value: 30, to: now) else { return nil }
@@ -69,21 +56,21 @@ final class AppleEventKitProvider {
             .filter { $0.startDate >= now }
             .sorted { $0.startDate < $1.startDate }
             .first
-            .map(CalendarEvent.init(ek:))
+            .map { JarvisCalendarEvent(ek: $0) }
     }
 
-    func upcomingReminders(limit: Int = 20) async throws -> [ReminderItem] {
+    func upcomingReminders(limit: Int = 20) async throws -> [JarvisReminderItem] {
         let predicate = store.predicateForIncompleteReminders(withDueDateStarting: nil,
-                                                              ending: nil,
-                                                              calendars: nil)
-        let reminders = try await store.fetchReminders(matching: predicate)
-        return reminders
-            .prefix(limit)
-            .map(ReminderItem.init(ek:))
+                                                              ending: nil, calendars: nil)
+        return try await withCheckedThrowingContinuation { cont in
+            store.fetchReminders(matching: predicate) { reminders in
+                cont.resume(returning: (reminders ?? []).prefix(limit).map { JarvisReminderItem(ek: $0) })
+            }
+        }
     }
 }
 
-extension CalendarEvent {
+extension JarvisCalendarEvent {
     init(ek: EKEvent) {
         id = ek.eventIdentifier ?? UUID().uuidString
         title = ek.title ?? "بدون عنوان"
@@ -95,7 +82,7 @@ extension CalendarEvent {
     }
 }
 
-extension ReminderItem {
+extension JarvisReminderItem {
     init(ek: EKReminder) {
         id = ek.calendarItemIdentifier
         title = ek.title ?? "بدون عنوان"
