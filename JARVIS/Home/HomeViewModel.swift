@@ -16,6 +16,7 @@ final class HomeViewModel: ObservableObject {
     @Published private(set) var mediaTrack: MediaTrack?
     @Published private(set) var isListening = false
     @Published var calendarMessage: String?
+    private var isVoiceStarting = false
 
     // Dependencies
     private let smartHome: SmartHomeProvider
