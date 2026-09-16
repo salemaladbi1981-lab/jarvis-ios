@@ -22,7 +22,8 @@ final class HomeViewModel: ObservableObject {
     @Published var micLevel: Double = 0
     @Published var outputLevel: Double = 0
     @Published var successPulse: Bool = false
-    @Published var frameTimeMs: Double = 0
+    // FPS metric (read-only, غير UI state — لا re-render). يُقرأ من Xcode console/Instruments فقط.
+    var frameTimeMs: Double = 0
     let orbit = AgentOrbitModel()
 
     // Dependencies

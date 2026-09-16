@@ -13,6 +13,7 @@ home = read('Home/HomeView.swift')
 core = read('Core/JarvisCoreView.swift')
 adaptive = read('iPad/AdaptiveRootView.swift')
 lt = read('Core/LaunchTiming.swift')
+vm = read('Home/HomeViewModel.swift')
 
 # 1. Core above the fold — scroll إلى الأعلى عند launch
 check("defaultScrollAnchor(.top)", '.defaultScrollAnchor(.top)' in home)
@@ -29,6 +30,16 @@ check("home onAppear mark", 'home onAppear' in home)
 check("adaptiveRoot onAppear mark", 'adaptiveRoot onAppear' in adaptive)
 check("core first frame mark في onAppear (خارج render closure)", 'core onAppear' in core and 'onAppear' in core)
 check("لا تعديل @State داخل Canvas render closure (crash fix)", 'didMarkFirstFrame' not in core)
+# Regression guard موسّع: لا mutation لـ @State/@observable داخل Canvas render closures
+check("frameTimeMs غير @Published (لا observable mutation داخل Canvas)", '@Published var frameTimeMs' not in vm)
+import re as _re
+_canvas = _re.search(r'Canvas \{ ctx, size in(.*?)\n            \}', core, _re.DOTALL)
+if _canvas:
+    _cb = _canvas.group(1)
+    check("Canvas closure: لا assignment لـ smoothedMic/smoothedOutput/successAnim", all(x not in _cb for x in ['smoothedMic =', 'smoothedOutput =', 'successAnim =']))
+    check("Canvas closure: لا @State mutation (no '= true' / '@Published')", 'didMarkFirstFrame' not in _cb)
+else:
+    check("Canvas closure موجود", False)
 
 # 4. Core أول عنصر بعد Header (وليس مدفوعاً للأسفل)
 check("Core (JarvisHeroView) يلي Header مباشرة", 'HeaderView()' in home and 'JarvisHeroView(vm: vm)' in home)
