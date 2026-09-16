@@ -18,6 +18,7 @@ APP_SOURCES = [
     "JARVIS/iPad/iPadLandscapeView.swift", "JARVIS/iPad/AdaptiveRootView.swift",
     "JARVIS/macOS/MacApp.swift", "JARVIS/macOS/MacHomeView.swift",
     "JARVIS/Voice/VoiceSession.swift", "JARVIS/Voice/RealtimeVoiceSession.swift", "JARVIS/Voice/AudioCapture.swift", "JARVIS/Voice/VoiceAudioEngine.swift",
+    "JARVIS/Voice/SessionEventParser.swift", "JARVIS/Voice/SessionGuardState.swift",
     "JARVIS/Integrations/EventKitModels.swift", "JARVIS/Integrations/AppleEventKitProvider.swift",
     "JARVIS/Integrations/MockCalendarProvider.swift", "JARVIS/Integrations/CalendarTools.swift",
     "JARVIS/Diagnostics/PreflightDiagnostics.swift",
@@ -39,6 +40,7 @@ TEST_SOURCES = [
     "JARVISTests/ApprovalPolicyEvaluatorTests.swift",
     "JARVISTests/HomeViewModelTests.swift",
     "JARVISTests/AgentRegistryTests.swift",
+    "JARVISTests/SessionGuardTests.swift",
 ]
 
 objs = {}
@@ -59,6 +61,7 @@ test_refs = {p: file_ref(p, "sourcecode.swift") for p in TEST_SOURCES}
 plist_ref = file_ref("JARVIS/Info.plist", "text.plist.xml")
 app_prod_ref = add("PBXFileReference", explicitFileType="wrapper.application", includeInIndex=0, path="JARVIS.app", sourceTree="BUILT_PRODUCTS_DIR")
 mac_prod_ref = add("PBXFileReference", explicitFileType="wrapper.application", includeInIndex=0, path="JARVIS Mac.app", sourceTree="BUILT_PRODUCTS_DIR")
+mac_test_prod_ref = add("PBXFileReference", explicitFileType="wrapper.cfbundle", includeInIndex=0, path="JARVISTestsMac.xctest", sourceTree="BUILT_PRODUCTS_DIR")
 test_prod_ref = add("PBXFileReference", explicitFileType="wrapper.cfbundle", includeInIndex=0, path="JARVISTests.xctest", sourceTree="BUILT_PRODUCTS_DIR")
 
 app_src_bf = {p: add("PBXBuildFile", fileRef=app_src_refs[p]) for p in APP_SOURCES}
@@ -100,7 +103,7 @@ jarvis_group = group(
     "JARVIS", "JARVIS"
 )
 tests_group = group(sorted(test_refs.values()), "JARVISTests", "JARVISTests")
-products_group = group([app_prod_ref, mac_prod_ref, test_prod_ref], "Products", None)
+products_group = group([app_prod_ref, mac_prod_ref, test_prod_ref, mac_test_prod_ref], "Products", None)
 main_group = add("PBXGroup", children=[jarvis_group, tests_group, products_group], sourceTree="<group>")
 
 app_sources_phase = add("PBXSourcesBuildPhase", files=sorted(app_src_bf.values()), buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)
@@ -130,7 +133,7 @@ mac_settings = {
     "CODE_SIGN_STYLE": "Automatic", "CURRENT_PROJECT_VERSION": "1",
     "GENERATE_INFOPLIST_FILE": "YES", "MACOSX_DEPLOYMENT_TARGET": "14.0",
     "MARKETING_VERSION": "0.1.0", "PRODUCT_BUNDLE_IDENTIFIER": "com.salemai.jarvis.mac",
-    "PRODUCT_NAME": "JARVIS Mac", "SDKROOT": "macosx", "SWIFT_VERSION": "5.0",
+    "PRODUCT_NAME": "JARVIS Mac", "PRODUCT_MODULE_NAME": "JARVIS", "SDKROOT": "macosx", "SWIFT_VERSION": "5.0",
     "ENABLE_HARDENED_RUNTIME": "YES",
     "INFOPLIST_KEY_NSMicrophoneUsageDescription": "جارفس يحتاج الميكروفون للمحادثة الصوتية.",
     "INFOPLIST_KEY_NSCalendarsUsageDescription": "جارفس يحتاج التقويم لعرض مواعيدك.",
@@ -169,12 +172,34 @@ test_target = add("PBXNativeTarget", buildConfigurationList=test_config_list,
     buildRules=[], dependencies=[dep], name="JARVISTests", productName="JARVISTests",
     productReference=test_prod_ref, productType="com.apple.product-type.bundle.unit-test")
 
+# macOS test target (JARVISTestsMac) — نفس الاختبارات على macOS (TEST_HOST = JARVIS Mac)
+mac_test_settings = {
+    "BUNDLE_LOADER": "$(TEST_HOST)", "CODE_SIGN_STYLE": "Automatic",
+    "CURRENT_PROJECT_VERSION": "1", "GENERATE_INFOPLIST_FILE": "YES",
+    "MACOSX_DEPLOYMENT_TARGET": "14.0", "MARKETING_VERSION": "0.1.0",
+    "PRODUCT_BUNDLE_IDENTIFIER": "com.salemai.jarvisTests.mac", "PRODUCT_NAME": "$(TARGET_NAME)",
+    "SDKROOT": "macosx", "SWIFT_VERSION": "5.0",
+    "TEST_HOST": "$(BUILT_PRODUCTS_DIR)/JARVIS Mac.app/Contents/MacOS/JARVIS Mac",
+}
+mac_test_debug = add("XCBuildConfiguration", buildSettings=dict(mac_test_settings), name="Debug")
+mac_test_release = add("XCBuildConfiguration", buildSettings=dict(mac_test_settings), name="Release")
+mac_test_config_list = add("XCConfigurationList", buildConfigurations=[mac_test_debug, mac_test_release], defaultConfigurationIsVisible=0, defaultConfigurationName="Release")
+mac_test_bf = {p: add("PBXBuildFile", fileRef=test_refs[p]) for p in TEST_SOURCES}
+mac_test_sources_phase = add("PBXSourcesBuildPhase", files=sorted(mac_test_bf.values()), buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)
+mac_dep_proxy = add("PBXContainerItemProxy", containerPortal=None, proxyType=1, remoteGlobalIDString=mac_target, remoteInfo="JARVIS Mac")
+mac_dep = add("PBXTargetDependency", target=mac_target, targetProxy=mac_dep_proxy)
+mac_test_target = add("PBXNativeTarget", buildConfigurationList=mac_test_config_list,
+    buildPhases=[mac_test_sources_phase, test_frameworks_phase, test_resources_phase],
+    buildRules=[], dependencies=[mac_dep], name="JARVISTestsMac", productName="JARVISTestsMac",
+    productReference=mac_test_prod_ref, productType="com.apple.product-type.bundle.unit-test")
+
 proj = add("PBXProject", attributes={"LastUpgradeCheck": "1500"},
     buildConfigurationList=proj_config_list, compatibilityVersion="Xcode 14.0",
     developmentRegion="en", hasScannedForEncodings=0, knownRegions=["en", "Base"],
     mainGroup=main_group, productRefGroup=products_group, projectDirPath="", projectRoot="",
-    targets=[app_target, mac_target, test_target])
+    targets=[app_target, mac_target, test_target, mac_test_target])
 objs[dep_proxy]["containerPortal"] = proj
+objs[mac_dep_proxy]["containerPortal"] = proj
 
 os.makedirs("JARVIS.xcodeproj", exist_ok=True)
 

@@ -59,6 +59,16 @@ jobs:
             -sdk macosx \
             CODE_SIGNING_ALLOWED=NO
 
+      - name: Run Swift unit tests (macOS)
+        run: |
+          xcodebuild test \
+            -project JARVIS.xcodeproj \
+            -scheme "JARVIS Mac" \
+            -destination 'platform=macOS' \
+            -only-testing:JARVISTestsMac \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO
+
       - name: Launch macOS + screenshots
         run: |
           APP=$(find build ~/Library/Developer/Xcode/DerivedData -name "JARVIS Mac.app" -type d 2>/dev/null | head -1)

@@ -19,10 +19,9 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     private var session = URLSession(configuration: .default)
     private let audio = VoiceAudioEngine()
     private var isSpeaking = false
+    private var guardState = SessionGuardState()   // حراسة الجلسة/الرد (currentResponseID + isSessionReady + pendingStatus)
     private var startAttemptID = 0
     private var pcmAppendCount = 0
-    private var isSessionReady = false
-    private var currentResponseID: String? = nil   // هوية الرد الحالي (لمنع stale deltas)
     private var bargeStartTime: TimeInterval = 0
 
     func connect(baseURL: URL) async throws {
@@ -40,7 +39,7 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     }
 
     func disconnect() {
-        currentResponseID = nil
+        guardState.onStop()
         isSpeaking = false
         stopListening()
         ws?.cancel(with: .goingAway, reason: nil)
@@ -60,7 +59,13 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
         audio.onPlaybackDrained = { [weak self] in
             guard let self else { return }
             self.trace("playback drained — اكتمل التشغيل المحلي")
-            self.eventPublisher.send(.connected)
+            let status = self.guardState.pendingStatus
+            self.guardState.pendingStatus = nil
+            if status == "failed" {
+                self.eventPublisher.send(.error("realtime_error"))
+            } else {
+                self.eventPublisher.send(.connected)
+            }
         }
         do {
             try audio.start()
@@ -72,7 +77,7 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     }
 
     func stopListening() {
-        currentResponseID = nil   // إبطال الرد (منع أحداث الدورة الموقوفة)
+        guardState.onStop()   // إبطال الجلسة + الرد (منع أحداث الدورة الموقوفة)
         isSpeaking = false
         audio.stop()   // يوقف المحرك + يصفّر المستوى + يبطل generation
     }
@@ -81,7 +86,7 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     /// الـ flush يمسح الـ playback queue فقط — لا يمسح الـ mic input،
     /// فلا تضيع أول كلمة من كلام المستخدم.
     private func bargeIn() {
-        currentResponseID = nil   // إبطال الرد
+        guardState.onBarge()   // إبطال الرد فقط (الجلسة تبقى نشطة للـ listening)
         isSpeaking = false
         trace("BARGE speech_started → response.cancel + flush")
         let cancel = #"{"type":"response.cancel"}"#
@@ -93,7 +98,7 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     }
 
     func interrupt() {
-        currentResponseID = nil
+        guardState.onBarge()
         isSpeaking = false
         bargeIn()
     }
@@ -108,7 +113,7 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
 
     func sendAudio(pcm16: Data) {
         // Gate: لا PCM قبل نجاح handshake/session.created
-        guard isSessionReady else { return }
+        guard guardState.isSessionReady else { return }
         pcmAppendCount += 1
         if pcmAppendCount == 1 {
             trace("PCM append #1 bytes=\(pcm16.count)")
@@ -147,41 +152,41 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
 
     private func handleServer(_ text: String) {
         // Parse minimal JSON: extract type + transcript text.
-        if let t = Self.jsonStringField(text, "type") {
+        if let t = SessionEventParser.field(text, "type") {
             if t != "response.output_audio.delta" {
                 trace("recv \(t)")
             }
             switch t {
             case "session.created":
                 trace("session.created received")
-                isSessionReady = true
+                guardState.sessionCreated()
                 eventPublisher.send(.connected)   // الآن فقط بعد نجاح handshake
             case "session.updated":
                 trace("session.updated received")
             case "response.created":
-                currentResponseID = Self.jsonNestedString(text, "response", "id")
-                trace("response.created id=\(currentResponseID ?? "?")")
-            case "response.output_audio.delta":
-                // حراسة هوية الرد أولاً (قبل أي تغيير isSpeaking/beginSpeaking/حدث)
-                guard let cur = currentResponseID else {
-                    trace("delta ignored — لا رد نشط")
-                    break
+                if guardState.onResponseCreated(text) {
+                    trace("response.created id=\(guardState.currentResponseID ?? "?")")
+                } else {
+                    trace("response.created ignored (لا جلسة نشطة)")
                 }
-                if let rid = Self.jsonStringField(text, "response_id"), rid != cur {
-                    trace("stale delta ignored (response_id \(rid) != \(cur))")
+            case "response.output_audio.delta":
+                // حراسة الجلسة + هوية الرد أولاً (قبل أي تغيير isSpeaking/beginSpeaking/حدث)
+                guard guardState.onDelta(text) else {
+                    trace("delta ignored (لا جلسة نشطة أو رد مطابق)")
                     break
                 }
                 if !isSpeaking {
                     isSpeaking = true
                     audio.beginSpeaking()   // يصفّر الـ counters ويبدأ التدفق
                 }
-                if let b64 = Self.jsonStringField(text, "delta") {
+                if let b64 = SessionEventParser.field(text, "delta") {
                     if let data = Data(base64Encoded: b64) { audio.enqueueAudio(data) }
                 }
                 eventPublisher.send(.speaking)
             case "input_audio_buffer.speech_started":
                 trace("VAD speech_started payload: \(text)")
                 bargeStartTime = Date().timeIntervalSinceReferenceDate
+                guardState.onBarge()   // إبطال الرد قبل التفرع (يشمل الفترة قبل أول delta)
                 if isSpeaking {
                     // barge-in: كلام مستخدم أثناء كلام جارفس (AEC يمنع echo).
                     isSpeaking = false
@@ -196,7 +201,7 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                 trace("VAD speech_stopped payload: \(text)")
             case "conversation.item.input_audio_transcription.completed":
                 // نص المستخدم فقط — للتوجيه (tool routing). لا نوجّه نص الرد.
-                if let txt = Self.transcriptText(text) {
+                if let txt = SessionEventParser.transcript(text) {
                     trace("user_transcript: \(txt)")
                     onTranscript?(txt)
                 }
@@ -204,22 +209,16 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                 // نص رد جارفس — لا يُعاد توجيهه (يمنع الـ loop).
                 break
             case "response.done":
-                // حراسة إلزامية: الهوية في response.id (nested) — يرفض عند nil أو عدم تطابق
-                guard let cur = currentResponseID,
-                      let rid = Self.jsonNestedString(text, "response", "id"),
-                      rid == cur else {
+                // حراسة إلزامية: الهوية في response.id — يرفض عند nil أو عدم تطابق
+                guard guardState.onDone(text) else {
                     trace("response.done ignored (لا رد مطابق نشط)")
                     break
                 }
-                let status = Self.jsonNestedString(text, "response", "status") ?? "completed"
+                let status = guardState.pendingStatus ?? "completed"
                 isSpeaking = false
-                currentResponseID = nil   // لا رد نشط بعد done
                 audio.flushTail()   // يفلش tail + يطبع PLAYBACK counters
                 trace("response.done status=\(status) — flushTail (انتظار اكتمال التشغيل المحلي)")
-                if status == "failed" {
-                    eventPublisher.send(.error("realtime_error"))
-                }
-                // لا .connected هنا — يُرسل عند onPlaybackDrained (اكتمال التشغيل الفعلي)
+                // النتيجة تُرسل عند onPlaybackDrained (failed لا يتحول إلى success)
             case "response.function_call_arguments.done":
                 eventPublisher.send(.toolExecuting)
             case "error":
@@ -235,32 +234,4 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
         audio.enqueueAudio(data)
     }
 
-    private static func jsonStringField(_ text: String, _ key: String) -> String? {
-        guard let data = text.data(using: .utf8),
-              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
-        return obj[key] as? String
-    }
-
-    /// استخراج حقل nested (مثل response.id من response.created).
-    private static func jsonNestedString(_ text: String, _ key: String, _ subKey: String) -> String? {
-        guard let data = text.data(using: .utf8),
-              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let nested = obj[key] as? [String: Any] else { return nil }
-        return nested[subKey] as? String
-    }
-
-    private static func transcriptText(_ text: String) -> String? {
-        guard let data = text.data(using: .utf8),
-              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
-        // GA: transcript field مباشر
-        if let t = obj["transcript"] as? String, !t.isEmpty { return t }
-        // fallback: item.content
-        if let item = obj["item"] as? [String: Any],
-           let content = item["content"] as? [[String: Any]] {
-            for c in content where c["type"] as? String == "input_text" || c["type"] as? String == "text" {
-                if let t = c["text"] as? String, !t.isEmpty { return t }
-            }
-        }
-        return nil
-    }
 }
