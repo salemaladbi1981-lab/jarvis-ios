@@ -172,6 +172,17 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
         }
     }
 
+    private func emitCompletion(_ completion: PlaybackCompletion) {
+        switch completion {
+        case .none:
+            break
+        case .success:
+            eventPublisher.send(.connected)
+        case .failed:
+            eventPublisher.send(.error("realtime_error"))
+        }
+    }
+
     private func handleServer(_ text: String) {
         if let t = SessionEventParser.field(text, "type") {
             if t != "response.output_audio.delta" {
@@ -235,15 +246,20 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
             case "response.done":
                 // هوية دورة التشغيل من المحرك (وليست هوية الرد الحالي عند وصول الـ callback).
                 let cycle = audio.currentGeneration
-                // حراسة إلزامية: الهوية في response.id — يرفض عند nil أو عدم تطابق
-                guard guardState.onDone(text, cycle: cycle) else {
+                // قرار الإنهاء حسب وجود صوت للرد (stale/بصوت/بلا صوت).
+                switch guardState.resolveDone(text, cycle: cycle) {
+                case .ignore:
                     trace("response.done ignored (لا رد مطابق نشط)")
-                    break
+                case .waitForDrain:
+                    isSpeaking = false
+                    audio.flushTail()   // يفلش tail + يطبع PLAYBACK counters
+                    trace("response.done cycle=\(cycle) — flushTail (انتظار اكتمال التشغيل المحلي)")
+                case .publishImmediately(let completion):
+                    // رد بلا صوت (لا delta): انشر النتيجة فوراً — لا انتظار drain ولا تأثير لإشعار قديم.
+                    isSpeaking = false
+                    trace("response.done — لا صوت، نشر فوري")
+                    emitCompletion(completion)
                 }
-                isSpeaking = false
-                audio.flushTail()   // يفلش tail + يطبع PLAYBACK counters
-                trace("response.done cycle=\(cycle) — flushTail (انتظار اكتمال التشغيل المحلي)")
-                // النتيجة تُرسل عند onPlaybackDrained المطابق لنفس الدورة (failed لا يتحول success)
             case "response.function_call_arguments.done":
                 eventPublisher.send(.toolExecuting)
             case "error":
