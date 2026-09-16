@@ -18,6 +18,13 @@ final class HomeViewModel: ObservableObject {
     @Published var calendarMessage: String?
     private var isVoiceStarting = false
 
+    // V1 Visual: audio level (read-only) + agent orbit activity
+    @Published var micLevel: Double = 0
+    @Published var outputLevel: Double = 0
+    @Published var successPulse: Bool = false
+    @Published var frameTimeMs: Double = 0
+    let orbit = AgentOrbitModel()
+
     // Dependencies
     private let smartHome: SmartHomeProvider
     private let security: SecurityProvider
@@ -52,13 +59,30 @@ final class HomeViewModel: ObservableObject {
                 self.state = JarvisStateMapper.state(for: event)
                 switch event {
                 case .listening: self.isListening = true
-                case .disconnected, .connected: self.isListening = false
+                case .disconnected, .connected:
+                    self.isListening = false
+                    // response.done / session ready → success + deactivate agents
+                    self.orbit.items.forEach { self.orbit.deactivate($0.id) }
+                    self.successPulse = true
+                case .toolExecuting:
+                    // agent نشط حقيقي أثناء tool execution (core_home للـ prototype)
+                    self.orbit.activate("core_home", name: "البيت", group: "core")
+                case .interrupted:
+                    // barge-in: transition سريع — يبقى agent إن وُجد
+                    break
                 default: break
                 }
             }
             .store(in: &cancellables)
         voiceSession.onTranscript = { [weak self] text in
             Task { await self?.routeVoiceTranscript(text) }
+        }
+        // V1 Visual: audio level forwarding (read-only)
+        voiceSession.onMicLevel = { [weak self] level in
+            self?.micLevel = level
+        }
+        voiceSession.onOutputLevel = { [weak self] level in
+            self?.outputLevel = level
         }
     }
 
@@ -84,6 +108,22 @@ final class HomeViewModel: ObservableObject {
                 if st == .approval {
                     requestAction(agentID: "core_home", action: "unlock-door")
                 }
+            }
+        }
+        // V1 Visual Prototype — orbit demo (Physical Visual Review فقط، لا timers وهمية)
+        if let oi = args.firstIndex(of: "-orbit"), oi + 1 < args.count {
+            switch args[oi + 1] {
+            case "single":
+                orbit.activate("core_home", name: "البيت", group: "core")
+            case "handoff":
+                orbit.activate("core_home", name: "البيت", group: "core")
+                orbit.activate("core_writer", name: "الكاتب", group: "core")
+                orbit.handoff(from: "core_home", to: "core_writer")
+            case "multi":
+                orbit.activate("core_home", name: "البيت", group: "core")
+                orbit.activate("core_writer", name: "الكاتب", group: "core")
+                orbit.activate("sys_builder", name: "البناء", group: "system")
+            default: break
             }
         }
     }

@@ -7,12 +7,15 @@ struct JarvisHeroView: View {
 
     var body: some View {
         ZStack {
-            JarvisCoreView(state: vm.state, size: coreSize)
-            JarvisOrbitView(
-                agents: vm.agents(in: vm.activeGroup),
-                coreSize: coreSize,
-                activeAgentID: vm.state == .executing ? vm.agents(in: vm.activeGroup).first?.id : nil
+            JarvisCoreView(
+                state: vm.state,
+                micLevel: vm.micLevel,
+                outputLevel: vm.outputLevel,
+                successPulse: vm.successPulse,
+                size: coreSize,
+                onFrameTime: { vm.frameTimeMs = $0 }
             )
+            JarvisOrbitView(orbit: vm.orbit, coreSize: coreSize)
         }
         .allowsHitTesting(false)
         .frame(maxWidth: .infinity)

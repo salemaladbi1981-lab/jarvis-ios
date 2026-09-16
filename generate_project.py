@@ -13,6 +13,7 @@ APP_SOURCES = [
     "JARVIS/Home/HeaderView.swift", "JARVIS/Home/QuickSuggestions.swift", "JARVIS/Home/QuickCommand.swift",
     "JARVIS/Home/VoiceInputBar.swift", "JARVIS/Home/BottomNavBar.swift",
     "JARVIS/Core/JarvisCoreView.swift", "JARVIS/Core/JarvisOrbitView.swift", "JARVIS/Core/WaveformView.swift",
+    "JARVIS/Core/MotionTokens.swift", "JARVIS/Core/AgentOrbitModel.swift",
     "JARVIS/Core/JarvisHeroView.swift", "JARVIS/Core/ApprovalCardView.swift",
     "JARVIS/iPad/iPadLandscapeView.swift", "JARVIS/iPad/AdaptiveRootView.swift",
     "JARVIS/macOS/MacApp.swift", "JARVIS/macOS/MacHomeView.swift",

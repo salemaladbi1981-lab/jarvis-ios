@@ -9,6 +9,9 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     let eventPublisher = PassthroughSubject<VoiceSessionEvent, Never>()
     /// Final user transcript (e.g. "وش عندي اليوم؟") for local tool routing.
     var onTranscript: ((String) -> Void)?
+    // V1 Visual: read-only level forwarding (من VoiceAudioEngine hooks)
+    var onMicLevel: ((Double) -> Void)?
+    var onOutputLevel: ((Double) -> Void)?
     /// Tool-result text to speak back (calendar/reminders result).
     var onNeedSpokenResponse: (() -> Void)?
 
@@ -49,6 +52,8 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
         trace("startListening attempt #\(attempt) — voiceState=listening")
         audio.onPCM = { [weak self] data in self?.sendAudio(pcm16: data) }
         audio.onDiagnostics = { [weak self] msg in self?.trace("AEC diag: \(msg)") }
+        audio.onMicLevel = { [weak self] level in self?.onMicLevel?(level) }
+        audio.onOutputLevel = { [weak self] level in self?.onOutputLevel?(level) }
         do {
             try audio.start()
             trace("startListening #\(attempt): audio.start OK")

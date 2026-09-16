@@ -1,51 +1,83 @@
 import SwiftUI
 
-/// Agent orbit: one group visible around the core at a time.
+/// V1 Agent Orbit — active agents فقط (لا 21 كرة دائمة).
+/// Canvas واحد يرسم النقاط + handoff arc + name flash.
 struct JarvisOrbitView: View {
-    let agents: [Agent]
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ObservedObject var orbit: AgentOrbitModel
     var coreSize: CGFloat = 250
-    var activeAgentID: String?
-    var onTapAgent: (Agent) -> Void = { _ in }
+    var onTapAgent: (AgentOrbitItem) -> Void = { _ in }
 
     var body: some View {
-        GeometryReader { geo in
-            let center = CGPoint(x: geo.size.width / 2, y: geo.size.height / 2)
-            let radius = min(geo.size.width, geo.size.height) / 2 - 26
-            ZStack {
-                ForEach(Array(agents.enumerated()), id: \.element.id) { idx, agent in
-                    let angle = angleFor(idx, count: agents.count)
-                    let pos = CGPoint(
-                        x: center.x + cos(angle) * radius,
-                        y: center.y + sin(angle) * radius
-                    )
-                    AgentChip(agent: agent, isActive: agent.id == activeAgentID)
-                        .position(pos)
-                        .onTapGesture { onTapAgent(agent) }
-                }
+        TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { timeline in
+            let t = reduceMotion ? 0.0 : timeline.date.timeIntervalSinceReferenceDate
+            Canvas { ctx, size in
+                draw(canvas: &ctx, size: size, time: t)
             }
-            .frame(width: geo.size.width, height: geo.size.height)
+        }
+        .allowsHitTesting(false)
+        .accessibilityLabel("مدار الإيجنتات النشطة")
+    }
+
+    private func radiusFactor(_ group: String) -> Double {
+        switch group {
+        case "system":  return MotionTokens.Orbit.systemRadiusFactor
+        case "content": return MotionTokens.Orbit.contentRadiusFactor
+        default:        return MotionTokens.Orbit.coreRadiusFactor
         }
     }
 
-    private func angleFor(_ idx: Int, count: Int) -> Double {
-        -Double.pi / 2 + Double(idx) * 2 * Double.pi / Double(count)
+    private func draw(canvas: inout GraphicsContext, size: CGSize, time: TimeInterval) {
+        let center = CGPoint(x: size.width / 2, y: size.height / 2)
+        let baseRadius = min(size.width, size.height) / 2 - 30
+
+        // handoff arc (طاقة من from إلى to)
+        if let arc = orbit.handoffArc,
+           let from = orbit.items.first(where: { $0.id == arc.from }),
+           let to = orbit.items.first(where: { $0.id == arc.to }) {
+            drawHandoffArc(canvas: &canvas, center: center, from: from, to: to, baseRadius: baseRadius, time: time)
+        }
+
+        // active agents
+        for item in orbit.items {
+            let rr = baseRadius * radiusFactor(item.group)
+            let pos = CGPoint(x: center.x + cos(item.position) * rr,
+                              y: center.y + sin(item.position) * rr)
+            drawAgentDot(canvas: &canvas, at: pos, item: item, time: time)
+        }
     }
-}
 
-struct AgentChip: View {
-    let agent: Agent
-    var isActive: Bool = false
+    private func drawAgentDot(canvas: inout GraphicsContext, at pos: CGPoint, item: AgentOrbitItem, time: TimeInterval) {
+        let r: CGFloat = 5.0
+        // halo
+        let halo = Path(ellipseIn: CGRect(x: pos.x - r * 2.4, y: pos.y - r * 2.4, width: r * 4.8, height: r * 4.8))
+        canvas.fill(halo, with: .color(JarvisColor.primary_blue.opacity(MotionTokens.Orbit.agentHaloOpacity)))
+        // dot (نبض خفيف)
+        let pulse = reduceMotion ? 1.0 : 1.0 + 0.12 * sin(time * 2.0 + item.position)
+        let dotR = r * CGFloat(pulse)
+        let dot = Path(ellipseIn: CGRect(x: pos.x - dotR, y: pos.y - dotR, width: dotR * 2, height: dotR * 2))
+        canvas.fill(dot, with: .color(JarvisColor.highlight_blue.opacity(0.95)))
+        // name (صغير، خافت — ليس label دائم بارز)
+        var text = canvas.resolve(Text(item.name).font(.system(size: 11)).foregroundColor(JarvisColor.text_muted))
+        canvas.draw(text, at: CGPoint(x: pos.x, y: pos.y + r + 12))
+    }
 
-    var body: some View {
-        Text(agent.name)
-            .font(.system(size: 13, weight: isActive ? .bold : .regular))
-            .foregroundColor(isActive ? JarvisColor.highlight_blue : JarvisColor.text_muted)
-            .padding(.horizontal, JarvisSpacing.md)
-            .padding(.vertical, 6)
-            .background(Capsule().fill(JarvisColor.bg_0.opacity(isActive ? 0.92 : 0.85)))
-            .overlay(Capsule().stroke(isActive ? JarvisColor.highlight_blue : JarvisColor.primary_blue.opacity(0.4), lineWidth: 1))
-            .shadow(color: isActive ? JarvisColor.primary_blue.opacity(0.35) : .clear, radius: isActive ? 8 : 0)
-            .fixedSize()
-            .accessibilityLabel("إيجنت \(agent.name)")
+    private func drawHandoffArc(canvas: inout GraphicsContext, center: CGPoint,
+                                from: AgentOrbitItem, to: AgentOrbitItem,
+                                baseRadius: Double, time: TimeInterval) {
+        let rf = radiusFactor(from.group)
+        let rt = radiusFactor(to.group)
+        let rFrom = baseRadius * rf
+        let rTo = baseRadius * rt
+        let pFrom = CGPoint(x: center.x + cos(from.position) * rFrom, y: center.y + sin(from.position) * rFrom)
+        let pTo = CGPoint(x: center.x + cos(to.position) * rTo, y: center.y + sin(to.position) * rTo)
+        // قوس ضوئي (منحنى بين النقطتين)
+        var arc = Path()
+        arc.move(to: pFrom)
+        let mid = CGPoint(x: (pFrom.x + pTo.x) / 2, y: (pFrom.y + pTo.y) / 2)
+        let dist = hypot(pTo.x - pFrom.x, pTo.y - pFrom.y)
+        let ctrl = CGPoint(x: mid.x, y: mid.y - dist * 0.3)
+        arc.addQuadCurve(to: pTo, control: ctrl)
+        canvas.stroke(arc, with: .color(JarvisColor.highlight_blue.opacity(0.6)), lineWidth: 1.5)
     }
 }

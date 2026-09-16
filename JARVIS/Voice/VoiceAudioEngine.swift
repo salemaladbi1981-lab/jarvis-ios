@@ -16,6 +16,11 @@ final class VoiceAudioEngine {
     var onDiagnostics: ((String) -> Void)?
     var onPlaybackDrained: (() -> Void)?
 
+    // V1 Visual: read-only RMS level hooks (normalized 0..1).
+    // لا تغيّر أي سلوك — تُحسب من الـ PCM المتدفق وتُنشر للـ Visual layer فقط.
+    var onMicLevel: ((Double) -> Void)?
+    var onOutputLevel: ((Double) -> Void)?
+
     // Mic capture counters (post-engine-startup evidence)
     private(set) var pcmCallbacks = 0
     private(set) var pcmBytesTotal = 0
@@ -96,6 +101,7 @@ final class VoiceAudioEngine {
                     self.onDiagnostics?("MIC firstPCM frames=\(buffer.frameLength) bytes=\(data.count)")
                 }
                 self.onPCM?(data)
+                if let level = Self.rmsLevel(data) { self.onMicLevel?(level) }
             }
         }
         onDiagnostics?("start: installTap OK hwRate=\(Int(hwFormat.sampleRate)) ch=\(hwFormat.channelCount)")
@@ -133,6 +139,8 @@ final class VoiceAudioEngine {
     /// Enqueue PCM16 (24kHz mono). Coalesces small deltas and schedules ahead.
     func enqueueAudio(_ data: Data) {
         guard !data.isEmpty else { return }
+        // read-only level (خارج workQueue، لا يؤثر على توقيت الـ scheduling)
+        if let level = Self.rmsLevel(data) { onOutputLevel?(level) }
         workQueue.async { [weak self] in
             guard let self else { return }
             self.receivedBytes += data.count
@@ -248,6 +256,21 @@ final class VoiceAudioEngine {
         let frames = Int(out.frameLength)
         let bytes = UnsafeBufferPointer(start: channelData[0], count: frames)
         return Data(bytes: bytes.baseAddress!, count: frames * MemoryLayout<Int16>.size)
+    }
+
+    /// Normalized RMS (0..1) من PCM16 — read-only، لا يمس الـ data.
+    static func rmsLevel(_ data: Data) -> Double? {
+        let count = data.count / MemoryLayout<Int16>.size
+        guard count > 0 else { return nil }
+        var sum = 0.0
+        data.withUnsafeBytes { raw in
+            guard let base = raw.bindMemory(to: Int16.self).baseAddress else { return }
+            for i in 0..<count {
+                let v = Double(base[i]) / 32768.0
+                sum += v * v
+            }
+        }
+        return (sum / Double(count)).squareRoot()
     }
 
     private static func toBuffer(_ data: Data, format: AVAudioFormat) -> AVAudioPCMBuffer? {
