@@ -30,6 +30,7 @@ struct AdaptiveRootView: View {
             }
         }
         .onAppear {
+            LaunchTiming.mark("adaptiveRoot onAppear")
             if forceLandscape { forceLandscapeOrientation() }
         }
         #endif

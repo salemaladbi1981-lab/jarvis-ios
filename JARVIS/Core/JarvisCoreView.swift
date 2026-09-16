@@ -14,6 +14,7 @@ struct JarvisCoreView: View {
     @State private var smoothedMic: Double = 0.0
     @State private var smoothedOutput: Double = 0.0
     @State private var successAnim: Double = 0.0
+    @State private var didMarkFirstFrame = false
 
     private let particles: [CGPoint] = [
         CGPoint(x: 0.20, y: -0.60), CGPoint(x: -0.55, y: -0.30), CGPoint(x: 0.65, y: -0.15),
@@ -35,6 +36,10 @@ struct JarvisCoreView: View {
                      success: successAnim)
                 let frameMs = (CACurrentMediaTime() - start) * 1000
                 onFrameTime?(frameMs)
+                if !didMarkFirstFrame {
+                    didMarkFirstFrame = true
+                    LaunchTiming.mark("core first frame")
+                }
             }
         }
         .frame(width: size, height: size)

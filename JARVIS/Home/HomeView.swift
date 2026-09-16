@@ -11,6 +11,7 @@ struct HomeView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: JarvisSpacing.lg) {
                     HeaderView()
+                        .id("top")
 
                     JarvisHeroView(vm: vm)
 
@@ -49,9 +50,14 @@ struct HomeView: View {
                 }
                 .padding(JarvisSpacing.lg)
             }
+            .defaultScrollAnchor(.top)
             .onAppear {
+                LaunchTiming.mark("home onAppear")
                 if ProcessInfo.processInfo.arguments.contains("-scrollBottom") {
                     proxy.scrollTo("bottom", anchor: .bottom)
+                } else {
+                    // cold launch / re-entry → النواة فوق الـ fold دائماً
+                    proxy.scrollTo("top", anchor: .top)
                 }
             }
         }
