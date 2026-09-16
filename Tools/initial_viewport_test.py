@@ -27,7 +27,8 @@ check("scrollTo top يحدث في onAppear (يمنع restoration)", 'onAppear' i
 check("LaunchTiming helper", 'enum LaunchTiming' in lt and 'systemUptime' in lt)
 check("home onAppear mark", 'home onAppear' in home)
 check("adaptiveRoot onAppear mark", 'adaptiveRoot onAppear' in adaptive)
-check("core first frame mark", 'core first frame' in core and 'didMarkFirstFrame' in core)
+check("core first frame mark في onAppear (خارج render closure)", 'core onAppear' in core and 'onAppear' in core)
+check("لا تعديل @State داخل Canvas render closure (crash fix)", 'didMarkFirstFrame' not in core)
 
 # 4. Core أول عنصر بعد Header (وليس مدفوعاً للأسفل)
 check("Core (JarvisHeroView) يلي Header مباشرة", 'HeaderView()' in home and 'JarvisHeroView(vm: vm)' in home)
