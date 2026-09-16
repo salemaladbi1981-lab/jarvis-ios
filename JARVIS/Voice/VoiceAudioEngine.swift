@@ -142,10 +142,16 @@ final class VoiceAudioEngine {
         workQueue.async { [weak self] in
             guard let self else { return }
             self.playbackGeneration += 1   // إبطال أي عمل قديم (رد سابق)
+            // بدء رد جديد: أوقف أي ذيل سابق + صفّر الطابور (اتساق مع المقاطعة)
+            self.player.stop()
+            self.player.reset()
+            self.pendingData.removeAll()
+            self.scheduledBuffers = 0
             self.scheduledLevels.removeAll()
             self.hasDrained = false
             self.resetStats()
             self.isSpeaking = true
+            self.player.play()
         }
     }
 
@@ -228,6 +234,9 @@ final class VoiceAudioEngine {
                     // advance: انشر level الـ المقطع التالي (يبدأ تشغيله الآن)
                     if !self.scheduledLevels.isEmpty {
                         self.onOutputLevel?(self.scheduledLevels.removeFirst())
+                    } else if self.pendingData.isEmpty && self.scheduledBuffers == 0 && self.isSpeaking {
+                        // فراغ الصوت أثناء استمرار التوليد → تصفير المستوى (لا drain)
+                        self.onOutputLevel?(0)
                     }
                     if self.scheduledBuffers == 0 && self.isSpeaking {
                         // نفدت كل الـ buffers المجدولة والرد ما زال يتدفق → underrun/gap
@@ -272,13 +281,18 @@ final class VoiceAudioEngine {
     }
 
     func stop() {
-        playbackGeneration += 1   // إبطال الدورة
-        scheduledLevels.removeAll()
-        hasDrained = false
+        workQueue.async { [weak self] in
+            guard let self else { return }
+            self.playbackGeneration += 1   // إبطال الدورة
+            self.scheduledLevels.removeAll()
+            self.hasDrained = false
+            self.pendingData.removeAll()
+            self.scheduledBuffers = 0
+            self.onOutputLevel?(0)   // تصفير المستوى عند التوقف
+        }
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
         started = false
-        onOutputLevel?(0)   // تصفير المستوى عند التوقف
         #if os(iOS)
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         #endif

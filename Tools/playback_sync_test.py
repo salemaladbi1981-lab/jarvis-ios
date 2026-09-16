@@ -15,6 +15,8 @@ class PlaybackSync:
 
     def begin_speaking(self):
         self.gen += 1
+        self.pending = []          # flush-like: تصفير tail سابق (رد جديد)
+        self.scheduled = 0
         self.scheduled_levels = []
         self.has_drained = False
         self.is_speaking = True
@@ -39,6 +41,8 @@ class PlaybackSync:
         self.scheduled -= 1
         if self.scheduled_levels:
             self.published.append(self.scheduled_levels.pop(0))  # advance للـ التالي
+        elif not self.pending and self.scheduled == 0 and self.is_speaking:
+            self.published.append(0.0)   # فراغ الصوت → تصفير level (لا drain)
         self.check_drain()
 
     def check_drain(self):
@@ -81,7 +85,7 @@ check("بعد اكتمال تشغيل الأول → يُنشر مستوى ال�
 p.complete_playback(p.gen)  # نهاية 0.2 → انشر 0.3
 check("بعد اكتمال الثاني → يُنشر الثالث", p.published == [0.1, 0.2, 0.3])
 p.complete_playback(p.gen)  # نهاية 0.3 → لا advance (فارغ)
-check("لا level إضافي بعد آخر مقطع (بدون drain بعد)", p.published == [0.1, 0.2, 0.3])
+check("بعد آخر مقطع أثناء التوليد → level 0 (فراغ، لا drain)", p.published == [0.1, 0.2, 0.3, 0.0])
 
 # 2. انتهاء الصوت قبل response.done → drain عند response.done
 p = PlaybackSync()
@@ -128,6 +132,28 @@ p.begin_speaking()           # رد جديد (gen++)
 p.enqueue(4800, 0.9)
 p.schedule_next()
 check("الرد الجديد ينشر level نظيفاً (0.9)", 0.9 in p.published)
+
+# 6. فراغ الصوت أثناء التوليد: level 0 ثم استئناف
+p = PlaybackSync()
+p.begin_speaking()
+p.enqueue(4800, 0.7)
+p.schedule_next()          # ينشر 0.7
+p.complete_playback(p.gen) # نهاية 0.7 → لا scheduled_levels + pending فارغ + is_speaking=True → level 0
+check("فراغ الصوت أثناء التوليد → تصفير level 0 (لا drain)", p.published == [0.7, 0.0] and not p.has_drained)
+p.enqueue(4800, 0.8)       # صوت جديد → استئناف
+p.schedule_next()          # ينشر 0.8
+check("وصول صوت جديد → استئناف نشر مستواه", p.published[-1] == 0.8)
+
+# 7. بدء رد جديد أثناء ذيل سابق: begin_speaking يصفّر tail (flush-like)
+p = PlaybackSync()
+p.begin_speaking()
+p.enqueue(4800, 0.3)
+p.schedule_next()
+p.begin_speaking()         # رد جديد: يصفّر pending + scheduled
+check("بدء رد جديد يصفّر tail السابق (flush-like)", p.pending == [] and p.scheduled == 0)
+p.enqueue(4800, 0.9)
+p.schedule_next()
+check("الرد الجديد ينشر level نظيفاً", p.published[-1] == 0.9)
 
 print(f"\n== RESULT: {PASS} PASS / {FAIL} FAIL ==")
 import sys

@@ -154,15 +154,18 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                 currentResponseID = Self.jsonNestedString(text, "response", "id")
                 trace("response.created id=\(currentResponseID ?? "?")")
             case "response.output_audio.delta":
+                // حراسة هوية الرد أولاً (قبل أي تغيير isSpeaking/beginSpeaking/حدث)
+                guard let cur = currentResponseID else {
+                    trace("delta ignored — لا رد نشط")
+                    break
+                }
+                if let rid = Self.jsonStringField(text, "response_id"), rid != cur {
+                    trace("stale delta ignored (response_id \(rid) != \(cur))")
+                    break
+                }
                 if !isSpeaking {
                     isSpeaking = true
                     audio.beginSpeaking()   // يصفّر الـ counters ويبدأ التدفق
-                }
-                // هوية الرد: تجاهل delta من رد قديم (ملغى) حتى لو وصل بعد بدء رد جديد
-                if let rid = Self.jsonStringField(text, "response_id"),
-                   let cur = currentResponseID, rid != cur {
-                    trace("stale delta ignored (response_id \(rid) != \(cur))")
-                    break
                 }
                 if let b64 = Self.jsonStringField(text, "delta") {
                     if let data = Data(base64Encoded: b64) { audio.enqueueAudio(data) }
@@ -171,6 +174,7 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
             case "input_audio_buffer.speech_started":
                 trace("VAD speech_started payload: \(text)")
                 bargeStartTime = Date().timeIntervalSinceReferenceDate
+                currentResponseID = nil   // إبطال قبول deltas فور المقاطعة
                 if isSpeaking {
                     // barge-in: كلام مستخدم أثناء كلام جارفس (AEC يمنع echo).
                     isSpeaking = false
@@ -178,7 +182,8 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                 } else {
                     // صوت متبقٍ بعد انتهاء التوليد (response.done) — إيقاف فوري للذيل
                     audio.flush()
-                    trace("BARGE — flush tail (صوت متبقٍ بعد انتهاء التوليد)")
+                    eventPublisher.send(.listening)   // انتقال الواجهة إلى Listening
+                    trace("BARGE — flush tail → Listening")
                 }
             case "input_audio_buffer.speech_stopped":
                 trace("VAD speech_stopped payload: \(text)")
@@ -192,7 +197,14 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                 // نص رد جارفس — لا يُعاد توجيهه (يمنع الـ loop).
                 break
             case "response.done":
+                // حراسة: done يجب أن يكون للرد الحالي (وليس رداً ملغى)
+                if let cur = currentResponseID,
+                   let rid = Self.jsonStringField(text, "response_id"), rid != cur {
+                    trace("stale response.done ignored (response_id \(rid) != \(cur))")
+                    break
+                }
                 isSpeaking = false
+                currentResponseID = nil   // لا رد نشط بعد done
                 audio.flushTail()   // يفلش tail + يطبع PLAYBACK counters
                 trace("response.done — flushTail called (انتظار اكتمال التشغيل المحلي)")
                 // لا .connected هنا — يُرسل عند onPlaybackDrained (اكتمال التشغيل الفعلي)
