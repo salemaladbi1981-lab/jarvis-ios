@@ -19,10 +19,12 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     private var session = URLSession(configuration: .default)
     private let audio = VoiceAudioEngine()
     private var isSpeaking = false
-    private var guardState = SessionGuardState()   // حراسة الجلسة/الرد (currentResponseID + isSessionReady + pendingStatus)
+    private var guardState = SessionGuardState()   // حراسة الجلسة/الرد/الاتصال
     private var startAttemptID = 0
     private var pcmAppendCount = 0
     private var bargeStartTime: TimeInterval = 0
+    /// تنفيذ تسلسلي واحد لحالة الجلسة وحراسة أحداثها.
+    private let stateQueue = DispatchQueue(label: "jarvis.session.state")
 
     func connect(baseURL: URL) async throws {
         eventPublisher.send(.connecting)
@@ -32,16 +34,23 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
         comps.scheme = comps.scheme == "https" ? "wss" : "ws"
         comps.path = "/realtime"
         guard let url = comps.url else { eventPublisher.send(.error("invalid_url")); return }
-        ws = session.webSocketTask(with: url)
-        ws?.resume()
+        // بدء اتصال جديد → جيل جديد يربط به الـ receiveLoop
+        let gen = stateQueue.sync { self.guardState.beginConnection() }
+        stateQueue.sync {
+            self.ws = self.session.webSocketTask(with: url)
+            self.ws?.resume()
+        }
         trace("WS resume → \(url) (handshake pending — NOT connected yet)")
-        receiveLoop()
+        receiveLoop(gen: gen)
     }
 
     func disconnect() {
-        guardState.onStop()
-        isSpeaking = false
-        stopListening()
+        stateQueue.sync {
+            self.guardState.invalidateConnection()   // إبطال دورة الاتصال
+            self.guardState.onStop()                 // إبطال الجلسة/الرد
+            self.isSpeaking = false
+        }
+        audio.stop()
         ws?.cancel(with: .goingAway, reason: nil)
         ws = nil
         eventPublisher.send(.disconnected)
@@ -58,13 +67,18 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
         audio.onOutputLevel = { [weak self] level in self?.onOutputLevel?(level) }
         audio.onPlaybackDrained = { [weak self] in
             guard let self else { return }
-            self.trace("playback drained — اكتمل التشغيل المحلي")
-            let status = self.guardState.pendingStatus
-            self.guardState.pendingStatus = nil
-            if status == "failed" {
-                self.eventPublisher.send(.error("realtime_error"))
-            } else {
-                self.eventPublisher.send(.connected)
+            // إشعار انتهاء التشغيل: ينهي دورة صالحة حالية فقط، ويستهلك النتيجة مرة واحدة.
+            self.stateQueue.async {
+                switch self.guardState.consumeCompletion() {
+                case .none:
+                    self.trace("playback drained — لا اكتمال معلّق (إشعار قديم)")
+                case .success:
+                    self.trace("playback drained — اكتمل التشغيل المحلي")
+                    self.eventPublisher.send(.connected)
+                case .failed:
+                    self.trace("playback drained — اكتمل التشغيل (failed)")
+                    self.eventPublisher.send(.error("realtime_error"))
+                }
             }
         }
         do {
@@ -77,17 +91,16 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     }
 
     func stopListening() {
-        guardState.onStop()   // إبطال الجلسة + الرد (منع أحداث الدورة الموقوفة)
-        isSpeaking = false
+        stateQueue.sync {
+            self.guardState.onStop()   // إبطال الجلسة + الرد (منع أحداث الدورة الموقوفة)
+            self.isSpeaking = false
+        }
         audio.stop()   // يوقف المحرك + يصفّر المستوى + يبطل generation
     }
 
     /// Barge-in: إلغاء الرد الجاري + مسح الـ playback (الـ mic يبقى شغّالاً).
-    /// الـ flush يمسح الـ playback queue فقط — لا يمسح الـ mic input،
-    /// فلا تضيع أول كلمة من كلام المستخدم.
+    /// (لا يغيّر الحالة — المتصلون يبطلون الرد عبر onBarge قبل النداء).
     private func bargeIn() {
-        guardState.onBarge()   // إبطال الرد فقط (الجلسة تبقى نشطة للـ listening)
-        isSpeaking = false
         trace("BARGE speech_started → response.cancel + flush")
         let cancel = #"{"type":"response.cancel"}"#
         ws?.send(.string(cancel)) { _ in }
@@ -98,8 +111,10 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     }
 
     func interrupt() {
-        guardState.onBarge()
-        isSpeaking = false
+        stateQueue.sync {
+            self.guardState.onBarge()
+            self.isSpeaking = false
+        }
         bargeIn()
     }
 
@@ -112,8 +127,9 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     }
 
     func sendAudio(pcm16: Data) {
-        // Gate: لا PCM قبل نجاح handshake/session.created
-        guard guardState.isSessionReady else { return }
+        // Gate: لا PCM قبل نجاح handshake/session.created (تحت التسلسل نفسه)
+        let ready = stateQueue.sync { self.guardState.isSessionReady }
+        guard ready else { return }
         pcmAppendCount += 1
         if pcmAppendCount == 1 {
             trace("PCM append #1 bytes=\(pcm16.count)")
@@ -128,36 +144,43 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
         print("[JARVIS-TRACE] \(String(format: "%.3f", ts)) \(msg)")
     }
 
-    private func receiveLoop() {
+    private func receiveLoop(gen: Int) {
         ws?.receive { [weak self] result in
             guard let self else { return }
-            switch result {
-            case .success(let message):
-                switch message {
-                case .string(let text): self.handleServer(text)
-                case .data(let data): self.handleAudio(data)
-                @unknown default: break
+            self.stateQueue.async {
+                // حراسة: callback من اتصال قديم لا يُعالج ولا يُستأنف
+                guard self.guardState.isValidConnection(gen) else {
+                    self.trace("receiveLoop تجاهل — اتصال قديم (gen=\(gen))")
+                    return
                 }
-                self.receiveLoop()
-            case .failure(let error):
-                self.trace("WS receive FAILED: \(error.localizedDescription)")
-                if let nserr = error as NSError? {
-                    let reason = nserr.userInfo["NSURLErrorWebSocketHandshakeFailureReason"] ?? "?"
-                    self.trace("WS handshake failure: code=\(nserr.code) reason=\(reason)")
+                switch result {
+                case .success(let message):
+                    switch message {
+                    case .string(let text): self.handleServer(text)
+                    case .data(let data): self.handleAudio(data)
+                    @unknown default: break
+                    }
+                    self.receiveLoop(gen: gen)
+                case .failure(let error):
+                    self.trace("WS receive FAILED: \(error.localizedDescription)")
+                    if let nserr = error as NSError? {
+                        let reason = nserr.userInfo["NSURLErrorWebSocketHandshakeFailureReason"] ?? "?"
+                        self.trace("WS handshake failure: code=\(nserr.code) reason=\(reason)")
+                    }
+                    self.eventPublisher.send(.disconnected)
                 }
-                self.eventPublisher.send(.disconnected)
             }
         }
     }
 
     private func handleServer(_ text: String) {
-        // Parse minimal JSON: extract type + transcript text.
         if let t = SessionEventParser.field(text, "type") {
             if t != "response.output_audio.delta" {
                 trace("recv \(t)")
             }
             switch t {
             case "session.created":
+                // حدث بدء الجلسة — لا يشترط isSessionReady؛ الـ receiveLoop يتحقق من جيل الاتصال.
                 trace("session.created received")
                 guardState.sessionCreated()
                 eventPublisher.send(.connected)   // الآن فقط بعد نجاح handshake
@@ -185,14 +208,16 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                 eventPublisher.send(.speaking)
             case "input_audio_buffer.speech_started":
                 trace("VAD speech_started payload: \(text)")
+                // حراسة: حدث متأخر بعد الإيقاف يجب ألا يعيد .listening أو يفلش دورة موقوفة
+                guard guardState.onSpeechStarted() else {
+                    trace("speech_started ignored (الجلسة موقوفة)")
+                    break
+                }
                 bargeStartTime = Date().timeIntervalSinceReferenceDate
-                guardState.onBarge()   // إبطال الرد قبل التفرع (يشمل الفترة قبل أول delta)
                 if isSpeaking {
-                    // barge-in: كلام مستخدم أثناء كلام جارفس (AEC يمنع echo).
                     isSpeaking = false
                     bargeIn()   // response.cancel + flush
                 } else {
-                    // صوت متبقٍ بعد انتهاء التوليد (response.done) — إيقاف فوري للذيل
                     audio.flush()
                     eventPublisher.send(.listening)   // انتقال الواجهة إلى Listening
                     trace("BARGE — flush tail → Listening")
@@ -214,10 +239,9 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                     trace("response.done ignored (لا رد مطابق نشط)")
                     break
                 }
-                let status = guardState.pendingStatus ?? "completed"
                 isSpeaking = false
                 audio.flushTail()   // يفلش tail + يطبع PLAYBACK counters
-                trace("response.done status=\(status) — flushTail (انتظار اكتمال التشغيل المحلي)")
+                trace("response.done — flushTail (انتظار اكتمال التشغيل المحلي)")
                 // النتيجة تُرسل عند onPlaybackDrained (failed لا يتحول إلى success)
             case "response.function_call_arguments.done":
                 eventPublisher.send(.toolExecuting)

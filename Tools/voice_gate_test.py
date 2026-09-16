@@ -82,7 +82,7 @@ check("toggleVoice re-entry guard", 'isVoiceStarting' in vm)
 
 # WebSocket handshake (regression: لا PCM قبل session.created + connected بعد handshake)
 check("no connected before handshake (resume != connected)", 'handshake pending' in rvs)
-check("sendAudio gate: guard guardState.isSessionReady", 'guard guardState.isSessionReady' in rvs)
+check("sendAudio gate: stateQueue.sync isSessionReady", 'guardState.isSessionReady' in rvs and 'stateQueue.sync' in rvs)
 check("connected فقط بعد session.created", 'guardState.sessionCreated()' in rvs and 'session.created received' in rvs)
 check("handshake error trace (code + reason)", 'handshake failure' in rvs and 'NSURLErrorWebSocketHandshakeFailureReason' in rvs)
 # state truth

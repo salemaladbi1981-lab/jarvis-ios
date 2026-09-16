@@ -1,13 +1,45 @@
 import Foundation
 
+/// نتيجة اكتمال الرد عند تصريف التشغيل المحلي.
+/// `.none` لا تعني نجاحاً — بل «لا اكتمال معلّق».
+enum PlaybackCompletion: Equatable {
+    case none
+    case success
+    case failed
+}
+
 /// حالة حراسة أحداث جلسة Realtime — Foundation-only (قابل للاختبار على macOS).
-/// يمنع أحداث الاتصال/الرد القديم من التأثير بعد الإيقاف أو إعادة البدء.
+/// يجمع: هوية الرد، جاهزية الجلسة، جيل الاتصال، ونتيجة الاكتمال.
 struct SessionGuardState {
     var currentResponseID: String?
     var isSessionReady = false
-    var pendingStatus: String?
+    var pendingCompletion: PlaybackCompletion = .none
 
-    /// session.created — جلسة الاتصال الحالية أصبحت نشطة.
+    /// جيل الاتصال — يعزل callbacks الاتصال القديم عن الجديد.
+    private(set) var connectionGeneration = 0
+
+    // MARK: - دورة الاتصال (WebSocket)
+
+    /// بدء اتصال جديد — يزيد الجيل ويُرجع هويته للربط بالـ callbacks.
+    @discardableResult
+    mutating func beginConnection() -> Int {
+        connectionGeneration += 1
+        return connectionGeneration
+    }
+
+    /// إبطال الاتصال الحالي (قطع/استبدال) — أي callback قديم يصبح غير صالح.
+    mutating func invalidateConnection() {
+        connectionGeneration += 1
+    }
+
+    /// هل هذا الجيل هو الاتصال الحالي المسموح له بالمعالجة؟
+    func isValidConnection(_ generation: Int) -> Bool {
+        generation == connectionGeneration
+    }
+
+    // MARK: - دورة الجلسة/الرد
+
+    /// session.created — بدء الجلسة (لا يشترط isSessionReady؛ هو من يضبطه).
     mutating func sessionCreated() {
         isSessionReady = true
     }
@@ -18,6 +50,7 @@ struct SessionGuardState {
         guard isSessionReady,
               let id = SessionEventParser.nested(json, "response", "id") else { return false }
         currentResponseID = id
+        pendingCompletion = .none   // بدء دورة رد جديدة يبطل اكتمال الرد السابق
         return true
     }
 
@@ -25,6 +58,7 @@ struct SessionGuardState {
     mutating func onDelta(_ json: String) -> Bool {
         guard isSessionReady, let cur = currentResponseID else { return false }
         if let rid = SessionEventParser.field(json, "response_id"), rid != cur { return false }
+        pendingCompletion = .none   // أي صوت لرد جديد يبطل الاكتمال المعلّق القديم
         return true
     }
 
@@ -34,21 +68,38 @@ struct SessionGuardState {
         guard let cur = currentResponseID,
               let rid = SessionEventParser.nested(json, "response", "id"),
               rid == cur else { return false }
-        pendingStatus = SessionEventParser.nested(json, "response", "status") ?? "completed"
+        let status = SessionEventParser.nested(json, "response", "status") ?? "completed"
+        pendingCompletion = (status == "failed") ? .failed : .success
         currentResponseID = nil
         return true
+    }
+
+    /// قبول حدث speech_started — الجلسة نشطة فقط، ويُبطل الرد الجاري.
+    /// يعيد false إذا كان الحدث متأخراً بعد الإيقاف (لا أثر على الصوت/الحالة).
+    @discardableResult
+    mutating func onSpeechStarted() -> Bool {
+        guard isSessionReady else { return false }
+        onBarge()
+        return true
+    }
+
+    /// استهلاك نتيجة الاكتمال مرة واحدة. `.none` لا تُنشر نجاحاً.
+    mutating func consumeCompletion() -> PlaybackCompletion {
+        let c = pendingCompletion
+        pendingCompletion = .none
+        return c
     }
 
     /// إيقاف/انقطاع كامل — يبطل الجلسة والرد الحالي.
     mutating func onStop() {
         currentResponseID = nil
         isSessionReady = false
-        pendingStatus = nil
+        pendingCompletion = .none
     }
 
     /// مقاطعة/إلغاء رد — يبطل الرد الحالي فقط (الجلسة تبقى نشطة للـ listening).
     mutating func onBarge() {
         currentResponseID = nil
-        pendingStatus = nil
+        pendingCompletion = .none
     }
 }
