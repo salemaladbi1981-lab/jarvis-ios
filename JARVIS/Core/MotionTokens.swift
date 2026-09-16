@@ -39,6 +39,16 @@ enum MotionTokens {
         static let release: Double = 0.35  // أبطأ انخفاض (تجنب flicker)
     }
 
+    // MARK: Level (RMS → perceptual mapping — visual layer only)
+    enum Level {
+        // RMS النموذجي للكلام/TTS صغير (0.02..0.3) — منحنى إدراكي يرفعه إلى مدى مرئي.
+        static let gain: Double = 8.0
+        /// يرفع الـ RMS الصغير بسرعة ويشبع عند 1.0 (بلا clipping حاد).
+        static func perceptual(_ raw: Double) -> Double {
+            min(1.0, 1.0 - exp(-raw * gain))
+        }
+    }
+
     // MARK: Orbit
     enum Orbit {
         static let coreRadiusFactor: Double = 1.0

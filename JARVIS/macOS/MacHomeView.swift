@@ -39,7 +39,7 @@ struct MacHomeView: View {
 
                     JarvisWaveformStatusView(vm: vm)
 
-                    QuickSuggestions(commands: QuickCommand.allCases) { cmd in
+                    QuickSuggestions(commands: QuickCommand.productionCases) { cmd in
                             Task { await vm.handleQuickCommand(cmd) }
                         }
 

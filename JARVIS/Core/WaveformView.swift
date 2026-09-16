@@ -24,8 +24,8 @@ struct WaveformView: View {
 
     private var activeLevel: Double {
         switch state {
-        case .listening: return levels.micLevel
-        case .speaking:  return levels.outputLevel
+        case .listening: return MotionTokens.Level.perceptual(levels.micLevel)
+        case .speaking:  return MotionTokens.Level.perceptual(levels.outputLevel)
         default:         return 0
         }
     }

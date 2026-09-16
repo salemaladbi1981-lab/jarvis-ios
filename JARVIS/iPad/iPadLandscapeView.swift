@@ -33,7 +33,7 @@ struct iPadLandscapeView: View {
                         SecurityCard(status: vm.securityStatus ?? SecurityStatus(systemsNormal: true, doorsLocked: true, camerasActive: true))
                             .onTapGesture { vm.requestAction(agentID: "core_home", action: "unlock-door") }
                         MediaCard(track: vm.mediaTrack ?? MediaTrack(title: "Blinding Lights", artist: "The Weeknd", current: "2:06", duration: "3:20"))
-                        QuickSuggestions(commands: QuickCommand.allCases) { cmd in
+                        QuickSuggestions(commands: QuickCommand.productionCases) { cmd in
                             Task { await vm.handleQuickCommand(cmd) }
                         }
                     }

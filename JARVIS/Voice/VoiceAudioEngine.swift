@@ -15,6 +15,9 @@ final class VoiceAudioEngine {
     private let player = AVAudioPlayerNode()
     private let format: AVAudioFormat   // 24kHz mono PCM16
     private var started = false
+    private var interrupted = false
+    private var interruptionObserver: NSObjectProtocol?
+    private var routeObserver: NSObjectProtocol?
     private var converter: AVAudioConverter?
 
     // Mic tap (AEC-applied via voice-processing session)
@@ -137,7 +140,72 @@ final class VoiceAudioEngine {
         let route = session.currentRoute.outputs.first?.portType.rawValue ?? "?"
         let sessionMode = session.mode.rawValue
         onDiagnostics?("AEC vpEnabled=\(vpEnabled) vpBypassed=\(vpBypassed) mode=\(sessionMode) route=\(route) hwRate=\(Int(hwFormat.sampleRate))")
+        registerSessionObservers()
         #endif
+    }
+
+    // MARK: - AVAudioSession interruption/route handling (iOS)
+    // policy: transient/system overlay لا يوقف الصوت؛ interruption حقيقي يpause ثم resume آمن.
+    // لا نلغي الرد ولا نمسح الـ playback إلا عند stop صريح.
+
+    private func registerSessionObservers() {
+        #if os(iOS)
+        let nc = NotificationCenter.default
+        interruptionObserver = nc.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] note in
+            self?.handleInterruption(note)
+        }
+        routeObserver = nc.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) { [weak self] note in
+            self?.handleRouteChange(note)
+        }
+        #endif
+    }
+
+    private func handleInterruption(_ note: Notification) {
+        #if os(iOS)
+        guard let info = note.userInfo,
+              let raw = info[AVAudioSessionInterruptionTypeKey] as? UInt,
+              let type = AVAudioSession.InterruptionType(rawValue: raw) else { return }
+        switch type {
+        case .began:
+            // Interruption حقيقي (مكالمة/سيري/صوت نظام) — الـ system أوقف الـ engine.
+            // لا flush ولا cancel — نحفظ الـ playback ونعلّم الحالة فقط.
+            onDiagnostics?("session interruption began (no flush — preserving playback)")
+            workQueue.async { [weak self] in self?.interrupted = true }
+        case .ended:
+            onDiagnostics?("session interruption ended")
+            let optsRaw = (info[AVAudioSessionInterruptionOptionKey] as? UInt) ?? 0
+            if AVAudioSession.InterruptionOptions(rawValue: optsRaw).contains(.shouldResume) {
+                resumeAfterInterruption()
+            }
+        @unknown default:
+            break
+        }
+        #endif
+    }
+
+    private func handleRouteChange(_ note: Notification) {
+        #if os(iOS)
+        guard let info = note.userInfo,
+              let raw = info[AVAudioSessionRouteChangeReasonKey] as? UInt,
+              let reason = AVAudioSession.RouteChangeReason(rawValue: raw) else { return }
+        onDiagnostics?("route change reason=\(reason.rawValue)")
+        // لا نوقف الصوت عند route change عادي (نترك الـ engine يتعامل معه)
+        #endif
+    }
+
+    private func resumeAfterInterruption() {
+        #if os(iOS)
+        try? AVAudioSession.sharedInstance().setActive(true, options: [])
+        #endif
+        workQueue.async { [weak self] in
+            guard let self else { return }
+            self.interrupted = false
+            if self.started && !self.engine.isRunning {
+                do { try self.engine.start() }
+                catch { self.onDiagnostics?("resume engine.start FAILED: \(error.localizedDescription)") }
+            }
+            self.player.play()
+        }
     }
 
     // MARK: - Playback (continuous schedule-ahead, thread-safe)

@@ -66,6 +66,10 @@ struct JarvisCoreView: View {
         let radius = min(size.width, size.height) / 2
         let reduce = reduceMotion
 
+        // V1: perceptual level mapping (RMS صغير → مدى مرئي) — visual layer only.
+        let micP = MotionTokens.Level.perceptual(mic)
+        let outP = MotionTokens.Level.perceptual(output)
+
         // disturbance (error) — إزاحة خفيفة بلا flashing أحمر
         var offset = CGSize.zero
         var bloomBoost = 0.0
@@ -103,9 +107,9 @@ struct JarvisCoreView: View {
             case .idle:
                 coreScale = 1.0 + MotionTokens.Amplitude.idleBreath * sin(time * 2 * .pi / MotionTokens.Duration.idleBreath)
             case .listening:
-                coreScale = 1.0 + MotionTokens.Amplitude.listening * mic
+                coreScale = 1.0 + MotionTokens.Amplitude.listening * micP
             case .speaking:
-                coreScale = 1.0 + MotionTokens.Amplitude.speaking * output
+                coreScale = 1.0 + MotionTokens.Amplitude.speaking * outP
             case .thinking:
                 coreScale = 1.0 + MotionTokens.Amplitude.thinking * 0.5 * (1 + sin(time * 2 * .pi * MotionTokens.Speed.thinking))
             case .executing:
@@ -136,7 +140,7 @@ struct JarvisCoreView: View {
             default: rotSpeed = 0.02   // بطيء جداً
             }
         }
-        let pulse = reduce ? 1.0 : 1.0 + 0.02 * (state == .listening ? mic : (state == .speaking ? output : 0))
+        let pulse = reduce ? 1.0 : 1.0 + 0.02 * (state == .listening ? micP : (state == .speaking ? outP : 0))
         for (i, angleDeg) in ringAngles.enumerated() {
             let rr = radius * ringRadii[i] * CGFloat(pulse)
             let angle = Angle.degrees(angleDeg + Double(i) * 4 + time * rotSpeed)
@@ -157,7 +161,7 @@ struct JarvisCoreView: View {
             if !reduce {
                 if state == .listening {
                     // طاقة تدخل للنواة حسب mic level
-                    let inward = 1.0 - mic * 0.5
+                    let inward = 1.0 - micP * 0.5
                     px = c.x + p.x * pr * inward
                     py = c.y + p.y * pr * inward
                 } else if state == .executing {

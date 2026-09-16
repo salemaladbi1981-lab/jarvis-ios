@@ -19,6 +19,11 @@ enum QuickCommand: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    /// Production UI: الأوامر المدمجة فعلياً فقط (تُخفى الحالات غير الجاهزة).
+    static var productionCases: [QuickCommand] {
+        allCases.filter { $0.capabilityStatus == .verified }
+    }
+
     var label: String {
         switch self {
         case .calendar:   return "وش عندي في الجدول؟"

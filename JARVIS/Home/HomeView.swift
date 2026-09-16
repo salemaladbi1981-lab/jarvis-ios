@@ -27,11 +27,9 @@ struct HomeView: View {
 
                     MediaCard(track: vm.mediaTrack ?? MediaTrack(title: "Blinding Lights", artist: "The Weeknd", current: "2:06", duration: "3:20"))
 
-                    QuickSuggestions(commands: QuickCommand.allCases) { cmd in
+                    QuickSuggestions(commands: QuickCommand.productionCases) { cmd in
                         Task { await vm.handleQuickCommand(cmd) }
                     }
-
-                    VoiceInputBar(isListening: vm.isListening) { vm.toggleVoice() }
 
                     if let msg = vm.calendarMessage {
                         Text(msg)
@@ -62,7 +60,11 @@ struct HomeView: View {
             }
         }
         .safeAreaInset(edge: .bottom) {
-            BottomNavBar(selected: $selectedTab)
+            VStack(spacing: 0) {
+                VoiceInputBar(isListening: vm.isListening) { vm.toggleVoice() }
+                    .padding(.horizontal, JarvisSpacing.lg)
+                BottomNavBar(selected: $selectedTab)
+            }
         }
         .background(
             LinearGradient(colors: [JarvisColor.bg_0, JarvisColor.bg_1], startPoint: .top, endPoint: .bottom)
