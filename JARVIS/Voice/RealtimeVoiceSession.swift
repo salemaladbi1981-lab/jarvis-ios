@@ -16,6 +16,8 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     private var session = URLSession(configuration: .default)
     private let audio = VoiceAudioEngine()
     private var isSpeaking = false
+    private var startAttemptID = 0
+    private var pcmAppendCount = 0
 
     func connect(baseURL: URL) async throws {
         eventPublisher.send(.connecting)
@@ -28,6 +30,7 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
         ws = session.webSocketTask(with: url)
         ws?.resume()
         eventPublisher.send(.connected)
+        trace("WS connected → \(url)")
         receiveLoop()
     }
 
@@ -39,14 +42,17 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     }
 
     func startListening() {
+        startAttemptID += 1
+        let attempt = startAttemptID
         eventPublisher.send(.listening)
+        trace("startListening attempt #\(attempt) — voiceState=listening")
         audio.onPCM = { [weak self] data in self?.sendAudio(pcm16: data) }
         audio.onDiagnostics = { [weak self] msg in self?.trace("AEC diag: \(msg)") }
         do {
             try audio.start()
-            trace("startListening: audio.start OK")
+            trace("startListening #\(attempt): audio.start OK")
         } catch {
-            trace("startListening FAILED: \(error.localizedDescription)")
+            trace("startListening #\(attempt) FAILED: \(error.localizedDescription)")
             eventPublisher.send(.error("mic_unavailable"))
         }
     }
@@ -77,6 +83,10 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     }
 
     func sendAudio(pcm16: Data) {
+        pcmAppendCount += 1
+        if pcmAppendCount == 1 {
+            trace("PCM append #1 bytes=\(pcm16.count)")
+        }
         let b64 = pcm16.base64EncodedString()
         let msg = #"{"type":"input_audio_buffer.append","audio":"\#(b64)"}"#
         ws?.send(.string(msg)) { _ in }
@@ -111,6 +121,10 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                 trace("recv \(t)")
             }
             switch t {
+            case "session.created":
+                trace("session.created received")
+            case "session.updated":
+                trace("session.updated received")
             case "response.output_audio.delta":
                 if !isSpeaking {
                     isSpeaking = true

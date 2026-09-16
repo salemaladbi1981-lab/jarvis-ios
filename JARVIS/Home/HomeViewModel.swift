@@ -95,8 +95,11 @@ final class HomeViewModel: ObservableObject {
             isVoiceActive = false
             isListening = false
             state = .idle
-        } else {
+        } else if !isVoiceStarting {
+            // منع re-entry: لا Task مكرر حتى تكتمل دورة البدء (كان يسبب multiple audio.start())
+            isVoiceStarting = true
             Task {
+                defer { isVoiceStarting = false }
                 // 1) mic permission أولاً (كان مفقوداً — يمنع input صامت/فشل)
                 let mic = AudioCapture.micPermission()
                 if mic == .notDetermined {

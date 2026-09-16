@@ -16,6 +16,10 @@ final class VoiceAudioEngine {
     var onDiagnostics: ((String) -> Void)?
     var onPlaybackDrained: (() -> Void)?
 
+    // Mic capture counters (post-engine-startup evidence)
+    private(set) var pcmCallbacks = 0
+    private(set) var pcmBytesTotal = 0
+
     // Serial queue: يحمي pendingData + counters من data race
     // (enqueue من WebSocket thread، completion من audio thread).
     private let workQueue = DispatchQueue(label: "jarvis.audio.playback")
@@ -86,6 +90,11 @@ final class VoiceAudioEngine {
         input.installTap(onBus: 0, bufferSize: 2048, format: hwFormat) { [weak self] buffer, _ in
             guard let self, let conv = self.converter else { return }
             if let data = self.convert(buffer, using: conv) {
+                self.pcmCallbacks += 1
+                self.pcmBytesTotal += data.count
+                if self.pcmCallbacks == 1 {
+                    self.onDiagnostics?("MIC firstPCM frames=\(buffer.frameLength) bytes=\(data.count)")
+                }
                 self.onPCM?(data)
             }
         }
