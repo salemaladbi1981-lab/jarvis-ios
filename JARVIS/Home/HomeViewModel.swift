@@ -80,10 +80,11 @@ final class HomeViewModel: ObservableObject {
         }
         // V1 Visual: audio level forwarding (read-only)
         voiceSession.onMicLevel = { [weak self] level in
-            self?.levels.setMicLevel(level)
+            // مستوى الصوت يأتي من الـ audio thread — نوصله إلى main حتى تُلاحظه SwiftUI (redraw).
+            Task { @MainActor in self?.levels.setMicLevel(level) }
         }
         voiceSession.onOutputLevel = { [weak self] level in
-            self?.levels.setOutputLevel(level)
+            Task { @MainActor in self?.levels.setOutputLevel(level) }
         }
     }
 
