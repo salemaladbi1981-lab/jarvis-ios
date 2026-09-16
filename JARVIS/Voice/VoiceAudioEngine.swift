@@ -3,7 +3,7 @@ import AVFoundation
 
 /// Shared full-duplex audio I/O: ONE AVAudioEngine + ONE AVAudioSession.
 /// Voice-processing (.voiceChat) mode → native AEC (speaker echo removed from mic).
-/// Coalescing playback buffer (jitter/underrun fix). flush() for barge-in.
+/// Continuous schedule-ahead playback + full runtime counters + serial queue (thread-safe).
 final class VoiceAudioEngine {
     private let engine = AVAudioEngine()
     private let player = AVAudioPlayerNode()
@@ -14,13 +14,28 @@ final class VoiceAudioEngine {
     // Mic tap (AEC-applied via voice-processing session)
     var onPCM: ((Data) -> Void)?
     var onDiagnostics: ((String) -> Void)?
-
-    // Playback coalescing
-    private var queue: [Data] = []
-    private var isPlaying = false
-    private let targetBufferBytes = 24000 * 2 / 10   // ~100ms @24kHz 16-bit mono
     var onPlaybackDrained: (() -> Void)?
-    var onUnderrun: ((Int) -> Void)?                 // gap frames measured
+
+    // Serial queue: يحمي pendingData + counters من data race
+    // (enqueue من WebSocket thread، completion من audio thread).
+    private let workQueue = DispatchQueue(label: "jarvis.audio.playback")
+
+    // Playback: coalescing + schedule-ahead (continuous, no serial gap)
+    private var pendingData: [Data] = []
+    private var scheduledBuffers = 0
+    private let targetBufferBytes = 4800        // ~100ms @24kHz 16-bit mono
+    private let maxScheduledAhead = 3           // keep up to 3 buffers queued in the player
+    private var isSpeaking = false              // response audio still streaming
+
+    // Runtime counters (PROVEN, not assumed)
+    private(set) var receivedBytes = 0
+    private(set) var scheduledBytes = 0
+    private(set) var completedBuffers = 0
+    private(set) var peakQueueDepth = 0
+    private(set) var underruns = 0
+    private(set) var tailBytesFlushed = 0
+    private(set) var converterErrors = 0
+    private(set) var scheduleErrors = 0
 
     init() {
         format = AVAudioFormat(commonFormat: .pcmFormatInt16,
@@ -71,45 +86,105 @@ final class VoiceAudioEngine {
         #endif
     }
 
-    /// Enqueue PCM16 (24kHz mono). Coalesces small deltas into ~100ms buffers.
+    // MARK: - Playback (continuous schedule-ahead, thread-safe)
+
+    /// يُستدعى عند بداية رد جديد — يصفّر الـ counters ويبدأ وضع التدفق.
+    func beginSpeaking() {
+        workQueue.async { [weak self] in
+            self?.resetStats()
+            self?.isSpeaking = true
+        }
+    }
+
+    /// Enqueue PCM16 (24kHz mono). Coalesces small deltas and schedules ahead.
     func enqueueAudio(_ data: Data) {
-        queue.append(data)
-        drainQueue(force: false)
-    }
-
-    /// يُستدعى عند نهاية الرد — يفلش tail buffer المتبقي (<100ms) فوراً.
-    func flushTail() {
-        drainQueue(force: true)
-    }
-
-    private func drainQueue(force: Bool) {
-        guard !isPlaying, !queue.isEmpty else { return }
-        var collected = Data()
-        while !queue.isEmpty && (force || collected.count < targetBufferBytes) {
-            collected.append(queue.removeFirst())
-        }
-        guard !collected.isEmpty, let buffer = Self.toBuffer(collected, format: format) else {
-            isPlaying = false
-            return
-        }
-        isPlaying = true
-        player.scheduleBuffer(buffer) { [weak self] in
+        guard !data.isEmpty else { return }
+        workQueue.async { [weak self] in
             guard let self else { return }
-            self.isPlaying = false
-            self.drainQueue(force: false)
-            if self.queue.isEmpty {
-                self.onPlaybackDrained?()
-            }
+            self.receivedBytes += data.count
+            self.pendingData.append(data)
+            self.peakQueueDepth = max(self.peakQueueDepth, self.pendingData.count)
+            self.pump()
+        }
+    }
+
+    /// يُستدعى عند نهاية الرد — يفلش tail buffer (<100ms) فوراً ويطبع الـ counters.
+    func flushTail() {
+        workQueue.async { [weak self] in
+            guard let self else { return }
+            self.isSpeaking = false
+            self.pump(forceTail: true)
+            self.onDiagnostics?(self.statsSummary())
         }
     }
 
     /// Barge-in: مسح فوري لكل الـ audio المعلق + إيقاف الرد القديم.
     func flush() {
-        player.stop()
-        player.reset()
-        queue.removeAll()
-        isPlaying = false
-        player.play()
+        workQueue.async { [weak self] in
+            guard let self else { return }
+            self.player.stop()
+            self.player.reset()
+            self.pendingData.removeAll()
+            self.scheduledBuffers = 0
+            self.isSpeaking = false
+            self.player.play()
+        }
+    }
+
+    private func statsSummary() -> String {
+        "PLAYBACK received=\(receivedBytes) scheduled=\(scheduledBytes) completedBuf=\(completedBuffers) peakQueue=\(peakQueueDepth) underruns=\(underruns) tail=\(tailBytesFlushed) convErr=\(converterErrors) schedErr=\(scheduleErrors) remainingQueue=\(pendingData.count) remainingScheduled=\(scheduledBuffers)"
+    }
+
+    private func resetStats() {
+        receivedBytes = 0; scheduledBytes = 0; completedBuffers = 0
+        peakQueueDepth = 0; underruns = 0; tailBytesFlushed = 0
+        converterErrors = 0; scheduleErrors = 0
+    }
+
+    /// جدولة مستمرة: يحافظ على maxScheduledAhead buffers مجدولة في الـ player.
+    /// MUST run inside workQueue.
+    private func pump(forceTail: Bool = false) {
+        while scheduledBuffers < maxScheduledAhead {
+            guard let data = nextBuffer(forceTail: forceTail) else { break }
+            guard let buffer = Self.toBuffer(data, format: format) else {
+                converterErrors += 1
+                continue
+            }
+            scheduledBytes += data.count
+            scheduledBuffers += 1
+            player.scheduleBuffer(buffer) { [weak self] in
+                guard let self else { return }
+                self.workQueue.async {
+                    self.completedBuffers += 1
+                    self.scheduledBuffers -= 1
+                    if self.scheduledBuffers == 0 && self.isSpeaking {
+                        // نفدت كل الـ buffers المجدولة والرد ما زال يتدفق → underrun/gap
+                        self.underruns += 1
+                    }
+                    // حرر slot → املأه من الـ queue فوراً (no gap)
+                    self.pump()
+                    if self.pendingData.isEmpty && self.scheduledBuffers == 0 && !self.isSpeaking {
+                        self.onPlaybackDrained?()
+                    }
+                }
+            }
+            if forceTail { break }   // forceTail يفلش tail واحد فقط
+        }
+    }
+
+    /// يأخذ buffer واحد: ~100ms عادي، أو كل الـ tail في forceTail. MUST run inside workQueue.
+    private func nextBuffer(forceTail: Bool) -> Data? {
+        guard !pendingData.isEmpty else { return nil }
+        var collected = Data()
+        if forceTail {
+            while !pendingData.isEmpty { collected.append(pendingData.removeFirst()) }
+            tailBytesFlushed += collected.count
+        } else {
+            while !pendingData.isEmpty && collected.count < targetBufferBytes {
+                collected.append(pendingData.removeFirst())
+            }
+        }
+        return collected.isEmpty ? nil : collected
     }
 
     func stop() {

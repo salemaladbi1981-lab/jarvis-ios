@@ -110,7 +110,10 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
             }
             switch t {
             case "response.output_audio.delta":
-                isSpeaking = true
+                if !isSpeaking {
+                    isSpeaking = true
+                    audio.beginSpeaking()   // يصفّر الـ counters ويبدأ التدفق
+                }
                 if let b64 = Self.jsonStringField(text, "delta") {
                     if let data = Data(base64Encoded: b64) { audio.enqueueAudio(data) }
                 }
@@ -133,7 +136,8 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                 break
             case "response.done":
                 isSpeaking = false
-                audio.flushTail()   // يفلش tail buffer المتبقي (<100ms)
+                audio.flushTail()   // يفلش tail + يطبع PLAYBACK counters
+                trace("response.done — flushTail called")
                 eventPublisher.send(.connected)
             case "response.function_call_arguments.done":
                 eventPublisher.send(.toolExecuting)
