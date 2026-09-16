@@ -18,6 +18,7 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     private var isSpeaking = false
     private var startAttemptID = 0
     private var pcmAppendCount = 0
+    private var isSessionReady = false
 
     func connect(baseURL: URL) async throws {
         eventPublisher.send(.connecting)
@@ -29,8 +30,7 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
         guard let url = comps.url else { eventPublisher.send(.error("invalid_url")); return }
         ws = session.webSocketTask(with: url)
         ws?.resume()
-        eventPublisher.send(.connected)
-        trace("WS connected → \(url)")
+        trace("WS resume → \(url) (handshake pending — NOT connected yet)")
         receiveLoop()
     }
 
@@ -83,6 +83,8 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     }
 
     func sendAudio(pcm16: Data) {
+        // Gate: لا PCM قبل نجاح handshake/session.created
+        guard isSessionReady else { return }
         pcmAppendCount += 1
         if pcmAppendCount == 1 {
             trace("PCM append #1 bytes=\(pcm16.count)")
@@ -108,7 +110,12 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                 @unknown default: break
                 }
                 self.receiveLoop()
-            case .failure:
+            case .failure(let error):
+                self.trace("WS receive FAILED: \(error.localizedDescription)")
+                if let nserr = error as NSError? {
+                    let reason = nserr.userInfo["NSURLErrorWebSocketHandshakeFailureReason"] ?? "?"
+                    self.trace("WS handshake failure: code=\(nserr.code) reason=\(reason)")
+                }
                 self.eventPublisher.send(.disconnected)
             }
         }
@@ -123,6 +130,8 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
             switch t {
             case "session.created":
                 trace("session.created received")
+                isSessionReady = true
+                eventPublisher.send(.connected)   // الآن فقط بعد نجاح handshake
             case "session.updated":
                 trace("session.updated received")
             case "response.output_audio.delta":

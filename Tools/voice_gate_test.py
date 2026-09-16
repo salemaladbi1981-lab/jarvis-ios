@@ -71,11 +71,17 @@ check("start() trace: setVoiceProcessingEnabled error", 'start FAILED at setVoic
 # Post-engine-startup data path (regression: mic button → listening → PCM → WS)
 check("firstPCM trace (MIC firstPCM frames/bytes)", 'MIC firstPCM' in vae and 'pcmCallbacks' in vae)
 check("startAttemptID (منع re-entry + caller trace)", 'startAttemptID' in rvs)
-check("WS connected trace", 'WS connected' in rvs)
+check("WS resume trace (handshake pending)", 'WS resume' in rvs)
 check("session.created trace", 'session.created received' in rvs)
 check("PCM append #1 trace", 'PCM append #1' in rvs)
 check("startListening → voiceState=listening", 'voiceState=listening' in rvs)
 check("toggleVoice re-entry guard", 'isVoiceStarting' in vm)
+
+# WebSocket handshake (regression: لا PCM قبل session.created + connected بعد handshake)
+check("no connected before handshake (resume != connected)", 'handshake pending' in rvs)
+check("sendAudio gate: guard isSessionReady", 'guard isSessionReady' in rvs)
+check("connected فقط بعد session.created", 'isSessionReady = true' in rvs and 'session.created received' in rvs)
+check("handshake error trace (code + reason)", 'handshake failure' in rvs and 'NSURLErrorWebSocketHandshakeFailureReason' in rvs)
 # state truth
 check("JarvisStateMapper events→states", 'func state(for' in vs and '.speaking' in vs)
 check("bindVoice → state", 'bindVoice' in vm and 'JarvisStateMapper.state' in vm)
