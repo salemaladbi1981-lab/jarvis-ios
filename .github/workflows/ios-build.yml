@@ -63,9 +63,8 @@ jobs:
         run: |
           xcodebuild test \
             -project JARVIS.xcodeproj \
-            -scheme "JARVIS Mac" \
+            -scheme JARVISTestsMac \
             -destination 'platform=macOS' \
-            -only-testing:JARVISTestsMac \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO
 

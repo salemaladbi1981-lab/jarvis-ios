@@ -1,5 +1,4 @@
 import XCTest
-@testable import JARVIS
 
 final class SessionGuardTests: XCTestCase {
     private func j(_ obj: [String: Any]) -> String {

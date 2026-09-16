@@ -43,6 +43,12 @@ TEST_SOURCES = [
     "JARVISTests/SessionGuardTests.swift",
 ]
 
+# مصادر Foundation المشتركة (تُبنى في app + test targets مباشرة، بلا @testable import)
+SESSION_GUARD_SOURCES = [
+    "JARVIS/Voice/SessionEventParser.swift",
+    "JARVIS/Voice/SessionGuardState.swift",
+]
+
 objs = {}
 def add(isa, **kw):
     i = uid(); kw["isa"] = isa; objs[i] = kw; return i
@@ -67,6 +73,7 @@ test_prod_ref = add("PBXFileReference", explicitFileType="wrapper.cfbundle", inc
 app_src_bf = {p: add("PBXBuildFile", fileRef=app_src_refs[p]) for p in APP_SOURCES}
 app_res_bf = {p: add("PBXBuildFile", fileRef=app_res_refs[p]) for p in APP_RESOURCES}
 test_bf = {p: add("PBXBuildFile", fileRef=test_refs[p]) for p in TEST_SOURCES}
+session_guard_bf = {p: add("PBXBuildFile", fileRef=app_src_refs[p]) for p in SESSION_GUARD_SOURCES}
 
 def subgroup(name, paths):
     refs = [app_src_refs[p] for p in paths]
@@ -109,7 +116,7 @@ main_group = add("PBXGroup", children=[jarvis_group, tests_group, products_group
 app_sources_phase = add("PBXSourcesBuildPhase", files=sorted(app_src_bf.values()), buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)
 app_resources_phase = add("PBXResourcesBuildPhase", files=sorted(app_res_bf.values()), buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)
 app_frameworks_phase = add("PBXFrameworksBuildPhase", files=[], buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)
-test_sources_phase = add("PBXSourcesBuildPhase", files=sorted(test_bf.values()), buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)
+test_sources_phase = add("PBXSourcesBuildPhase", files=sorted(list(test_bf.values()) + list(session_guard_bf.values())), buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)
 test_resources_phase = add("PBXResourcesBuildPhase", files=[], buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)
 test_frameworks_phase = add("PBXFrameworksBuildPhase", files=[], buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)
 
@@ -133,7 +140,7 @@ mac_settings = {
     "CODE_SIGN_STYLE": "Automatic", "CURRENT_PROJECT_VERSION": "1",
     "GENERATE_INFOPLIST_FILE": "YES", "MACOSX_DEPLOYMENT_TARGET": "14.0",
     "MARKETING_VERSION": "0.1.0", "PRODUCT_BUNDLE_IDENTIFIER": "com.salemai.jarvis.mac",
-    "PRODUCT_NAME": "JARVIS Mac", "PRODUCT_MODULE_NAME": "JARVIS", "SDKROOT": "macosx", "SWIFT_VERSION": "5.0",
+    "PRODUCT_NAME": "JARVIS Mac", "SDKROOT": "macosx", "SWIFT_VERSION": "5.0",
     "ENABLE_HARDENED_RUNTIME": "YES",
     "INFOPLIST_KEY_NSMicrophoneUsageDescription": "جارفس يحتاج الميكروفون للمحادثة الصوتية.",
     "INFOPLIST_KEY_NSCalendarsUsageDescription": "جارفس يحتاج التقويم لعرض مواعيدك.",
@@ -174,17 +181,17 @@ test_target = add("PBXNativeTarget", buildConfigurationList=test_config_list,
 
 # macOS test target (JARVISTestsMac) — نفس الاختبارات على macOS (TEST_HOST = JARVIS Mac)
 mac_test_settings = {
-    "BUNDLE_LOADER": "$(TEST_HOST)", "CODE_SIGN_STYLE": "Automatic",
+    "CODE_SIGN_STYLE": "Automatic",
     "CURRENT_PROJECT_VERSION": "1", "GENERATE_INFOPLIST_FILE": "YES",
     "MACOSX_DEPLOYMENT_TARGET": "14.0", "MARKETING_VERSION": "0.1.0",
     "PRODUCT_BUNDLE_IDENTIFIER": "com.salemai.jarvisTests.mac", "PRODUCT_NAME": "$(TARGET_NAME)",
     "SDKROOT": "macosx", "SWIFT_VERSION": "5.0",
-    "TEST_HOST": "$(BUILT_PRODUCTS_DIR)/JARVIS Mac.app/Contents/MacOS/JARVIS Mac",
 }
 mac_test_debug = add("XCBuildConfiguration", buildSettings=dict(mac_test_settings), name="Debug")
 mac_test_release = add("XCBuildConfiguration", buildSettings=dict(mac_test_settings), name="Release")
 mac_test_config_list = add("XCConfigurationList", buildConfigurations=[mac_test_debug, mac_test_release], defaultConfigurationIsVisible=0, defaultConfigurationName="Release")
 mac_test_bf = {p: add("PBXBuildFile", fileRef=test_refs[p]) for p in TEST_SOURCES}
+session_guard_bf = {p: add("PBXBuildFile", fileRef=app_src_refs[p]) for p in SESSION_GUARD_SOURCES}
 mac_test_sources_phase = add("PBXSourcesBuildPhase", files=sorted(mac_test_bf.values()), buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)
 mac_dep_proxy = add("PBXContainerItemProxy", containerPortal=None, proxyType=1, remoteGlobalIDString=mac_target, remoteInfo="JARVIS Mac")
 mac_dep = add("PBXTargetDependency", target=mac_target, targetProxy=mac_dep_proxy)
@@ -199,7 +206,6 @@ proj = add("PBXProject", attributes={"LastUpgradeCheck": "1500"},
     mainGroup=main_group, productRefGroup=products_group, projectDirPath="", projectRoot="",
     targets=[app_target, mac_target, test_target, mac_test_target])
 objs[dep_proxy]["containerPortal"] = proj
-objs[mac_dep_proxy]["containerPortal"] = proj
 
 os.makedirs("JARVIS.xcodeproj", exist_ok=True)
 
@@ -224,13 +230,13 @@ lines.append(f"\trootObject = {proj};")
 lines.append("}")
 open("JARVIS.xcodeproj/project.pbxproj", "w", encoding="utf-8").write("\n".join(lines) + "\n")
 
-# shared scheme لاختبار macOS (JARVISTestsMac) — يربط الـ test target بالـ mac target
+# shared scheme لاختبار macOS المنطقي (JARVISTestsMac) — logic test بلا TEST_HOST
 scheme_xml = f'''<?xml version="1.0" encoding="UTF-8"?>
 <Scheme LastUpgradeVersion="1500" version="1.7">
    <BuildAction parallelizeBuildables="YES" buildImplicitDependencies="YES">
       <BuildActionEntries>
-         <BuildActionEntry buildForTesting="YES" buildForRunning="YES" buildForProfiling="YES" buildForArchiving="YES" buildForAnalyzing="YES">
-            <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="{mac_target}" BuildableName="JARVIS Mac.app" BlueprintName="JARVIS Mac" ReferencedContainer="container:JARVIS.xcodeproj"/>
+         <BuildActionEntry buildForTesting="YES" buildForRunning="YES" buildForProfiling="NO" buildForArchiving="NO" buildForAnalyzing="YES">
+            <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="{mac_test_target}" BuildableName="JARVISTestsMac.xctest" BlueprintName="JARVISTestsMac" ReferencedContainer="container:JARVIS.xcodeproj"/>
          </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
@@ -242,9 +248,9 @@ scheme_xml = f'''<?xml version="1.0" encoding="UTF-8"?>
       </Testables>
    </TestAction>
    <LaunchAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.DebuggerFoundation.Launcher.LLDB" launchStyle="0" useCustomWorkingDirectory="NO" ignoresPersistentStateOnLaunch="NO" debugDocumentVersioning="YES" debugServiceExtension="internal" allowLocationSimulation="YES">
-      <BuildableProductRunnable runnableDebuggingMode="0">
-         <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="{mac_target}" BuildableName="JARVIS Mac.app" BlueprintName="JARVIS Mac" ReferencedContainer="container:JARVIS.xcodeproj"/>
-      </BuildableProductRunnable>
+      <MacroExpansion>
+         <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="{mac_test_target}" BuildableName="JARVISTestsMac.xctest" BlueprintName="JARVISTestsMac" ReferencedContainer="container:JARVIS.xcodeproj"/>
+      </MacroExpansion>
    </LaunchAction>
    <ProfileAction buildConfiguration="Release" shouldUseLaunchSchemeArgsEnv="YES" savedToolIdentifier="" useCustomWorkingDirectory="NO" debugDocumentVersioning="YES"/>
    <AnalyzeAction buildConfiguration="Debug"/>
@@ -252,5 +258,5 @@ scheme_xml = f'''<?xml version="1.0" encoding="UTF-8"?>
 </Scheme>
 '''
 os.makedirs("JARVIS.xcodeproj/xcshareddata/xcschemes", exist_ok=True)
-open("JARVIS.xcodeproj/xcshareddata/xcschemes/JARVIS Mac.xcscheme", "w", encoding="utf-8").write(scheme_xml)
-print(f"Wrote pbxproj ({len(objs)} objects) + scheme (JARVIS Mac)")
+open("JARVIS.xcodeproj/xcshareddata/xcschemes/JARVISTestsMac.xcscheme", "w", encoding="utf-8").write(scheme_xml)
+print(f"Wrote pbxproj ({len(objs)} objects) + scheme (JARVISTestsMac)")
