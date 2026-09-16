@@ -4,9 +4,8 @@ import SwiftUI
 /// Idle فقط يستخدم sine breathing. Listening/Speaking يستخدمان level حقيقي (smoothed إلى 60fps).
 struct JarvisCoreView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ObservedObject var levels: VisualLevelModel
     var state: JarvisState = .idle
-    var micLevel: Double = 0.0          // normalized 0..1 (target)
-    var outputLevel: Double = 0.0       // normalized 0..1 (target)
     var successPulse: Bool = false      // transient success (tool.completed)
     var size: CGFloat = 250
     var onFrameTime: ((Double) -> Void)? = nil   // FPS instrumentation
@@ -39,10 +38,10 @@ struct JarvisCoreView: View {
         }
         .frame(width: size, height: size)
         .allowsHitTesting(false)
-        .onChange(of: micLevel) { v in
+        .onChange(of: levels.micLevel) { v in
             withAnimation(.easeOut(duration: MotionTokens.Smoothing.attack)) { smoothedMic = v }
         }
-        .onChange(of: outputLevel) { v in
+        .onChange(of: levels.outputLevel) { v in
             withAnimation(.easeOut(duration: MotionTokens.Smoothing.attack)) { smoothedOutput = v }
         }
         .onChange(of: successPulse) { p in

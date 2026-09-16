@@ -8,9 +8,8 @@ struct JarvisHeroView: View {
     var body: some View {
         ZStack {
             JarvisCoreView(
+                levels: vm.levels,
                 state: vm.state,
-                micLevel: vm.micLevel,
-                outputLevel: vm.outputLevel,
                 successPulse: vm.successPulse,
                 size: coreSize,
                 onFrameTime: { vm.frameTimeMs = $0 }

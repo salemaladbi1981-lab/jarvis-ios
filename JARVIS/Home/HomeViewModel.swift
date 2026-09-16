@@ -19,9 +19,9 @@ final class HomeViewModel: ObservableObject {
     private var isVoiceStarting = false
 
     // V1 Visual: audio level (read-only) + agent orbit activity
-    @Published var micLevel: Double = 0
-    @Published var outputLevel: Double = 0
     @Published var successPulse: Bool = false
+    // V1: مستوى الصوت معزول في model خفيف — لا يُعيد بناء HomeView كامل
+    let levels = VisualLevelModel()
     // FPS metric (read-only, غير UI state — لا re-render). يُقرأ من Xcode console/Instruments فقط.
     var frameTimeMs: Double = 0
     let orbit = AgentOrbitModel()
@@ -80,10 +80,10 @@ final class HomeViewModel: ObservableObject {
         }
         // V1 Visual: audio level forwarding (read-only)
         voiceSession.onMicLevel = { [weak self] level in
-            self?.micLevel = level
+            self?.levels.setMicLevel(level)
         }
         voiceSession.onOutputLevel = { [weak self] level in
-            self?.outputLevel = level
+            self?.levels.setOutputLevel(level)
         }
     }
 
