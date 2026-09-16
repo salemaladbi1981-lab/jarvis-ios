@@ -19,6 +19,7 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     private var startAttemptID = 0
     private var pcmAppendCount = 0
     private var isSessionReady = false
+    private var bargeStartTime: TimeInterval = 0
 
     func connect(baseURL: URL) async throws {
         eventPublisher.send(.connecting)
@@ -62,11 +63,15 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     }
 
     /// Barge-in: إلغاء الرد الجاري + مسح الـ playback (الـ mic يبقى شغّالاً).
+    /// الـ flush يمسح الـ playback queue فقط — لا يمسح الـ mic input،
+    /// فلا تضيع أول كلمة من كلام المستخدم.
     private func bargeIn() {
-        trace("bargeIn — response.cancel + flush playback")
+        trace("BARGE speech_started → response.cancel + flush")
         let cancel = #"{"type":"response.cancel"}"#
         ws?.send(.string(cancel)) { _ in }
         audio.flush()
+        let latency = Int((Date().timeIntervalSinceReferenceDate - bargeStartTime) * 1000)
+        trace("BARGE playback stopped (latency=\(latency)ms)")
         eventPublisher.send(.interrupted)
     }
 
@@ -144,10 +149,15 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                 }
                 eventPublisher.send(.speaking)
             case "input_audio_buffer.speech_started":
-                // لا bargeIn تلقائي هنا — الـ echo (بدون AEC عبر inputNode) يسبب
-                // false speech_started كان يقطع رد جارفس نفسه. الـ model native
-                // interrupt_response هو المسؤول عن barge-in الحقيقي.
                 trace("VAD speech_started payload: \(text)")
+                if isSpeaking {
+                    // barge-in: كلام مستخدم حقيقي أثناء كلام جارفس.
+                    // AEC مثبت على الجهاز → الـ echo لا يولّد speech_started كاذباً.
+                    // إيقاف فوري للرد القديم مرة واحدة فقط (وليس انتظار transcript).
+                    bargeStartTime = Date().timeIntervalSinceReferenceDate
+                    isSpeaking = false
+                    bargeIn()
+                }
             case "input_audio_buffer.speech_stopped":
                 trace("VAD speech_stopped payload: \(text)")
             case "conversation.item.input_audio_transcription.completed":
