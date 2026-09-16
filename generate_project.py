@@ -223,4 +223,34 @@ lines.append("\t};")
 lines.append(f"\trootObject = {proj};")
 lines.append("}")
 open("JARVIS.xcodeproj/project.pbxproj", "w", encoding="utf-8").write("\n".join(lines) + "\n")
-print(f"Wrote pbxproj ({len(objs)} objects) — file refs are basename-only (group-relative)")
+
+# shared scheme لاختبار macOS (JARVISTestsMac) — يربط الـ test target بالـ mac target
+scheme_xml = f'''<?xml version="1.0" encoding="UTF-8"?>
+<Scheme LastUpgradeVersion="1500" version="1.7">
+   <BuildAction parallelizeBuildables="YES" buildImplicitDependencies="YES">
+      <BuildActionEntries>
+         <BuildActionEntry buildForTesting="YES" buildForRunning="YES" buildForProfiling="YES" buildForArchiving="YES" buildForAnalyzing="YES">
+            <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="{mac_target}" BuildableName="JARVIS Mac.app" BlueprintName="JARVIS Mac" ReferencedContainer="container:JARVIS.xcodeproj"/>
+         </BuildActionEntry>
+      </BuildActionEntries>
+   </BuildAction>
+   <TestAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.DebuggerFoundation.Launcher.LLDB" shouldUseLaunchSchemeArgsEnv="YES">
+      <Testables>
+         <TestableReference skipped="NO">
+            <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="{mac_test_target}" BuildableName="JARVISTestsMac.xctest" BlueprintName="JARVISTestsMac" ReferencedContainer="container:JARVIS.xcodeproj"/>
+         </TestableReference>
+      </Testables>
+   </TestAction>
+   <LaunchAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.DebuggerFoundation.Launcher.LLDB" launchStyle="0" useCustomWorkingDirectory="NO" ignoresPersistentStateOnLaunch="NO" debugDocumentVersioning="YES" debugServiceExtension="internal" allowLocationSimulation="YES">
+      <BuildableProductRunnable runnableDebuggingMode="0">
+         <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="{mac_target}" BuildableName="JARVIS Mac.app" BlueprintName="JARVIS Mac" ReferencedContainer="container:JARVIS.xcodeproj"/>
+      </BuildableProductRunnable>
+   </LaunchAction>
+   <ProfileAction buildConfiguration="Release" shouldUseLaunchSchemeArgsEnv="YES" savedToolIdentifier="" useCustomWorkingDirectory="NO" debugDocumentVersioning="YES"/>
+   <AnalyzeAction buildConfiguration="Debug"/>
+   <ArchiveAction buildConfiguration="Release" revealArchiveInOrganizer="YES"/>
+</Scheme>
+'''
+os.makedirs("JARVIS.xcodeproj/xcshareddata/xcschemes", exist_ok=True)
+open("JARVIS.xcodeproj/xcshareddata/xcschemes/JARVIS Mac.xcscheme", "w", encoding="utf-8").write(scheme_xml)
+print(f"Wrote pbxproj ({len(objs)} objects) + scheme (JARVIS Mac)")
