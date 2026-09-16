@@ -20,7 +20,7 @@ final class VoiceAudioEngine {
     // Mic tap (AEC-applied via voice-processing session)
     var onPCM: ((Data) -> Void)?
     var onDiagnostics: ((String) -> Void)?
-    var onPlaybackDrained: (() -> Void)?
+    var onPlaybackDrained: ((Int) -> Void)?   // يمرّر playbackGeneration (هوية دورة التشغيل)
 
     // V1 Visual: read-only RMS level hooks (normalized 0..1).
     // لا تغيّر أي سلوك — تُحسب من الـ PCM المتدفق وتُنشر للـ Visual layer فقط.
@@ -41,6 +41,11 @@ final class VoiceAudioEngine {
     private var scheduledLevels: [Double] = []   // levels للمقاطع المجدولة (لترتيب الـ advance)
     private var hasDrained = false               // يمنع إشعار الاكتمال المزدوج
     private var playbackGeneration = 0           // يُبطل الدورة السابقة عند barge-in/رد جديد
+
+    /// الجيل الحالي لدورة التشغيل (read-only، thread-safe) — تُربط به نتيجة الرد.
+    var currentGeneration: Int {
+        workQueue.sync { self.playbackGeneration }
+    }
     private let targetBufferBytes = 4800        // ~100ms @24kHz 16-bit mono
     private let maxScheduledAhead = 3           // keep up to 3 buffers queued in the player
     private var isSpeaking = false              // response audio still streaming
@@ -261,7 +266,7 @@ final class VoiceAudioEngine {
         hasDrained = true
         scheduledLevels.removeAll()
         onOutputLevel?(0)
-        onPlaybackDrained?()
+        onPlaybackDrained?(playbackGeneration)   // هوية الدورة التي اكتمل تشغيلها
     }
 
     /// يأخذ buffer واحد: ~100ms عادي، أو كل الـ tail في forceTail. MUST run inside workQueue.

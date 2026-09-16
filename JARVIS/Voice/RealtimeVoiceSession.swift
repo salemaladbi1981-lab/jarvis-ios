@@ -46,8 +46,7 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
 
     func disconnect() {
         stateQueue.sync {
-            self.guardState.invalidateConnection()   // إبطال دورة الاتصال
-            self.guardState.onStop()                 // إبطال الجلسة/الرد
+            self.guardState.onStop()   // يبطل الجلسة/الرد + دورة الاتصال معاً
             self.isSpeaking = false
         }
         audio.stop()
@@ -65,13 +64,13 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
         audio.onDiagnostics = { [weak self] msg in self?.trace("AEC diag: \(msg)") }
         audio.onMicLevel = { [weak self] level in self?.onMicLevel?(level) }
         audio.onOutputLevel = { [weak self] level in self?.onOutputLevel?(level) }
-        audio.onPlaybackDrained = { [weak self] in
+        audio.onPlaybackDrained = { [weak self] cycle in
             guard let self else { return }
-            // إشعار انتهاء التشغيل: ينهي دورة صالحة حالية فقط، ويستهلك النتيجة مرة واحدة.
+            // إشعار انتهاء التشغيل: يطابق هوية دورة التشغيل قبل استهلاك النتيجة.
             self.stateQueue.async {
-                switch self.guardState.consumeCompletion() {
+                switch self.guardState.consumeCompletion(cycle: cycle) {
                 case .none:
-                    self.trace("playback drained — لا اكتمال معلّق (إشعار قديم)")
+                    self.trace("playback drained — لا اكتمال مطابق (إشعار قديم cycle=\(cycle))")
                 case .success:
                     self.trace("playback drained — اكتمل التشغيل المحلي")
                     self.eventPublisher.send(.connected)
@@ -234,15 +233,17 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                 // نص رد جارفس — لا يُعاد توجيهه (يمنع الـ loop).
                 break
             case "response.done":
+                // هوية دورة التشغيل من المحرك (وليست هوية الرد الحالي عند وصول الـ callback).
+                let cycle = audio.currentGeneration
                 // حراسة إلزامية: الهوية في response.id — يرفض عند nil أو عدم تطابق
-                guard guardState.onDone(text) else {
+                guard guardState.onDone(text, cycle: cycle) else {
                     trace("response.done ignored (لا رد مطابق نشط)")
                     break
                 }
                 isSpeaking = false
                 audio.flushTail()   // يفلش tail + يطبع PLAYBACK counters
-                trace("response.done — flushTail (انتظار اكتمال التشغيل المحلي)")
-                // النتيجة تُرسل عند onPlaybackDrained (failed لا يتحول إلى success)
+                trace("response.done cycle=\(cycle) — flushTail (انتظار اكتمال التشغيل المحلي)")
+                // النتيجة تُرسل عند onPlaybackDrained المطابق لنفس الدورة (failed لا يتحول success)
             case "response.function_call_arguments.done":
                 eventPublisher.send(.toolExecuting)
             case "error":

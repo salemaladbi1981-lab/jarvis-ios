@@ -36,11 +36,11 @@ final class SessionGuardTests: XCTestCase {
         XCTAssertTrue(g.onResponseCreated(j(["response": ["id": "R1"]])))
         g.onStop()
         XCTAssertFalse(g.onDelta(j(["response_id": "R1", "delta": "AAA="])))
-        XCTAssertFalse(g.onDone(j(["response": ["id": "R1", "status": "completed"]])))
+        XCTAssertFalse(g.onDone(j(["response": ["id": "R1", "status": "completed"]]), cycle: 1))
         g.sessionCreated()
         XCTAssertTrue(g.onResponseCreated(j(["response": ["id": "R2"]])))
         XCTAssertTrue(g.onDelta(j(["response_id": "R2", "delta": "AAA="])))
-        XCTAssertTrue(g.onDone(j(["response": ["id": "R2", "status": "completed"]])))
+        XCTAssertTrue(g.onDone(j(["response": ["id": "R2", "status": "completed"]]), cycle: 2))
         XCTAssertEqual(g.pendingCompletion, .success)
     }
 
@@ -49,7 +49,7 @@ final class SessionGuardTests: XCTestCase {
     func testConnectionGenerationIsolatesOldCallbacks() {
         var g = SessionGuardState()
         let genA = g.beginConnection()
-        let genB = g.beginConnection()   // اتصال B يحل محل A
+        let genB = g.beginConnection()
         XCTAssertFalse(g.isValidConnection(genA))
         XCTAssertTrue(g.isValidConnection(genB))
     }
@@ -65,13 +65,42 @@ final class SessionGuardTests: XCTestCase {
     func testSessionCreatedFromStaleConnectionDoesNotReadyNewSession() {
         var g = SessionGuardState()
         let genA = g.beginConnection()
-        let genB = g.beginConnection()   // B يبدأ
-        // session.created متأخر من A → غير صالح → لا يُعالج
+        let genB = g.beginConnection()
         if g.isValidConnection(genA) { g.sessionCreated() }
-        XCTAssertFalse(g.isSessionReady)   // لم تتأثر B
-        // session.created من B → صالح
+        XCTAssertFalse(g.isSessionReady)
         if g.isValidConnection(genB) { g.sessionCreated() }
         XCTAssertTrue(g.isSessionReady)
+    }
+
+    // MARK: - stopListening يبطل دورة الاتصال
+
+    func testStopListeningInvalidatesConnectionThenLateSessionCreatedRejected() {
+        var g = SessionGuardState()
+        let genA = g.beginConnection()   // اتصال A
+        g.sessionCreated()
+        g.onStop()   // stopListening → يبطل الجلسة + الاتصال
+        // جيل A لم يعد صالحاً → session.created(A) المتأخر لا يُعالج
+        XCTAssertFalse(g.isValidConnection(genA))
+        if g.isValidConnection(genA) { g.sessionCreated() }
+        XCTAssertFalse(g.isSessionReady)   // لا جاهزية
+        // أحداث متأخرة أخرى من A مرفوضة
+        XCTAssertFalse(g.onResponseCreated(j(["response": ["id": "R1"]])))
+        XCTAssertFalse(g.onDelta(j(["response_id": "R1", "delta": "AAA="])))
+        XCTAssertFalse(g.onDone(j(["response": ["id": "R1", "status": "completed"]]), cycle: 1))
+        XCTAssertFalse(g.onSpeechStarted())
+    }
+
+    func testNewSessionAfterStopStartsCorrectly() {
+        var g = SessionGuardState()
+        let genA = g.beginConnection()
+        g.sessionCreated()
+        g.onStop()   // يبطل A
+        // بدء جديد صريح
+        let genB = g.beginConnection()
+        XCTAssertTrue(g.isValidConnection(genB))
+        if g.isValidConnection(genB) { g.sessionCreated() }
+        XCTAssertTrue(g.isSessionReady)
+        XCTAssertTrue(g.onResponseCreated(j(["response": ["id": "R2"]])))
     }
 
     // MARK: - إبطال الرد في كل speech_started
@@ -80,16 +109,16 @@ final class SessionGuardTests: XCTestCase {
         var g = SessionGuardState()
         g.sessionCreated()
         XCTAssertTrue(g.onResponseCreated(j(["response": ["id": "R1"]])))
-        XCTAssertTrue(g.onSpeechStarted())   // يبطل R1 قبل أول delta
-        XCTAssertFalse(g.onDone(j(["response": ["id": "R1", "status": "cancelled"]])))
+        XCTAssertTrue(g.onSpeechStarted())
+        XCTAssertFalse(g.onDone(j(["response": ["id": "R1", "status": "cancelled"]]), cycle: 1))
         XCTAssertEqual(g.pendingCompletion, .none)
     }
 
     func testSpeechStartedAfterStopRejected() {
         var g = SessionGuardState()
         g.sessionCreated()
-        g.onStop()   // stopListening
-        XCTAssertFalse(g.onSpeechStarted())   // متأخر بعد الإيقاف → مرفوض (لا flush/.listening)
+        g.onStop()
+        XCTAssertFalse(g.onSpeechStarted())
     }
 
     // MARK: - done repeat
@@ -98,8 +127,8 @@ final class SessionGuardTests: XCTestCase {
         var g = SessionGuardState()
         g.sessionCreated()
         XCTAssertTrue(g.onResponseCreated(j(["response": ["id": "R1"]])))
-        XCTAssertTrue(g.onDone(j(["response": ["id": "R1", "status": "completed"]])))
-        XCTAssertFalse(g.onDone(j(["response": ["id": "R1", "status": "completed"]])))
+        XCTAssertTrue(g.onDone(j(["response": ["id": "R1", "status": "completed"]]), cycle: 1))
+        XCTAssertFalse(g.onDone(j(["response": ["id": "R1", "status": "completed"]]), cycle: 1))
     }
 
     // MARK: - إشعار انتهاء التشغيل (completion token)
@@ -108,48 +137,81 @@ final class SessionGuardTests: XCTestCase {
         var g = SessionGuardState()
         g.sessionCreated()
         XCTAssertTrue(g.onResponseCreated(j(["response": ["id": "R1"]])))
-        XCTAssertTrue(g.onDone(j(["response": ["id": "R1", "status": "completed"]])))
-        XCTAssertEqual(g.consumeCompletion(), .success)
-        XCTAssertEqual(g.consumeCompletion(), .none)   // مرة واحدة فقط
+        XCTAssertTrue(g.onDone(j(["response": ["id": "R1", "status": "completed"]]), cycle: 1))
+        XCTAssertEqual(g.consumeCompletion(cycle: 1), .success)
+        XCTAssertEqual(g.consumeCompletion(cycle: 1), .none)
     }
 
     func testFailedCompletionPreserved() {
         var g = SessionGuardState()
         g.sessionCreated()
         XCTAssertTrue(g.onResponseCreated(j(["response": ["id": "R1"]])))
-        XCTAssertTrue(g.onDone(j(["response": ["id": "R1", "status": "failed"]])))
-        XCTAssertEqual(g.consumeCompletion(), .failed)
+        XCTAssertTrue(g.onDone(j(["response": ["id": "R1", "status": "failed"]]), cycle: 1))
+        XCTAssertEqual(g.consumeCompletion(cycle: 1), .failed)
     }
 
     func testLateDrainAfterStopDoesNotNotify() {
         var g = SessionGuardState()
         g.sessionCreated()
         XCTAssertTrue(g.onResponseCreated(j(["response": ["id": "R1"]])))
-        XCTAssertTrue(g.onDone(j(["response": ["id": "R1", "status": "completed"]])))
-        g.onStop()   // stop → يبطل الاكتمال
-        XCTAssertEqual(g.consumeCompletion(), .none)   // إشعار قديم لا ينشر نجاحاً
+        XCTAssertTrue(g.onDone(j(["response": ["id": "R1", "status": "completed"]]), cycle: 1))
+        g.onStop()
+        XCTAssertEqual(g.consumeCompletion(cycle: 1), .none)
     }
 
     func testLateDrainAfterBargeDoesNotNotify() {
         var g = SessionGuardState()
         g.sessionCreated()
         XCTAssertTrue(g.onResponseCreated(j(["response": ["id": "R1"]])))
-        XCTAssertTrue(g.onDone(j(["response": ["id": "R1", "status": "completed"]])))
-        g.onBarge()   // barge → يبطل الاكتمال
-        XCTAssertEqual(g.consumeCompletion(), .none)
+        XCTAssertTrue(g.onDone(j(["response": ["id": "R1", "status": "completed"]]), cycle: 1))
+        g.onBarge()
+        XCTAssertEqual(g.consumeCompletion(cycle: 1), .none)
     }
 
     func testLateDrainAfterNewCycleDoesNotNotify() {
         var g = SessionGuardState()
         g.sessionCreated()
         XCTAssertTrue(g.onResponseCreated(j(["response": ["id": "R1"]])))
-        XCTAssertTrue(g.onDone(j(["response": ["id": "R1", "status": "completed"]])))
-        // بدء دورة جديدة R2 → يبطل اكتمال R1
+        XCTAssertTrue(g.onDone(j(["response": ["id": "R1", "status": "completed"]]), cycle: 1))
         XCTAssertTrue(g.onResponseCreated(j(["response": ["id": "R2"]])))
-        XCTAssertEqual(g.consumeCompletion(), .none)
-        // R2 تكتمل → .success
-        XCTAssertTrue(g.onDone(j(["response": ["id": "R2", "status": "completed"]])))
-        XCTAssertEqual(g.consumeCompletion(), .success)
+        XCTAssertEqual(g.consumeCompletion(cycle: 1), .none)
+        XCTAssertTrue(g.onDone(j(["response": ["id": "R2", "status": "completed"]]), cycle: 2))
+        XCTAssertEqual(g.consumeCompletion(cycle: 2), .success)
+    }
+
+    // MARK: - هوية دورة التشغيل (drain identity) — حتمية
+
+    func testDrainIdentityIsolationSuccess() {
+        var g = SessionGuardState()
+        g.sessionCreated()
+        // R1
+        XCTAssertTrue(g.onResponseCreated(j(["response": ["id": "R1"]])))
+        XCTAssertTrue(g.onDelta(j(["response_id": "R1", "delta": "AAA="])))
+        XCTAssertTrue(g.onDone(j(["response": ["id": "R1", "status": "completed"]]), cycle: 1))
+        // R2
+        XCTAssertTrue(g.onResponseCreated(j(["response": ["id": "R2"]])))
+        XCTAssertTrue(g.onDelta(j(["response_id": "R2", "delta": "AAA="])))
+        XCTAssertTrue(g.onDone(j(["response": ["id": "R2", "status": "completed"]]), cycle: 2))
+        // drain(R1) متأخر → لا ينشر ولا يمس R2
+        XCTAssertEqual(g.consumeCompletion(cycle: 1), .none)
+        XCTAssertEqual(g.pendingCompletion, .success)   // R2 سليمة
+        // drain(R2) → يستهلك R2 مرة واحدة
+        XCTAssertEqual(g.consumeCompletion(cycle: 2), .success)
+        XCTAssertEqual(g.consumeCompletion(cycle: 2), .none)
+    }
+
+    func testDrainIdentityIsolationFailed() {
+        var g = SessionGuardState()
+        g.sessionCreated()
+        XCTAssertTrue(g.onResponseCreated(j(["response": ["id": "R1"]])))
+        XCTAssertTrue(g.onDelta(j(["response_id": "R1", "delta": "AAA="])))
+        XCTAssertTrue(g.onDone(j(["response": ["id": "R1", "status": "failed"]]), cycle: 1))
+        XCTAssertTrue(g.onResponseCreated(j(["response": ["id": "R2"]])))
+        XCTAssertTrue(g.onDelta(j(["response_id": "R2", "delta": "AAA="])))
+        XCTAssertTrue(g.onDone(j(["response": ["id": "R2", "status": "failed"]]), cycle: 2))
+        XCTAssertEqual(g.consumeCompletion(cycle: 1), .none)
+        XCTAssertEqual(g.pendingCompletion, .failed)   // R2 سليمة
+        XCTAssertEqual(g.consumeCompletion(cycle: 2), .failed)
     }
 
     // MARK: - مقاطعة أثناء التشغيل والذيل
@@ -161,14 +223,14 @@ final class SessionGuardTests: XCTestCase {
         XCTAssertTrue(g.onDelta(j(["response_id": "R1", "delta": "AAA="])))
         g.onBarge()
         XCTAssertNil(g.currentResponseID)
-        XCTAssertFalse(g.onDone(j(["response": ["id": "R1", "status": "cancelled"]])))
+        XCTAssertFalse(g.onDone(j(["response": ["id": "R1", "status": "cancelled"]]), cycle: 1))
     }
 
     func testInterruptDuringTailInvalidatesResponse() {
         var g = SessionGuardState()
         g.sessionCreated()
         XCTAssertTrue(g.onResponseCreated(j(["response": ["id": "R1"]])))
-        XCTAssertTrue(g.onDone(j(["response": ["id": "R1", "status": "completed"]])))
+        XCTAssertTrue(g.onDone(j(["response": ["id": "R1", "status": "completed"]]), cycle: 1))
         g.onBarge()
         XCTAssertNil(g.currentResponseID)
     }

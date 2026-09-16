@@ -9,11 +9,13 @@ enum PlaybackCompletion: Equatable {
 }
 
 /// حالة حراسة أحداث جلسة Realtime — Foundation-only (قابل للاختبار على macOS).
-/// يجمع: هوية الرد، جاهزية الجلسة، جيل الاتصال، ونتيجة الاكتمال.
+/// يجمع: هوية الرد، جاهزية الجلسة، جيل الاتصال، ونتيجة الاكتمال المربوطة بهوية دورة التشغيل.
 struct SessionGuardState {
     var currentResponseID: String?
     var isSessionReady = false
     var pendingCompletion: PlaybackCompletion = .none
+    /// هوية دورة التشغيل (playbackGeneration) التي أنتجت النتيجة المعلقة.
+    private(set) var pendingCompletionCycle = 0
 
     /// جيل الاتصال — يعزل callbacks الاتصال القديم عن الجديد.
     private(set) var connectionGeneration = 0
@@ -50,7 +52,7 @@ struct SessionGuardState {
         guard isSessionReady,
               let id = SessionEventParser.nested(json, "response", "id") else { return false }
         currentResponseID = id
-        pendingCompletion = .none   // بدء دورة رد جديدة يبطل اكتمال الرد السابق
+        resetCompletion()   // بدء دورة رد جديدة يبطل اكتمال الرد السابق
         return true
     }
 
@@ -58,24 +60,24 @@ struct SessionGuardState {
     mutating func onDelta(_ json: String) -> Bool {
         guard isSessionReady, let cur = currentResponseID else { return false }
         if let rid = SessionEventParser.field(json, "response_id"), rid != cur { return false }
-        pendingCompletion = .none   // أي صوت لرد جديد يبطل الاكتمال المعلّق القديم
+        resetCompletion()   // أي صوت لرد جديد يبطل الاكتمال المعلّق القديم
         return true
     }
 
-    /// response.done — يقبل فقط الرد المطابق (يصفّر currentResponseID → مرة واحدة).
+    /// response.done — يقبل فقط الرد المطابق، ويربط النتيجة بهوية دورة تشغيله.
     @discardableResult
-    mutating func onDone(_ json: String) -> Bool {
+    mutating func onDone(_ json: String, cycle: Int) -> Bool {
         guard let cur = currentResponseID,
               let rid = SessionEventParser.nested(json, "response", "id"),
               rid == cur else { return false }
         let status = SessionEventParser.nested(json, "response", "status") ?? "completed"
         pendingCompletion = (status == "failed") ? .failed : .success
+        pendingCompletionCycle = cycle
         currentResponseID = nil
         return true
     }
 
     /// قبول حدث speech_started — الجلسة نشطة فقط، ويُبطل الرد الجاري.
-    /// يعيد false إذا كان الحدث متأخراً بعد الإيقاف (لا أثر على الصوت/الحالة).
     @discardableResult
     mutating func onSpeechStarted() -> Bool {
         guard isSessionReady else { return false }
@@ -83,23 +85,30 @@ struct SessionGuardState {
         return true
     }
 
-    /// استهلاك نتيجة الاكتمال مرة واحدة. `.none` لا تُنشر نجاحاً.
-    mutating func consumeCompletion() -> PlaybackCompletion {
+    /// استهلاك نتيجة الاكتمال فقط إذا تطابق هوية دورة التشغيل — وإلا تُرفض ولا تُلمس.
+    mutating func consumeCompletion(cycle: Int) -> PlaybackCompletion {
+        guard cycle == pendingCompletionCycle else { return .none }
         let c = pendingCompletion
-        pendingCompletion = .none
+        resetCompletion()
         return c
     }
 
-    /// إيقاف/انقطاع كامل — يبطل الجلسة والرد الحالي.
+    /// إيقاف/انقطاع كامل — يبطل الجلسة والرد الحالي ودورة الاتصال.
     mutating func onStop() {
         currentResponseID = nil
         isSessionReady = false
-        pendingCompletion = .none
+        resetCompletion()
+        connectionGeneration += 1   // إبطال دورة الاتصال — callbacks قديمة تُرفض
     }
 
     /// مقاطعة/إلغاء رد — يبطل الرد الحالي فقط (الجلسة تبقى نشطة للـ listening).
     mutating func onBarge() {
         currentResponseID = nil
+        resetCompletion()
+    }
+
+    private mutating func resetCompletion() {
         pendingCompletion = .none
+        pendingCompletionCycle = 0
     }
 }
