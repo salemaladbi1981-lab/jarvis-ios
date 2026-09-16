@@ -57,6 +57,16 @@ check("no manual commit (server VAD owns)", 'input_audio_buffer.commit' not in r
 # mic permission
 check("mic permission notDetermined→prompt", 'requestMic' in ac)
 check("mic denied→structured", 'case .denied' in ac)
+# Voice startup path (regression: mic button → permission → start)
+check("toggleVoice requests mic permission", 'AudioCapture.micPermission()' in vm and 'AudioCapture.requestMic()' in vm)
+check("toggleVoice denied → structured alert", 'صلاحية الميكروفون مرفوضة' in vm)
+check("startListening traces real error (not swallowed)", 'error.localizedDescription' in rvs and 'startListening FAILED' in rvs)
+# start() instrumentation: كل خطوة تُسجّل لتحديد أول نقطة فشل
+check("start() trace: setCategory OK", 'setCategory OK' in vae)
+check("start() trace: setVoiceProcessingEnabled OK", 'setVoiceProcessingEnabled OK' in vae)
+check("start() trace: installTap OK", 'installTap OK' in vae)
+check("start() trace: engine.start error", 'start FAILED at engine.start' in vae)
+check("start() trace: setVoiceProcessingEnabled error", 'start FAILED at setVoiceProcessingEnabled' in vae)
 # state truth
 check("JarvisStateMapper events→states", 'func state(for' in vs and '.speaking' in vs)
 check("bindVoice → state", 'bindVoice' in vm and 'JarvisStateMapper.state' in vm)

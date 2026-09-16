@@ -44,7 +44,9 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
         audio.onDiagnostics = { [weak self] msg in self?.trace("AEC diag: \(msg)") }
         do {
             try audio.start()
+            trace("startListening: audio.start OK")
         } catch {
+            trace("startListening FAILED: \(error.localizedDescription)")
             eventPublisher.send(.error("mic_unavailable"))
         }
     }

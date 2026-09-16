@@ -97,6 +97,21 @@ final class HomeViewModel: ObservableObject {
             state = .idle
         } else {
             Task {
+                // 1) mic permission أولاً (كان مفقوداً — يمنع input صامت/فشل)
+                let mic = AudioCapture.micPermission()
+                if mic == .notDetermined {
+                    let r = await AudioCapture.requestMic()
+                    guard r == .granted else {
+                        state = .alert
+                        calendarMessage = "صلاحية الميكروفون مرفوضة — فعّلها من إعدادات النظام"
+                        return
+                    }
+                } else if mic == .denied {
+                    state = .alert
+                    calendarMessage = "صلاحية الميكروفون مرفوضة — فعّلها من إعدادات النظام"
+                    return
+                }
+                // 2) connect + start
                 do {
                     guard let url = URL(string: RealtimeVoiceSession.backendBaseURL) else {
                         state = .alert; calendarMessage = "عنوان الخادم غير صالح"; return

@@ -47,9 +47,21 @@ final class VoiceAudioEngine {
         #if os(iOS)
         let session = AVAudioSession.sharedInstance()
         // Voice-processing mode (AEC عبر VPIO داخل AVAudioEngine).
-        try session.setCategory(.playAndRecord, mode: .voiceChat,
-                                options: [.allowBluetooth, .defaultToSpeaker])
-        try session.setActive(true, options: [])
+        do {
+            try session.setCategory(.playAndRecord, mode: .voiceChat,
+                                    options: [.allowBluetooth, .defaultToSpeaker])
+            onDiagnostics?("start: setCategory OK")
+        } catch {
+            onDiagnostics?("start FAILED at setCategory: \(error.localizedDescription)")
+            throw error
+        }
+        do {
+            try session.setActive(true, options: [])
+            onDiagnostics?("start: setActive OK")
+        } catch {
+            onDiagnostics?("start FAILED at setActive: \(error.localizedDescription)")
+            throw error
+        }
         #endif
 
         // Output graph
@@ -59,7 +71,13 @@ final class VoiceAudioEngine {
         engine.mainMixerNode.outputVolume = 1.0
 
         // AEC: فعّل voice processing على الـ I/O node قبل start (Apple official path)
-        try engine.inputNode.setVoiceProcessingEnabled(true)
+        do {
+            try engine.inputNode.setVoiceProcessingEnabled(true)
+            onDiagnostics?("start: setVoiceProcessingEnabled OK")
+        } catch {
+            onDiagnostics?("start FAILED at setVoiceProcessingEnabled: \(error.localizedDescription)")
+            throw error
+        }
 
         // Input tap (AEC-applied)
         let input = engine.inputNode
@@ -71,11 +89,18 @@ final class VoiceAudioEngine {
                 self.onPCM?(data)
             }
         }
+        onDiagnostics?("start: installTap OK hwRate=\(Int(hwFormat.sampleRate)) ch=\(hwFormat.channelCount)")
 
         engine.prepare()
-        try engine.start()
+        do {
+            try engine.start()
+        } catch {
+            onDiagnostics?("start FAILED at engine.start: \(error.localizedDescription)")
+            throw error
+        }
         player.play()
         started = true
+        onDiagnostics?("start: engine started OK")
 
         #if os(iOS)
         let vpEnabled = engine.inputNode.isVoiceProcessingEnabled
