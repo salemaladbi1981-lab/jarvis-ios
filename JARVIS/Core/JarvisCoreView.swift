@@ -39,14 +39,15 @@ struct JarvisCoreView: View {
         .frame(width: size, height: size)
         .allowsHitTesting(false)
         .onChange(of: levels.micLevel) { v in
+            // EMA مباشر — withAnimation لا يعمل داخل TimelineView/Canvas (كانت النواة ثابتة).
             let rising = v > smoothedMic
-            let dur = rising ? MotionTokens.Smoothing.attack : MotionTokens.Smoothing.release
-            withAnimation(.easeOut(duration: dur)) { smoothedMic = v }
+            let alpha = rising ? MotionTokens.Smoothing.attackAlpha : MotionTokens.Smoothing.releaseAlpha
+            smoothedMic += (v - smoothedMic) * alpha
         }
         .onChange(of: levels.outputLevel) { v in
             let rising = v > smoothedOutput
-            let dur = rising ? MotionTokens.Smoothing.attack : MotionTokens.Smoothing.release
-            withAnimation(.easeOut(duration: dur)) { smoothedOutput = v }
+            let alpha = rising ? MotionTokens.Smoothing.attackAlpha : MotionTokens.Smoothing.releaseAlpha
+            smoothedOutput += (v - smoothedOutput) * alpha
         }
         .onChange(of: successPulse) { p in
             if p { withAnimation(.easeOut(duration: MotionTokens.Duration.successPulse)) { successAnim = 1.0 } }

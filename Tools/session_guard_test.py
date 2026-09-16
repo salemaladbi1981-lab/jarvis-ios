@@ -60,9 +60,13 @@ class SessionGuard:
     def on_speech_started(self):
         if not self.isSessionReady:
             return False
-        self.pendingCompletion = None; self.pendingCompletionCycle = 0
-        self.currentResponseID = None
+        # لا يُبطل الرد هنا — التأكيد يؤجل الإبطال (منع micro-cut)
         return True
+
+    def on_barge(self):
+        self.currentResponseID = None
+        self.currentResponseHasAudio = False
+        self.pendingCompletion = None; self.pendingCompletionCycle = 0
 
     def consume_completion(self, cycle):
         if cycle != self.pendingCompletionCycle:
@@ -139,6 +143,15 @@ r = g.resolve_done("R2", 1, "failed")
 check("رد بلا صوت ينشر فوراً (failed)", r == ("publishImmediately", "failed"))
 check("لا نتيجة معلقة بعد النشر الفوري", g.pendingCompletion is None and g.pendingCompletionCycle == 0)
 check("تكرار done بلا صوت مرفوض", g.resolve_done("R2", 1, "failed") == "ignore")
+
+# 11. speech_started لا يُبطل الرد (delta يبقى مقبولاً — منع micro-cut)
+g = SessionGuard(); g.session_created(); g.on_response_created("R1")
+check("speech_started لا يُبطل الرد (delta مقبول)", g.on_speech_started() and g.on_delta("R1") == True)
+
+# 12. on_barge (بعد التأكيد) يبطل الرد
+g = SessionGuard(); g.session_created(); g.on_response_created("R1")
+g.on_speech_started(); g.on_barge()
+check("on_barge يبطل الرد", g.on_delta("R1") == False and g.resolve_done("R1", 1) == "ignore")
 
 print(f"\n== RESULT: {PASS} PASS / {FAIL} FAIL ==")
 import sys

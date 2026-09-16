@@ -93,11 +93,11 @@ struct SessionGuardState {
         }
     }
 
-    /// قبول حدث speech_started — الجلسة نشطة فقط، ويُبطل الرد الجاري.
+    /// قبول حدث speech_started — الجلسة نشطة فقط.
+    /// لا يُبطل الرد هنا (التأكيد يؤجل الإبطال — يمنع micro-cut للضوضاء القصيرة).
     @discardableResult
     mutating func onSpeechStarted() -> Bool {
         guard isSessionReady else { return false }
-        onBarge()
         return true
     }
 

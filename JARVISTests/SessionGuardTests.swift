@@ -105,8 +105,19 @@ final class SessionGuardTests: XCTestCase {
         g.sessionCreated()
         XCTAssertTrue(g.onResponseCreated(j(["response": ["id": "R1"]])))
         XCTAssertTrue(g.onSpeechStarted())
+        // التأكيد: onSpeechStarted لا يُبطل؛ onBarge (بعد نافذة التأكيد) هو من يبطل الرد.
+        g.onBarge()
         XCTAssertEqual(g.resolveDone(j(["response": ["id": "R1", "status": "cancelled"]]), cycle: 1), .ignore)
         XCTAssertEqual(g.pendingCompletion, .none)
+    }
+
+    func testSpeechStartedDoesNotInvalidateResponse() {
+        var g = SessionGuardState()
+        g.sessionCreated()
+        XCTAssertTrue(g.onResponseCreated(j(["response": ["id": "R1"]])))
+        XCTAssertTrue(g.onSpeechStarted())
+        // الرد يبقى حياً — delta يستمر مقبولاً (منع micro-cut للضوضاء القصيرة)
+        XCTAssertTrue(g.onDelta(j(["response_id": "R1", "delta": "AAA="])))
     }
 
     func testSpeechStartedAfterStopRejected() {

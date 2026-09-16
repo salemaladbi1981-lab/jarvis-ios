@@ -125,6 +125,7 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                 self.pendingBargeIn = false
                 if self.isSpeaking {
                     self.isSpeaking = false
+                    self.guardState.onBarge()   // إبطال الرد الآن (بعد التأكيد، لا عند speech_started)
                     self.bargeIn()
                 }
             }

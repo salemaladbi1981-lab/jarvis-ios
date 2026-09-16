@@ -35,8 +35,11 @@ enum MotionTokens {
 
     // MARK: Smoothing (RMS → 60fps interpolation)
     enum Smoothing {
-        static let attack: Double = 0.10   // أسرع ارتفاع (استجابة للصوت)
-        static let release: Double = 0.35  // أبطأ انخفاض (تجنب flicker)
+        static let attack: Double = 0.10   // duration (للـ Waveform animation)
+        static let release: Double = 0.35  // duration
+        // alpha للـ EMA المباشر في Core onChange (~40ms update) — لا withAnimation
+        static let attackAlpha: Double = 0.55
+        static let releaseAlpha: Double = 0.18
     }
 
     // MARK: Level (RMS → perceptual mapping — visual layer only)
