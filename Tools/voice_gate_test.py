@@ -28,7 +28,7 @@ check("AEC runtime: isVoiceProcessingBypassed", 'isVoiceProcessingBypassed' in v
 # C. Coalescing + continuous schedule-ahead (jitter fix)
 check("coalescing: targetBufferBytes (~100ms)", 'targetBufferBytes' in vae)
 check("schedule-ahead: maxScheduledAhead", 'maxScheduledAhead' in vae)
-check("continuous pump (schedule-ahead, no serial gap)", 'func pump(' in vae and 'player.scheduleBuffer(buffer)' in vae)
+check("continuous pump (schedule-ahead, no serial gap)", 'func pump(' in vae and 'scheduleBuffer(buffer' in vae)
 check("tail flush (flushTail→pump forceTail)", 'func flushTail()' in vae and 'pump(forceTail: true)' in vae)
 
 # PLAYBACK counters (runtime evidence)

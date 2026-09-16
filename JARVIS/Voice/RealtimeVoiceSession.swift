@@ -54,6 +54,11 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
         audio.onDiagnostics = { [weak self] msg in self?.trace("AEC diag: \(msg)") }
         audio.onMicLevel = { [weak self] level in self?.onMicLevel?(level) }
         audio.onOutputLevel = { [weak self] level in self?.onOutputLevel?(level) }
+        audio.onPlaybackDrained = { [weak self] in
+            guard let self else { return }
+            self.trace("playback drained — اكتمل التشغيل المحلي")
+            self.eventPublisher.send(.connected)
+        }
         do {
             try audio.start()
             trace("startListening #\(attempt): audio.start OK")
@@ -177,8 +182,8 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
             case "response.done":
                 isSpeaking = false
                 audio.flushTail()   // يفلش tail + يطبع PLAYBACK counters
-                trace("response.done — flushTail called")
-                eventPublisher.send(.connected)
+                trace("response.done — flushTail called (انتظار اكتمال التشغيل المحلي)")
+                // لا .connected هنا — يُرسل عند onPlaybackDrained (اكتمال التشغيل الفعلي)
             case "response.function_call_arguments.done":
                 eventPublisher.send(.toolExecuting)
             case "error":

@@ -1,6 +1,12 @@
 import Foundation
 import AVFoundation
 
+/// Audio chunk مع level محسوب مسبقاً (من PCM) — يُنشر عند بداية render.
+private struct AudioChunk {
+    let data: Data
+    let level: Double
+}
+
 /// Shared full-duplex audio I/O: ONE AVAudioEngine + ONE AVAudioSession.
 /// Voice-processing (.voiceChat) mode → native AEC (speaker echo removed from mic).
 /// Continuous schedule-ahead playback + full runtime counters + serial queue (thread-safe).
@@ -32,6 +38,7 @@ final class VoiceAudioEngine {
     // Playback: coalescing + schedule-ahead (continuous, no serial gap)
     private var pendingData: [Data] = []
     private var scheduledBuffers = 0
+    private var playbackGeneration = 0           // يُبطل الدورة السابقة عند barge-in/رد جديد
     private let targetBufferBytes = 4800        // ~100ms @24kHz 16-bit mono
     private let maxScheduledAhead = 3           // keep up to 3 buffers queued in the player
     private var isSpeaking = false              // response audio still streaming
@@ -131,16 +138,17 @@ final class VoiceAudioEngine {
     /// يُستدعى عند بداية رد جديد — يصفّر الـ counters ويبدأ وضع التدفق.
     func beginSpeaking() {
         workQueue.async { [weak self] in
-            self?.resetStats()
-            self?.isSpeaking = true
+            guard let self else { return }
+            self.playbackGeneration += 1   // إبطال أي عمل قديم (رد سابق)
+            self.resetStats()
+            self.isSpeaking = true
         }
     }
 
     /// Enqueue PCM16 (24kHz mono). Coalesces small deltas and schedules ahead.
     func enqueueAudio(_ data: Data) {
         guard !data.isEmpty else { return }
-        // read-only level (خارج workQueue، لا يؤثر على توقيت الـ scheduling)
-        if let level = Self.rmsLevel(data) { onOutputLevel?(level) }
+        // لا level هنا — الـ level يُنشر عند بداية render (ربط بموضع التشغيل)
         workQueue.async { [weak self] in
             guard let self else { return }
             self.receivedBytes += data.count
@@ -156,6 +164,11 @@ final class VoiceAudioEngine {
             guard let self else { return }
             self.isSpeaking = false
             self.pump(forceTail: true)
+            // drain check: إذا انتهى كل الصوت قبل response.done (لا pending ولا scheduled)
+            if self.pendingData.isEmpty && self.scheduledBuffers == 0 {
+                self.onOutputLevel?(0)
+                self.onPlaybackDrained?()
+            }
             self.onDiagnostics?(self.statsSummary())
         }
     }
@@ -164,11 +177,13 @@ final class VoiceAudioEngine {
     func flush() {
         workQueue.async { [weak self] in
             guard let self else { return }
+            self.playbackGeneration += 1   // إبطال الدورة السابقة (stale callbacks/levels)
             self.player.stop()
             self.player.reset()
             self.pendingData.removeAll()
             self.scheduledBuffers = 0
             self.isSpeaking = false
+            self.onOutputLevel?(0)   // تصفير فوري للمستوى عند الإلغاء
             self.player.play()
         }
     }
@@ -187,16 +202,21 @@ final class VoiceAudioEngine {
     /// MUST run inside workQueue.
     private func pump(forceTail: Bool = false) {
         while scheduledBuffers < maxScheduledAhead {
-            guard let data = nextBuffer(forceTail: forceTail) else { break }
-            guard let buffer = Self.toBuffer(data, format: format) else {
+            guard let chunk = nextBuffer(forceTail: forceTail) else { break }
+            guard let buffer = Self.toBuffer(chunk.data, format: format) else {
                 converterErrors += 1
                 continue
             }
-            scheduledBytes += data.count
+            scheduledBytes += chunk.data.count
             scheduledBuffers += 1
-            player.scheduleBuffer(buffer) { [weak self] in
+            let gen = playbackGeneration
+            // .dataRendered: الـ completion يُستدعى عند بداية render الـ buffer
+            // (أقرب نقطة لبداية التشغيل الفعلي) — الـ level مربوط بموضع التشغيل.
+            player.scheduleBuffer(buffer, completionCallbackType: .dataRendered) { [weak self] _ in
                 guard let self else { return }
                 self.workQueue.async {
+                    guard gen == self.playbackGeneration else { return }  // عمل قديم ملغى
+                    self.onOutputLevel?(chunk.level)   // نشر level الـ chunk الذي بدأ render
                     self.completedBuffers += 1
                     self.scheduledBuffers -= 1
                     if self.scheduledBuffers == 0 && self.isSpeaking {
@@ -206,6 +226,7 @@ final class VoiceAudioEngine {
                     // حرر slot → املأه من الـ queue فوراً (no gap)
                     self.pump()
                     if self.pendingData.isEmpty && self.scheduledBuffers == 0 && !self.isSpeaking {
+                        self.onOutputLevel?(0)   // تصفير المستوى عند اكتمال التشغيل
                         self.onPlaybackDrained?()
                     }
                 }
@@ -215,7 +236,7 @@ final class VoiceAudioEngine {
     }
 
     /// يأخذ buffer واحد: ~100ms عادي، أو كل الـ tail في forceTail. MUST run inside workQueue.
-    private func nextBuffer(forceTail: Bool) -> Data? {
+    private func nextBuffer(forceTail: Bool) -> AudioChunk? {
         guard !pendingData.isEmpty else { return nil }
         var collected = Data()
         if forceTail {
@@ -226,13 +247,16 @@ final class VoiceAudioEngine {
                 collected.append(pendingData.removeFirst())
             }
         }
-        return collected.isEmpty ? nil : collected
+        guard !collected.isEmpty else { return nil }
+        return AudioChunk(data: collected, level: Self.rmsLevel(collected) ?? 0)
     }
 
     func stop() {
+        playbackGeneration += 1   // إبطال الدورة
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
         started = false
+        onOutputLevel?(0)   // تصفير المستوى عند التوقف
         #if os(iOS)
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         #endif
