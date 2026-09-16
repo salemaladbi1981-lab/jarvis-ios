@@ -57,7 +57,7 @@ struct JarvisWaveformStatusView: View {
 
     var body: some View {
         VStack(spacing: 4) {
-            WaveformView(state: vm.state)
+            WaveformView(levels: vm.levels, state: vm.state)
             statusLine
         }
     }

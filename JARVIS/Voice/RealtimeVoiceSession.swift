@@ -199,6 +199,7 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
             case "response.created":
                 if guardState.onResponseCreated(text) {
                     trace("response.created id=\(guardState.currentResponseID ?? "?")")
+                    eventPublisher.send(.thinking)   // V1 Visual: model بدأ يولد الرد
                 } else {
                     trace("response.created ignored (لا جلسة نشطة)")
                 }

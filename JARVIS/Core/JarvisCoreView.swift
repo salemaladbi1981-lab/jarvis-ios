@@ -39,10 +39,14 @@ struct JarvisCoreView: View {
         .frame(width: size, height: size)
         .allowsHitTesting(false)
         .onChange(of: levels.micLevel) { v in
-            withAnimation(.easeOut(duration: MotionTokens.Smoothing.attack)) { smoothedMic = v }
+            let rising = v > smoothedMic
+            let dur = rising ? MotionTokens.Smoothing.attack : MotionTokens.Smoothing.release
+            withAnimation(.easeOut(duration: dur)) { smoothedMic = v }
         }
         .onChange(of: levels.outputLevel) { v in
-            withAnimation(.easeOut(duration: MotionTokens.Smoothing.attack)) { smoothedOutput = v }
+            let rising = v > smoothedOutput
+            let dur = rising ? MotionTokens.Smoothing.attack : MotionTokens.Smoothing.release
+            withAnimation(.easeOut(duration: dur)) { smoothedOutput = v }
         }
         .onChange(of: successPulse) { p in
             if p { withAnimation(.easeOut(duration: MotionTokens.Duration.successPulse)) { successAnim = 1.0 } }

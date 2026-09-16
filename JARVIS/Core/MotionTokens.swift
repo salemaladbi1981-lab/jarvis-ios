@@ -20,7 +20,7 @@ enum MotionTokens {
     enum Amplitude {
         static let idleBreath: Double = 0.03
         static let listening: Double = 0.25      // مضروب بـ micLevel
-        static let speaking: Double = 0.08       // مضروب بـ outputLevel
+        static let speaking: Double = 0.18       // مضروب بـ outputLevel (معايرة محافظة ظاهرة)
         static let thinking: Double = 0.15
         static let executing: Double = 0.12
         static let errorShake: Double = 0.02
