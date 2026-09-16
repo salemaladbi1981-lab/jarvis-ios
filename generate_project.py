@@ -190,7 +190,7 @@ mac_test_settings = {
 mac_test_debug = add("XCBuildConfiguration", buildSettings=dict(mac_test_settings), name="Debug")
 mac_test_release = add("XCBuildConfiguration", buildSettings=dict(mac_test_settings), name="Release")
 mac_test_config_list = add("XCConfigurationList", buildConfigurations=[mac_test_debug, mac_test_release], defaultConfigurationIsVisible=0, defaultConfigurationName="Release")
-mac_test_bf = {p: add("PBXBuildFile", fileRef=test_refs[p]) for p in TEST_SOURCES}
+mac_test_bf = {p: add("PBXBuildFile", fileRef=test_refs[p]) for p in TEST_SOURCES if "SessionGuardTests" in p}
 mac_test_sources_phase = add("PBXSourcesBuildPhase", files=sorted(list(mac_test_bf.values()) + list(session_guard_bf.values())), buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)
 mac_test_target = add("PBXNativeTarget", buildConfigurationList=mac_test_config_list,
     buildPhases=[mac_test_sources_phase, test_frameworks_phase, test_resources_phase],
