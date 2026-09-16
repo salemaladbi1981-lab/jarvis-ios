@@ -22,6 +22,7 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     private var startAttemptID = 0
     private var pcmAppendCount = 0
     private var isSessionReady = false
+    private var currentResponseID: String? = nil   // هوية الرد الحالي (لمنع stale deltas)
     private var bargeStartTime: TimeInterval = 0
 
     func connect(baseURL: URL) async throws {
@@ -149,10 +150,19 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                 eventPublisher.send(.connected)   // الآن فقط بعد نجاح handshake
             case "session.updated":
                 trace("session.updated received")
+            case "response.created":
+                currentResponseID = Self.jsonNestedString(text, "response", "id")
+                trace("response.created id=\(currentResponseID ?? "?")")
             case "response.output_audio.delta":
                 if !isSpeaking {
                     isSpeaking = true
                     audio.beginSpeaking()   // يصفّر الـ counters ويبدأ التدفق
+                }
+                // هوية الرد: تجاهل delta من رد قديم (ملغى) حتى لو وصل بعد بدء رد جديد
+                if let rid = Self.jsonStringField(text, "response_id"),
+                   let cur = currentResponseID, rid != cur {
+                    trace("stale delta ignored (response_id \(rid) != \(cur))")
+                    break
                 }
                 if let b64 = Self.jsonStringField(text, "delta") {
                     if let data = Data(base64Encoded: b64) { audio.enqueueAudio(data) }
@@ -160,13 +170,15 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                 eventPublisher.send(.speaking)
             case "input_audio_buffer.speech_started":
                 trace("VAD speech_started payload: \(text)")
+                bargeStartTime = Date().timeIntervalSinceReferenceDate
                 if isSpeaking {
-                    // barge-in: كلام مستخدم حقيقي أثناء كلام جارفس.
-                    // AEC مثبت على الجهاز → الـ echo لا يولّد speech_started كاذباً.
-                    // إيقاف فوري للرد القديم مرة واحدة فقط (وليس انتظار transcript).
-                    bargeStartTime = Date().timeIntervalSinceReferenceDate
+                    // barge-in: كلام مستخدم أثناء كلام جارفس (AEC يمنع echo).
                     isSpeaking = false
-                    bargeIn()
+                    bargeIn()   // response.cancel + flush
+                } else {
+                    // صوت متبقٍ بعد انتهاء التوليد (response.done) — إيقاف فوري للذيل
+                    audio.flush()
+                    trace("BARGE — flush tail (صوت متبقٍ بعد انتهاء التوليد)")
                 }
             case "input_audio_buffer.speech_stopped":
                 trace("VAD speech_stopped payload: \(text)")
@@ -203,6 +215,14 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
         guard let data = text.data(using: .utf8),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
         return obj[key] as? String
+    }
+
+    /// استخراج حقل nested (مثل response.id من response.created).
+    private static func jsonNestedString(_ text: String, _ key: String, _ subKey: String) -> String? {
+        guard let data = text.data(using: .utf8),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let nested = obj[key] as? [String: Any] else { return nil }
+        return nested[subKey] as? String
     }
 
     private static func transcriptText(_ text: String) -> String? {

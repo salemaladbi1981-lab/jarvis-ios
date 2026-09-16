@@ -38,6 +38,8 @@ final class VoiceAudioEngine {
     // Playback: coalescing + schedule-ahead (continuous, no serial gap)
     private var pendingData: [Data] = []
     private var scheduledBuffers = 0
+    private var scheduledLevels: [Double] = []   // levels للمقاطع المجدولة (لترتيب الـ advance)
+    private var hasDrained = false               // يمنع إشعار الاكتمال المزدوج
     private var playbackGeneration = 0           // يُبطل الدورة السابقة عند barge-in/رد جديد
     private let targetBufferBytes = 4800        // ~100ms @24kHz 16-bit mono
     private let maxScheduledAhead = 3           // keep up to 3 buffers queued in the player
@@ -140,6 +142,8 @@ final class VoiceAudioEngine {
         workQueue.async { [weak self] in
             guard let self else { return }
             self.playbackGeneration += 1   // إبطال أي عمل قديم (رد سابق)
+            self.scheduledLevels.removeAll()
+            self.hasDrained = false
             self.resetStats()
             self.isSpeaking = true
         }
@@ -164,11 +168,7 @@ final class VoiceAudioEngine {
             guard let self else { return }
             self.isSpeaking = false
             self.pump(forceTail: true)
-            // drain check: إذا انتهى كل الصوت قبل response.done (لا pending ولا scheduled)
-            if self.pendingData.isEmpty && self.scheduledBuffers == 0 {
-                self.onOutputLevel?(0)
-                self.onPlaybackDrained?()
-            }
+            self.checkDrain()
             self.onDiagnostics?(self.statsSummary())
         }
     }
@@ -182,6 +182,8 @@ final class VoiceAudioEngine {
             self.player.reset()
             self.pendingData.removeAll()
             self.scheduledBuffers = 0
+            self.scheduledLevels.removeAll()
+            self.hasDrained = false
             self.isSpeaking = false
             self.onOutputLevel?(0)   // تصفير فوري للمستوى عند الإلغاء
             self.player.play()
@@ -210,29 +212,47 @@ final class VoiceAudioEngine {
             scheduledBytes += chunk.data.count
             scheduledBuffers += 1
             let gen = playbackGeneration
-            // .dataRendered: الـ completion يُستدعى عند بداية render الـ buffer
-            // (أقرب نقطة لبداية التشغيل الفعلي) — الـ level مربوط بموضع التشغيل.
-            player.scheduleBuffer(buffer, completionCallbackType: .dataRendered) { [weak self] _ in
+            if scheduledBuffers == 1 {
+                // أول مقطع يبدأ التشغيل الآن → انشر level فوراً
+                self.onOutputLevel?(chunk.level)
+            } else {
+                self.scheduledLevels.append(chunk.level)
+            }
+            // .dataPlayedBack: إثبات انتهاء تشغيل الـ buffer (وليس لنشر المستوى أثناء المقطع).
+            player.scheduleBuffer(buffer, completionCallbackType: .dataPlayedBack) { [weak self] _ in
                 guard let self else { return }
                 self.workQueue.async {
                     guard gen == self.playbackGeneration else { return }  // عمل قديم ملغى
-                    self.onOutputLevel?(chunk.level)   // نشر level الـ chunk الذي بدأ render
                     self.completedBuffers += 1
                     self.scheduledBuffers -= 1
+                    // advance: انشر level الـ المقطع التالي (يبدأ تشغيله الآن)
+                    if !self.scheduledLevels.isEmpty {
+                        self.onOutputLevel?(self.scheduledLevels.removeFirst())
+                    }
                     if self.scheduledBuffers == 0 && self.isSpeaking {
                         // نفدت كل الـ buffers المجدولة والرد ما زال يتدفق → underrun/gap
                         self.underruns += 1
                     }
                     // حرر slot → املأه من الـ queue فوراً (no gap)
                     self.pump()
-                    if self.pendingData.isEmpty && self.scheduledBuffers == 0 && !self.isSpeaking {
-                        self.onOutputLevel?(0)   // تصفير المستوى عند اكتمال التشغيل
-                        self.onPlaybackDrained?()
-                    }
+                    self.checkDrain()
                 }
             }
             if forceTail { break }   // forceTail يفلش tail واحد فقط
         }
+    }
+
+    /// شرط انتهاء التشغيل (مرة واحدة): انتهى التوليد + الذيل مُصرَّف + لا بيانات منتظرة
+    /// + لا مقاطع قيد التشغيل → إشعار اكتمال واحد + تصفير المستوى.
+    private func checkDrain() {
+        guard !hasDrained,
+              !isSpeaking,
+              pendingData.isEmpty,
+              scheduledBuffers == 0 else { return }
+        hasDrained = true
+        scheduledLevels.removeAll()
+        onOutputLevel?(0)
+        onPlaybackDrained?()
     }
 
     /// يأخذ buffer واحد: ~100ms عادي، أو كل الـ tail في forceTail. MUST run inside workQueue.
@@ -253,6 +273,8 @@ final class VoiceAudioEngine {
 
     func stop() {
         playbackGeneration += 1   // إبطال الدورة
+        scheduledLevels.removeAll()
+        hasDrained = false
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
         started = false
