@@ -285,7 +285,7 @@ final class VoiceAudioEngine {
             guard let self else { return }
             self.playbackGeneration += 1   // إبطال الدورة
             self.scheduledLevels.removeAll()
-            self.hasDrained = false
+            self.hasDrained = true    // منع onPlaybackDrained من الدورة الموقوفة
             self.pendingData.removeAll()
             self.scheduledBuffers = 0
             self.onOutputLevel?(0)   // تصفير المستوى عند التوقف

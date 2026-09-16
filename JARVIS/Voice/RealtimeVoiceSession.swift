@@ -40,6 +40,8 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     }
 
     func disconnect() {
+        currentResponseID = nil
+        isSpeaking = false
         stopListening()
         ws?.cancel(with: .goingAway, reason: nil)
         ws = nil
@@ -70,13 +72,17 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     }
 
     func stopListening() {
-        audio.stop()
+        currentResponseID = nil   // إبطال الرد (منع أحداث الدورة الموقوفة)
+        isSpeaking = false
+        audio.stop()   // يوقف المحرك + يصفّر المستوى + يبطل generation
     }
 
     /// Barge-in: إلغاء الرد الجاري + مسح الـ playback (الـ mic يبقى شغّالاً).
     /// الـ flush يمسح الـ playback queue فقط — لا يمسح الـ mic input،
     /// فلا تضيع أول كلمة من كلام المستخدم.
     private func bargeIn() {
+        currentResponseID = nil   // إبطال الرد
+        isSpeaking = false
         trace("BARGE speech_started → response.cancel + flush")
         let cancel = #"{"type":"response.cancel"}"#
         ws?.send(.string(cancel)) { _ in }
@@ -87,6 +93,8 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     }
 
     func interrupt() {
+        currentResponseID = nil
+        isSpeaking = false
         bargeIn()
     }
 
@@ -174,7 +182,6 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
             case "input_audio_buffer.speech_started":
                 trace("VAD speech_started payload: \(text)")
                 bargeStartTime = Date().timeIntervalSinceReferenceDate
-                currentResponseID = nil   // إبطال قبول deltas فور المقاطعة
                 if isSpeaking {
                     // barge-in: كلام مستخدم أثناء كلام جارفس (AEC يمنع echo).
                     isSpeaking = false
@@ -197,16 +204,21 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                 // نص رد جارفس — لا يُعاد توجيهه (يمنع الـ loop).
                 break
             case "response.done":
-                // حراسة: done يجب أن يكون للرد الحالي (وليس رداً ملغى)
-                if let cur = currentResponseID,
-                   let rid = Self.jsonStringField(text, "response_id"), rid != cur {
-                    trace("stale response.done ignored (response_id \(rid) != \(cur))")
+                // حراسة إلزامية: الهوية في response.id (nested) — يرفض عند nil أو عدم تطابق
+                guard let cur = currentResponseID,
+                      let rid = Self.jsonNestedString(text, "response", "id"),
+                      rid == cur else {
+                    trace("response.done ignored (لا رد مطابق نشط)")
                     break
                 }
+                let status = Self.jsonNestedString(text, "response", "status") ?? "completed"
                 isSpeaking = false
                 currentResponseID = nil   // لا رد نشط بعد done
                 audio.flushTail()   // يفلش tail + يطبع PLAYBACK counters
-                trace("response.done — flushTail called (انتظار اكتمال التشغيل المحلي)")
+                trace("response.done status=\(status) — flushTail (انتظار اكتمال التشغيل المحلي)")
+                if status == "failed" {
+                    eventPublisher.send(.error("realtime_error"))
+                }
                 // لا .connected هنا — يُرسل عند onPlaybackDrained (اكتمال التشغيل الفعلي)
             case "response.function_call_arguments.done":
                 eventPublisher.send(.toolExecuting)
