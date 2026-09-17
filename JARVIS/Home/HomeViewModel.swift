@@ -193,6 +193,9 @@ final class HomeViewModel: ObservableObject {
     /// V1.1: إضافة إنشاء تذكير (بتأكيد) + أسئلة شخصية تعتمد على الذاكرة.
     func routeVoiceTranscript(_ text: String) async {
         let t = text.lowercased()
+        // أسئلة البريد يعالجها الـ backend LLM عبر function calling — لا نعترضها محلياً
+        // (يمنع «وش أهم إيميلاتي اليوم؟» من الوصول لمسار التقويم بسبب كلمة «اليوم»)
+        if Self.isEmailQuestion(t) { return }
         // 1) إنشاء تذكير (يتطلب تأكيد)
         if let reminderTitle = Self.parseCreateReminder(t) {
             requestReminderCreate(title: reminderTitle)
@@ -319,6 +322,10 @@ final class HomeViewModel: ObservableObject {
         let m = MemoryStore.seeded()
         memory = m
         return m
+    }
+
+    private static func isEmailQuestion(_ t: String) -> Bool {
+        ["إيميل", "ايميل", "بريد", "email", "mail", "inbox"].contains { t.contains($0) }
     }
 
     private static func parseCreateReminder(_ t: String) -> String? {
