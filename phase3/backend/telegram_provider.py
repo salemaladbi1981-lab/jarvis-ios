@@ -27,6 +27,11 @@ def _run(coro):
     return asyncio.run(coro)
 
 
+def _peer_chat_id(peer_id):
+    """يستخرج chat_id بأمان لأي نوع peer (User/Channel/Chat) — لا AttributeError."""
+    return getattr(peer_id, "channel_id", None) or getattr(peer_id, "user_id", None) or getattr(peer_id, "chat_id", None)
+
+
 class TelegramProvider:
     provider_name = "telegram"
 
@@ -70,7 +75,7 @@ class TelegramProvider:
                 out = []
                 for m in r.messages:
                     out.append({
-                        "chat_id": str(m.peer_id.channel_id or m.peer_id.user_id or m.peer_id.chat_id),
+                        "chat_id": str(_peer_chat_id(m.peer_id)),
                         "message_id": str(m.id),
                         "sender": str(getattr(m, "sender_id", "") or ""),
                         "text": (m.text or m.message or "")[:200],

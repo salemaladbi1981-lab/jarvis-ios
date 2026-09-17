@@ -106,5 +106,17 @@ telegram_provider.TG_CRED_PATH = _old_path
 telegram_provider.TG_API_ID = _old_id
 telegram_provider.TG_API_HASH = _old_hash
 
+# L) _peer_chat_id — آمن لأنواع peer الثلاثة (PeerUser / PeerChannel / PeerChat)
+from telegram_provider import _peer_chat_id
+class _PeerUser: user_id = 111
+class _PeerChannel: channel_id = 222
+class _PeerChat: chat_id = 333
+check("PeerUser → user_id", _peer_chat_id(_PeerUser()) == 111)
+check("PeerChannel → channel_id", _peer_chat_id(_PeerChannel()) == 222)
+check("PeerChat → chat_id", _peer_chat_id(_PeerChat()) == 333)
+# peer بدون أي id → None (لا crash)
+class _PeerEmpty: pass
+check("empty peer → None (no crash)", _peer_chat_id(_PeerEmpty()) is None)
+
 print(f"\n== RESULT: {PASS} PASS / {FAIL} FAIL ==")
 sys.exit(0 if FAIL == 0 else 1)
