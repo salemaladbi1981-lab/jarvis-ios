@@ -17,6 +17,14 @@ import youtube_provider
 import yt_oauth
 
 app = FastAPI(title="JARVIS Control Plane")
+
+@app.middleware("http")
+async def no_cache(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    return response
+
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 approval_eval = ApprovalEvaluator()
@@ -195,7 +203,7 @@ def yt_oauth_client_form(code: str = ""):
 <p>ألصق بيانات الـ OAuth Client (نوع Web application). تُخزَّن سيرفراً فقط.</p>
 <form method="POST" action="/yt/oauth">
 <input type="hidden" name="code" value="{code}">
-<p>Client ID:<br><input name="client_id" size="52" required></p>
+<p>Client ID (ينتهي بـ .apps.googleusercontent.com):<br><input name="client_id" size="52" placeholder="مثال: 123456789-xxxx.apps.googleusercontent.com" required></p>
 <p>Client Secret:<br><input name="client_secret" type="password" size="52" required></p>
 <button type="submit">حفظ</button>
 </form></body></html>"""
