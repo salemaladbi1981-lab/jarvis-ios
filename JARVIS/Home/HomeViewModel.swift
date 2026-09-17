@@ -44,14 +44,6 @@ final class HomeViewModel: ObservableObject {
     private let eventWriter = AppleEventKitWriter()
     private var pendingWrite: PendingWrite?
 
-    // V1.1 Phase 2 — Tool Foundation (email + لاحقاً web/files)
-    private lazy var emailTool = EmailTool(client: EmailClient(baseURL: RealtimeVoiceSession.backendBaseURL))
-    private var pendingTool: PendingTool?
-    private struct PendingTool {
-        let tool: Tool
-        let intent: ToolIntent
-    }
-
     private enum PendingWrite {
         case createReminder(title: String)
         case createEvent(title: String, start: Date, end: Date)
@@ -223,9 +215,7 @@ final class HomeViewModel: ObservableObject {
             speak(answer)
             return
         }
-        // 5) أدوات Tool Foundation (بريد — ولاحقاً web/files)
-        if await routeToolChain(t) { return }
-        // 6) محادثة مباشرة — النموذج رد بالفعل من الصوت، لا نعيد إرسال النص
+        // 5) محادثة مباشرة — النموذج رد بالفعل من الصوت، لا نعيد إرسال النص
     }
 
     private func speakResult() {
@@ -403,46 +393,6 @@ final class HomeViewModel: ObservableObject {
         }
     }
 
-    // MARK: V1.1 Phase 2 — Tool Foundation (بريد)
-    private func routeToolChain(_ t: String) async -> Bool {
-        let chain: [Tool] = [emailTool]
-        for tool in chain {
-            let intent = tool.detectIntent(from: t)
-            guard intent != .none else { continue }
-            // Grounded Tool Contract: إلغاء أي ردّ حر جارٍ من النموذج،
-            // لتكون نتيجة الأداة هي الجواب الوحيد (لا اختراع محتوى بريد).
-            voiceSession.interrupt()
-            switch tool.confirmation(for: intent) {
-            case .none:
-                let result = await tool.execute(intent)
-                speakToolResult(result)
-                return true
-            case .confirm(let desc):
-                pendingTool = PendingTool(tool: tool, intent: intent)
-                pendingApproval = desc
-                state = .approval
-                return true
-            }
-        }
-        return false
-    }
-
-    private func executeTool(_ pt: PendingTool) async {
-        state = .executing
-        let result = await pt.tool.execute(pt.intent)
-        speakToolResult(result)
-    }
-
-    private func speakToolResult(_ result: ToolResult) {
-        switch result {
-        case .success(let msg):
-            speak(msg)
-        case .failure(let reason):
-            state = .alert
-            calendarMessage = reason
-        }
-    }
-
     // MARK: Agents
     func agents(in group: String) -> [Agent] {
         registry?.agents(in: group) ?? []
@@ -483,10 +433,6 @@ final class HomeViewModel: ObservableObject {
             pendingWrite = nil
             pendingApproval = nil
             Task { await executeWrite(w) }
-        } else if let pt = pendingTool {
-            pendingTool = nil
-            pendingApproval = nil
-            Task { await executeTool(pt) }
         } else {
             pendingApproval = nil
             state = .idle
@@ -494,7 +440,6 @@ final class HomeViewModel: ObservableObject {
     }
     func reject() {
         pendingWrite = nil
-        pendingTool = nil
         pendingApproval = nil
         state = .idle
     }

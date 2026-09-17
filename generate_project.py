@@ -31,7 +31,6 @@ APP_SOURCES = [
     "JARVIS/Memory/MemoryItem.swift", "JARVIS/Memory/MemoryStore.swift",
     "JARVIS/Memory/MemoryRetrieval.swift", "JARVIS/Memory/MemorySeed.swift",
     "JARVIS/Integrations/AppleEventKitWriter.swift",
-    "JARVIS/ToolKit/ToolFoundation.swift", "JARVIS/ToolKit/EmailTool.swift",
 ]
 APP_RESOURCES = [
     "JARVIS/Assets/Fonts/IBMPlexSansArabic-Regular.ttf",
@@ -46,7 +45,6 @@ TEST_SOURCES = [
     "JARVISTests/AgentRegistryTests.swift",
     "JARVISTests/SessionGuardTests.swift",
     "JARVISTests/MemoryTests.swift",
-    "JARVISTests/EmailToolTests.swift",
 ]
 
 # مصادر Foundation المشتركة (تُبنى في app + test targets مباشرة، بلا @testable import)
@@ -60,11 +58,6 @@ MEMORY_SOURCES = [
     "JARVIS/Memory/MemoryStore.swift",
     "JARVIS/Memory/MemoryRetrieval.swift",
     "JARVIS/Memory/MemorySeed.swift",
-]
-# مصادر ToolKit (Foundation خالصة — تُبنى في app + test targets)
-TOOLKIT_SOURCES = [
-    "JARVIS/ToolKit/ToolFoundation.swift",
-    "JARVIS/ToolKit/EmailTool.swift",
 ]
 
 objs = {}
@@ -93,7 +86,6 @@ app_res_bf = {p: add("PBXBuildFile", fileRef=app_res_refs[p]) for p in APP_RESOU
 test_bf = {p: add("PBXBuildFile", fileRef=test_refs[p]) for p in TEST_SOURCES}
 session_guard_bf = {p: add("PBXBuildFile", fileRef=app_src_refs[p]) for p in SESSION_GUARD_SOURCES}
 memory_bf = {p: add("PBXBuildFile", fileRef=app_src_refs[p]) for p in MEMORY_SOURCES}
-toolkit_bf = {p: add("PBXBuildFile", fileRef=app_src_refs[p]) for p in TOOLKIT_SOURCES}
 
 def subgroup(name, paths):
     refs = [app_src_refs[p] for p in paths]
@@ -115,7 +107,6 @@ groups["Voice"] = subgroup("Voice", [p for p in APP_SOURCES if "/Voice/" in p])
 groups["Integrations"] = subgroup("Integrations", [p for p in APP_SOURCES if "/Integrations/" in p])
 groups["Diagnostics"] = subgroup("Diagnostics", [p for p in APP_SOURCES if "/Diagnostics/" in p])
 groups["Memory"] = subgroup("Memory", [p for p in APP_SOURCES if "/Memory/" in p])
-groups["ToolKit"] = subgroup("ToolKit", [p for p in APP_SOURCES if "/ToolKit/" in p])
 
 font_refs = [app_res_refs[p] for p in APP_RESOURCES if "Fonts" in p]
 json_refs = [app_res_refs[p] for p in APP_RESOURCES if "Resources" in p]
@@ -128,7 +119,7 @@ resources_group = group(sorted(json_refs), "Resources", "Resources")
 jarvis_group = group(
     [groups["App"], groups["Home"], groups["Core"], groups["Cards"],
      groups["State"], groups["Agents"], groups["DesignSystem"],
-     groups["Providers"], groups["Mocks"], groups["iPad"], groups["macOS"], groups["Voice"], groups["Integrations"], groups["Diagnostics"], groups["Memory"], groups["ToolKit"], assets_group, resources_group, plist_ref],
+     groups["Providers"], groups["Mocks"], groups["iPad"], groups["macOS"], groups["Voice"], groups["Integrations"], groups["Diagnostics"], groups["Memory"], assets_group, resources_group, plist_ref],
     "JARVIS", "JARVIS"
 )
 tests_group = group(sorted(test_refs.values()), "JARVISTests", "JARVISTests")
@@ -138,7 +129,7 @@ main_group = add("PBXGroup", children=[jarvis_group, tests_group, products_group
 app_sources_phase = add("PBXSourcesBuildPhase", files=sorted(app_src_bf.values()), buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)
 app_resources_phase = add("PBXResourcesBuildPhase", files=sorted(app_res_bf.values()), buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)
 app_frameworks_phase = add("PBXFrameworksBuildPhase", files=[], buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)
-test_sources_phase = add("PBXSourcesBuildPhase", files=sorted(list(test_bf.values()) + list(session_guard_bf.values()) + list(memory_bf.values()) + list(toolkit_bf.values())), buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)
+test_sources_phase = add("PBXSourcesBuildPhase", files=sorted(list(test_bf.values()) + list(session_guard_bf.values()) + list(memory_bf.values())), buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)
 test_resources_phase = add("PBXResourcesBuildPhase", files=[], buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)
 test_frameworks_phase = add("PBXFrameworksBuildPhase", files=[], buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)
 
@@ -212,8 +203,8 @@ mac_test_settings = {
 mac_test_debug = add("XCBuildConfiguration", buildSettings=dict(mac_test_settings), name="Debug")
 mac_test_release = add("XCBuildConfiguration", buildSettings=dict(mac_test_settings), name="Release")
 mac_test_config_list = add("XCConfigurationList", buildConfigurations=[mac_test_debug, mac_test_release], defaultConfigurationIsVisible=0, defaultConfigurationName="Release")
-mac_test_bf = {p: add("PBXBuildFile", fileRef=test_refs[p]) for p in TEST_SOURCES if "SessionGuardTests" in p or "MemoryTests" in p or "EmailToolTests" in p}
-mac_test_sources_phase = add("PBXSourcesBuildPhase", files=sorted(list(mac_test_bf.values()) + list(session_guard_bf.values()) + list(memory_bf.values()) + list(toolkit_bf.values())), buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)
+mac_test_bf = {p: add("PBXBuildFile", fileRef=test_refs[p]) for p in TEST_SOURCES if "SessionGuardTests" in p or "MemoryTests" in p}
+mac_test_sources_phase = add("PBXSourcesBuildPhase", files=sorted(list(mac_test_bf.values()) + list(session_guard_bf.values()) + list(memory_bf.values())), buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)
 mac_test_target = add("PBXNativeTarget", buildConfigurationList=mac_test_config_list,
     buildPhases=[mac_test_sources_phase, test_frameworks_phase, test_resources_phase],
     buildRules=[], dependencies=[], name="JARVISTestsMac", productName="JARVISTestsMac",

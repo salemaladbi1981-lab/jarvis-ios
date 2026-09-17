@@ -13,9 +13,6 @@ import realtime
 app = FastAPI(title="JARVIS Control Plane")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-import email_routes
-app.include_router(email_routes.router)
-
 approval_eval = ApprovalEvaluator()
 approval_store = ApprovalStore()
 gateway = ToolGateway()

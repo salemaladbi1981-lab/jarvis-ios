@@ -103,3 +103,10 @@ def send(to, subject, body):
         headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=25) as r:
         return json.loads(r.read())
+
+
+def message_headers(mid):
+    """خلفيات خفيفة (from/subject) لرسالة — لبناء draft الرد دون جلب الجسم كاملاً."""
+    meta = _gmail("messages/" + mid, {"format": "metadata"})
+    headers = {h["name"].lower(): h["value"] for h in meta.get("payload", {}).get("headers", [])}
+    return {"from": headers.get("from", ""), "subject": headers.get("subject", "")}
