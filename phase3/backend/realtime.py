@@ -15,6 +15,7 @@ import config
 from realtime_tools import build_email_tools, execute_email_tool
 from telegram_tools import TELEGRAM_TOOLS, execute_telegram_tool
 from youtube_tools import YOUTUBE_TOOLS, execute_youtube_tool
+from instagram_tools import INSTAGRAM_TOOLS, execute_instagram_tool
 
 OPENAI_REALTIME_URL = "wss://api.openai.com/v1/realtime"
 
@@ -45,7 +46,7 @@ async def openai_realtime_proxy(client_ws, session_config: dict):
         inp["turn_detection"] = {"type": "semantic_vad", "interrupt_response": True, "create_response": True}
         session.setdefault("instructions", config.REALTIME_INSTRUCTIONS)
         # email tools + auto tool choice → the model can call them mid-turn
-        session["tools"] = build_email_tools() + TELEGRAM_TOOLS + YOUTUBE_TOOLS
+        session["tools"] = build_email_tools() + TELEGRAM_TOOLS + YOUTUBE_TOOLS + INSTAGRAM_TOOLS
         session["tool_choice"] = "auto"
         await upstream.send(json.dumps({"type": "session.update", "session": session}))
 
@@ -84,6 +85,8 @@ async def openai_realtime_proxy(client_ws, session_config: dict):
                             output = await asyncio.to_thread(execute_telegram_tool, name, args, pending_tg)
                         elif name.startswith("youtube_"):
                             output = await asyncio.to_thread(execute_youtube_tool, name, args)
+                        elif name.startswith("instagram_"):
+                            output = await asyncio.to_thread(execute_instagram_tool, name, args)
                         else:
                             output = await asyncio.to_thread(execute_email_tool, name, args, pending_email)
                         print(f"[TRACE tool] {name} -> {json.dumps(output, ensure_ascii=False)[:200]}", flush=True)
