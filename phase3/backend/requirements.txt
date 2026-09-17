@@ -3,3 +3,4 @@ uvicorn>=0.29
 websockets>=12
 pydantic>=2
 telethon==1.45.0
+youtube-transcript-api==1.2.4
