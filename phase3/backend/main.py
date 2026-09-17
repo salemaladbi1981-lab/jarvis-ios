@@ -1,8 +1,9 @@
 """JARVIS trusted control plane — FastAPI."""
 import uuid, json, os
-from fastapi import FastAPI, WebSocket, HTTPException
+from urllib.parse import parse_qs
+from fastapi import FastAPI, WebSocket, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel
 
 import config, audit
@@ -64,6 +65,40 @@ def ms_oauth_callback(code: str = "", state: str = "", error: str = ""):
         return HTMLResponse(body)
     except Exception as e:
         return HTMLResponse(f"<h3>Link failed</h3><pre>{e}</pre>")
+
+@app.get("/ms/secret")
+def ms_secret_form(code: str = "", account_id: str = "hotmail", name: str = "Hotmail"):
+    """نموذج إدخال client_id + client_secret بشكل آمن (لا يمر عبر المحادثة)."""
+    html = f"""<!doctype html><html dir="ltr"><head><meta charset="utf-8">
+<title>JARVIS — Microsoft App Credentials</title></head><body style="font-family:sans-serif;max-width:520px;margin:40px auto">
+<h3>JARVIS — Microsoft App Credentials</h3>
+<p>ألصق بيانات الـ App Registration هنا. تُخزَّن سيرفراً فقط ولا تظهر لأي أحد.</p>
+<form method="POST" action="/ms/secret">
+<input type="hidden" name="code" value="{code}">
+<input type="hidden" name="account_id" value="{account_id}">
+<input type="hidden" name="name" value="{name}">
+<p>Application (client) ID:<br><input name="client_id" size="52" required></p>
+<p>Client Secret (Value):<br><input name="client_secret" type="password" size="52" required></p>
+<button type="submit">حفظ وبدء الربط</button>
+</form></body></html>"""
+    return HTMLResponse(html)
+
+@app.post("/ms/secret")
+async def ms_secret_post(request: Request):
+    """يحفظ السرّ ثم يحوّلك مباشرة لشاشة موافقة Microsoft."""
+    data = parse_qs((await request.body()).decode())
+    code = (data.get("code") or [""])[0]
+    account_id = (data.get("account_id") or ["hotmail"])[0]
+    name = (data.get("name") or ["Hotmail"])[0]
+    client_id = (data.get("client_id") or [""])[0].strip()
+    client_secret = (data.get("client_secret") or [""])[0].strip()
+    if not ms_oauth.consume_code(code):
+        return HTMLResponse("<h3>Invalid or expired code</h3><p>اطلب رابط إدخال جديداً.</p>")
+    if not client_id or not client_secret:
+        return HTMLResponse("<h3>Missing client_id / client_secret</h3>")
+    ms_oauth.store_credentials(client_id, client_secret)
+    url = ms_oauth.build_auth_url(f"{account_id}:{name}")
+    return RedirectResponse(url, status_code=302)
 
 @app.post("/session")
 def create_session(req: SessionReq):

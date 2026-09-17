@@ -6,7 +6,7 @@
 يتطلب app registration (client_id + client_secret + redirect_uri) — تُقرأ من env:
   MS_CLIENT_ID, MS_CLIENT_SECRET, MS_TENANT (default: consumers), MS_REDIRECT_URI
 """
-import json, os, time, urllib.request, urllib.parse
+import json, os, time, secrets, urllib.request, urllib.parse
 
 MS_TENANT = os.environ.get("MS_TENANT", "consumers")
 MS_REDIRECT_URI = os.environ.get("MS_REDIRECT_URI", "https://jarvis-api.qeyas.app/ms/oauth/callback")
@@ -120,3 +120,34 @@ def _add_to_registry(account_id, display_name, email, token_path):
     })
     with open(REGISTRY_PATH, "w", encoding="utf-8") as f:
         json.dump(reg, f, indent=2, ensure_ascii=False)
+
+
+# --- إدخال سرّ آمن (نموذج ويب بنافذة كود واحدة) ---
+INPUT_CODE_PATH = "/opt/data/ms_input_code.json"
+
+def generate_input_code(ttl=1800):
+    """يولّد كود دخول لمرة واحدة (30 دقيقة) لفتح نموذج إدخال السرّ."""
+    code = secrets.token_urlsafe(24)
+    with open(INPUT_CODE_PATH, "w", encoding="utf-8") as f:
+        json.dump({"code": code, "expires_at": time.time() + ttl}, f)
+    os.chmod(INPUT_CODE_PATH, 0o600)
+    return code
+
+def consume_code(code):
+    """يتحقق من الكود ويُبطله فور الاستخدام (مرة واحدة فقط)."""
+    if not os.path.exists(INPUT_CODE_PATH):
+        return False
+    d = json.load(open(INPUT_CODE_PATH))
+    if not code or d.get("code") != code:
+        return False
+    if time.time() > d.get("expires_at", 0):
+        return False
+    json.dump({"code": "", "expires_at": 0}, open(INPUT_CODE_PATH, "w"))
+    return True
+
+def store_credentials(client_id, client_secret, tenant="consumers"):
+    """يخزّن client_id + client_secret سيرفراً (chmod 600) — لا يظهر لأحد."""
+    p = os.environ.get("MS_CLIENT_SECRET_PATH", "/opt/data/ms_client_secret.json")
+    with open(p, "w", encoding="utf-8") as f:
+        json.dump({"client_id": client_id, "client_secret": client_secret, "tenant": tenant}, f, indent=2)
+    os.chmod(p, 0o600)
