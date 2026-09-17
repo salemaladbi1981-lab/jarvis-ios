@@ -12,6 +12,7 @@ from tools import Tool, ToolGateway
 from orchestrator import Orchestrator
 import realtime
 import ms_oauth
+import telegram_auth
 
 app = FastAPI(title="JARVIS Control Plane")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -99,6 +100,63 @@ async def ms_secret_post(request: Request):
     ms_oauth.store_credentials(client_id, client_secret)
     url = ms_oauth.build_auth_url(f"{account_id}:{name}")
     return RedirectResponse(url, status_code=302)
+
+@app.get("/tg/setup")
+def tg_setup_form(code: str = ""):
+    """نموذج إدخال API ID/Hash + رقم الهاتف لربط حساب تيليقرام الشخصي."""
+    html = f"""<!doctype html><html dir="ltr"><head><meta charset="utf-8"><title>JARVIS — Telegram Setup</title></head>
+<body style="font-family:sans-serif;max-width:520px;margin:40px auto">
+<h3>JARVIS — Telegram Personal Account</h3>
+<p>بيانات من <b>my.telegram.org</b> → API development tools.</p>
+<form method="POST" action="/tg/setup">
+<input type="hidden" name="code" value="{code}">
+<p>API ID:<br><input name="api_id" size="52" required></p>
+<p>API Hash:<br><input name="api_hash" size="52" required></p>
+<p>رقم الهاتف (بصيغة دولية +):<br><input name="phone" size="52" placeholder="+974..." required></p>
+<button type="submit">إرسال كود التحقق</button>
+</form></body></html>"""
+    return HTMLResponse(html)
+
+@app.post("/tg/setup")
+async def tg_setup_post(request: Request):
+    data = parse_qs((await request.body()).decode())
+    code = (data.get("code") or [""])[0]
+    api_id = (data.get("api_id") or [""])[0].strip()
+    api_hash = (data.get("api_hash") or [""])[0].strip()
+    phone = (data.get("phone") or [""])[0].strip()
+    if not telegram_auth.consume_setup_code(code):
+        return HTMLResponse("<h3>Invalid or expired code</h3>")
+    if not api_id or not api_hash or not phone:
+        return HTMLResponse("<h3>Missing fields</h3>")
+    telegram_auth.store_credentials(api_id, api_hash)
+    try:
+        await telegram_auth.start_login_async(phone)
+    except Exception as e:
+        return HTMLResponse(f"<h3>Failed to send OTP</h3><pre>{e}</pre>")
+    html = f"""<!doctype html><html dir="ltr"><head><meta charset="utf-8"><title>JARVIS — OTP</title></head>
+<body style="font-family:sans-serif;max-width:520px;margin:40px auto">
+<h3>كود التحقق أُرسل إلى هاتفك</h3>
+<form method="POST" action="/tg/verify">
+<input type="hidden" name="phone" value="{phone}">
+<p>أدخل الكود:<br><input name="otp" size="52" required></p>
+<p>كلمة مرور التحقق بخطوتين (2FA) إن كانت مفعّلة:<br><input name="password" type="password" size="52"></p>
+<button type="submit">تسجيل الدخول</button>
+</form></body></html>"""
+    return HTMLResponse(html)
+
+@app.post("/tg/verify")
+async def tg_verify_post(request: Request):
+    data = parse_qs((await request.body()).decode())
+    phone = (data.get("phone") or [""])[0].strip()
+    otp = (data.get("otp") or [""])[0].strip()
+    password = (data.get("password") or [""])[0].strip() or None
+    if not phone or not otp:
+        return HTMLResponse("<h3>Missing phone/otp</h3>")
+    try:
+        me = await telegram_auth.complete_login_async(phone, otp, password=password)
+        return HTMLResponse("<h3>✓ Connected</h3><pre>" + json.dumps(me, indent=2, ensure_ascii=False) + "</pre>")
+    except Exception as e:
+        return HTMLResponse(f"<h3>Sign in failed</h3><pre>{e}</pre>")
 
 @app.post("/session")
 def create_session(req: SessionReq):
