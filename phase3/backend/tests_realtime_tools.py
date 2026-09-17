@@ -51,5 +51,24 @@ check("realtime.py intercepts function_call_arguments.done", '"response.function
 check("realtime.py feeds function_call_output", '"function_call_output"' in rt and '"response.create"' in rt)
 check("realtime.py function-calling (no cancel-then-answer workaround)", '"function_call_output"' in rt and '"type": "response.cancel"' not in rt)
 
+# H) Gmail failure → لا success (error صريح)
+import gmail_tools
+_orig_send = gmail_tools.send
+def _boom(to, subj, body):
+    raise Exception("gmail_http_error")
+gmail_tools.send = _boom
+p5 = {"draft": {"to": "x@y.com", "subject": "Re: hi", "body": "ok"}}
+r = execute_email_tool("email_send", {"confirmed": True}, p5)
+check("Gmail failure → ok False (no success claim)", r.get("ok") is False)
+check("Gmail failure → pending NOT cleared (لم يُرسل)", "draft" in p5)
+
+# I) Gmail success → success فقط بعد message id حقيقي + مسح pending
+gmail_tools.send = lambda to, subj, body: {"id": "sent_123", "threadId": "t1"}
+p6 = {"draft": {"to": "x@y.com", "subject": "Re: hi", "body": "ok"}}
+r = execute_email_tool("email_send", {"confirmed": True}, p6)
+check("Gmail success → sent_message_id حقيقي", r.get("ok") is True and r.get("sent_message_id") == "sent_123")
+check("Gmail success → pending cleared (no double-send)", "draft" not in p6)
+gmail_tools.send = _orig_send
+
 print(f"\n== RESULT: {PASS} PASS / {FAIL} FAIL ==")
 sys.exit(0 if FAIL == 0 else 1)
