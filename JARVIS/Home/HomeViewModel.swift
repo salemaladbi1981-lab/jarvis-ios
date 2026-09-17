@@ -409,6 +409,9 @@ final class HomeViewModel: ObservableObject {
         for tool in chain {
             let intent = tool.detectIntent(from: t)
             guard intent != .none else { continue }
+            // Grounded Tool Contract: إلغاء أي ردّ حر جارٍ من النموذج،
+            // لتكون نتيجة الأداة هي الجواب الوحيد (لا اختراع محتوى بريد).
+            voiceSession.interrupt()
             switch tool.confirmation(for: intent) {
             case .none:
                 let result = await tool.execute(intent)
