@@ -223,6 +223,11 @@ final class HomeViewModel: ObservableObject {
     /// V1.1: إضافة إنشاء تذكير (بتأكيد) + أسئلة شخصية تعتمد على الذاكرة.
     func routeVoiceTranscript(_ text: String) async {
         let t = text.lowercased()
+        // OBSERVATION MODE ONLY: log the router's decision without acting on it.
+        let routedAgentID = AgentRouter.route(text)
+        #if DEBUG
+        print("[JARVIS-ROUTER] agent=\(routedAgentID) request=\(text)")
+        #endif
         // أسئلة البريد يعالجها الـ backend LLM عبر function calling — لا نعترضها محلياً
         // (يمنع «وش أهم إيميلاتي اليوم؟» من الوصول لمسار التقويم بسبب كلمة «اليوم»)
         if Self.isEmailQuestion(t) { return }
