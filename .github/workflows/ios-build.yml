@@ -14,7 +14,7 @@ jobs:
         run: |
           python3 phase3/backend/tests_realtime_tools.py
           python3 phase3/backend/tests_multi_email.py
-          for f in Tools/*.py; do python3 "$f" || exit 1; done
+          for f in Tools/*_test.py; do python3 "$f" || exit 1; done
 
   ios:
     runs-on: macos-14
