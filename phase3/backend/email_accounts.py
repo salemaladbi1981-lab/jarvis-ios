@@ -28,10 +28,13 @@ class EmailAccount:
 
 
 def make_provider(account):
-    """يحوّل حساباً إلى EmailProvider بناءً على provider. إضافة Outlook = فرع هنا."""
-    from email_provider import GmailProvider
-    if account.provider == "gmail":
+    """يحوّل حساباً إلى EmailProvider بناءً على provider (gmail | microsoft/outlook)."""
+    from email_provider import GmailProvider, MicrosoftProvider
+    p = account.provider.lower()
+    if p == "gmail":
         return GmailProvider(account.token_path)
+    if p in ("microsoft", "outlook", "hotmail"):
+        return MicrosoftProvider(account.token_path)
     raise ValueError(f"unsupported provider: {account.provider}")
 
 

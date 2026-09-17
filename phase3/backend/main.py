@@ -2,13 +2,15 @@
 import uuid, json, os
 from fastapi import FastAPI, WebSocket, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 import config, audit
 from approval import ApprovalEvaluator, ApprovalStore
-from tools import ToolGateway
+from tools import Tool, ToolGateway
 from orchestrator import Orchestrator
 import realtime
+import ms_oauth
 
 app = FastAPI(title="JARVIS Control Plane")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -45,6 +47,23 @@ class ApproveReq(BaseModel):
 @app.get("/health")
 def health():
     return {"ok": True, "provider": config.REALTIME_PROVIDER}
+
+@app.get("/ms/oauth/callback")
+def ms_oauth_callback(code: str = "", state: str = "", error: str = ""):
+    """Redirect تلقائي بعد موافقة المالك — يربط حساب Microsoft ويحقق منه."""
+    if error:
+        return HTMLResponse(f"<h3>Authorization cancelled</h3><p>{error}</p>")
+    if not code:
+        return HTMLResponse("<h3>Missing code</h3>")
+    try:
+        parts = state.split(":", 1)
+        account_id = parts[0] if parts and parts[0] else "microsoft"
+        display_name = parts[1] if len(parts) > 1 else account_id
+        result = ms_oauth.complete(account_id, display_name, code)
+        body = "<h3>✓ Linked</h3><pre>" + json.dumps(result, indent=2, ensure_ascii=False) + "</pre>"
+        return HTMLResponse(body)
+    except Exception as e:
+        return HTMLResponse(f"<h3>Link failed</h3><pre>{e}</pre>")
 
 @app.post("/session")
 def create_session(req: SessionReq):

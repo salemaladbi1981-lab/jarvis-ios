@@ -4,6 +4,7 @@
 إضافة provider جديد = subclass جديد هنا + فرع في make_provider (email_accounts.py).
 """
 import gmail_tools
+import ms_graph
 
 
 class EmailProvider:
@@ -24,6 +25,28 @@ class EmailProvider:
 
     def send(self, to, subject, body):
         raise NotImplementedError
+
+
+class MicrosoftProvider(EmailProvider):
+    provider_name = "microsoft"
+
+    def __init__(self, token_path):
+        self.token_path = token_path
+
+    def summary(self, limit=10, q=None):
+        return ms_graph.summary(limit=limit, q=q, token_path=self.token_path)
+
+    def search(self, q, limit=20):
+        return ms_graph.search(q, limit=limit, token_path=self.token_path)
+
+    def read_message(self, mid):
+        return ms_graph.read_message(mid, token_path=self.token_path)
+
+    def message_headers(self, mid):
+        return ms_graph.message_headers(mid, token_path=self.token_path)
+
+    def send(self, to, subject, body):
+        return ms_graph.send(to, subject, body, token_path=self.token_path)
 
 
 class GmailProvider(EmailProvider):
