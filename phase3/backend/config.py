@@ -43,4 +43,5 @@ REALTIME_INSTRUCTIONS = os.environ.get(
     "بعد email_draft_reply اعرض المسودة واطلب تأكيداً صريحاً، ولا تستدع email_send أبداً إلا بعد أن يقول "
     "المالك «أرسل». قبل الإرسال تأكد من الحساب الذي سترسل منه؛ إذا كان الحساب المقصود غير واضح اسأل المالك "
     "أي حساب يقصد ولا ترسل. لا تعلن نجاح الإرسال إلا بعد أن ترجع email_send ناجحة ومعها sent message ID حقيقي."
+    "لديك أيضاً أدوات تيليقرام (telegram_summary, telegram_search, telegram_read, telegram_draft_reply, telegram_send) — استدعها للإجابة عن أسئلة رسائل تيليقرام الشخصية ولا تخترع أي رسالة من معرفتك. كل رسالة تحمل chat_id + message_id معاً، ولا تعتمد على message_id وحده. بعد telegram_draft_reply اعرض المسودة واطلب تأكيداً صريحاً، ولا تستدع telegram_send إلا بعد أن يقول المالك «أرسل». لا تعلن نجاح إرسال تيليقرام إلا بعد أن ترجع telegram_send ناجحة ومعها sent message ID حقيقي."
 )

@@ -13,6 +13,7 @@ tool result returns (function_call_output + response.create).
 import asyncio, json, os
 import config
 from realtime_tools import build_email_tools, execute_email_tool
+from telegram_tools import TELEGRAM_TOOLS, execute_telegram_tool
 
 OPENAI_REALTIME_URL = "wss://api.openai.com/v1/realtime"
 
@@ -30,8 +31,9 @@ async def openai_realtime_proxy(client_ws, session_config: dict):
     url = f"{OPENAI_REALTIME_URL}?model={config.REALTIME_MODEL}"
     headers = {"Authorization": f"Bearer {config.OPENAI_API_KEY}"}
 
-    # pending draft — per-session confirmation gate
-    pending = {}
+    # pending drafts — per-session confirmation gate (email + telegram منفصلان)
+    pending_email = {}
+    pending_tg = {}
 
     async with websockets.connect(url, additional_headers=headers) as upstream:
         session = dict(session_config) if session_config else {}
@@ -42,7 +44,7 @@ async def openai_realtime_proxy(client_ws, session_config: dict):
         inp["turn_detection"] = {"type": "semantic_vad", "interrupt_response": True, "create_response": True}
         session.setdefault("instructions", config.REALTIME_INSTRUCTIONS)
         # email tools + auto tool choice → the model can call them mid-turn
-        session["tools"] = build_email_tools()
+        session["tools"] = build_email_tools() + TELEGRAM_TOOLS
         session["tool_choice"] = "auto"
         await upstream.send(json.dumps({"type": "session.update", "session": session}))
 
@@ -77,7 +79,10 @@ async def openai_realtime_proxy(client_ws, session_config: dict):
                         except Exception:
                             args = {}
                         print(f"[TRACE tool] call {name} args={json.dumps(args)[:200]}", flush=True)
-                        output = await asyncio.to_thread(execute_email_tool, name, args, pending)
+                        if name.startswith("telegram_"):
+                            output = await asyncio.to_thread(execute_telegram_tool, name, args, pending_tg)
+                        else:
+                            output = await asyncio.to_thread(execute_email_tool, name, args, pending_email)
                         print(f"[TRACE tool] {name} -> {json.dumps(output, ensure_ascii=False)[:200]}", flush=True)
                         # relay the function-call event (transparency) then feed the grounded result back
                         await client_ws.send_text(msg)
