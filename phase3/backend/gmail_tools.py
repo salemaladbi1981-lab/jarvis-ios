@@ -1,12 +1,16 @@
-"""Gmail tools — server-side only. Token lives in /opt/data/google_token.json (never in repo)."""
+"""Gmail tools — server-side only. Token lives in /opt/data/google_token.json (never in repo).
+
+Multi-account ready: كل دالة تقبل `token_path` اختيارياً (default: الحساب الأساسي).
+"""
 import json, base64, urllib.request, urllib.parse, os, time, datetime
 from email.mime.text import MIMEText
 
 TOKEN_PATH = os.environ.get("GOOGLE_TOKEN_PATH", "/opt/data/google_token.json")
 
 
-def _token():
-    d = json.load(open(TOKEN_PATH))
+def _token(token_path=None):
+    tp = token_path or TOKEN_PATH
+    d = json.load(open(tp))
     exp = d.get("expiry", 0)
     need_refresh = True
     if isinstance(exp, (int, float)):
@@ -27,12 +31,12 @@ def _token():
         nd = json.loads(urllib.request.urlopen(req, timeout=20).read())
         d["token"] = nd["access_token"]
         d["expiry"] = time.time() + nd.get("expires_in", 3600)
-        json.dump(d, open(TOKEN_PATH, "w"))
+        json.dump(d, open(tp, "w"))
     return d["token"]
 
 
-def _gmail(path, params=None, method="GET", body=None):
-    token = _token()
+def _gmail(path, params=None, method="GET", body=None, token_path=None):
+    token = _token(token_path)
     url = "https://www.googleapis.com/gmail/v1/users/me/" + path
     if params:
         url += "?" + urllib.parse.urlencode(params)
@@ -44,12 +48,12 @@ def _gmail(path, params=None, method="GET", body=None):
         return json.loads(r.read())
 
 
-def summary(limit=10, q=None):
+def summary(limit=10, q=None, token_path=None):
     q = q or "in:inbox newer_than:2d"
-    d = _gmail("messages", {"maxResults": min(limit, 20), "q": q})
+    d = _gmail("messages", {"maxResults": min(limit, 20), "q": q}, token_path=token_path)
     out = []
     for m in d.get("messages", []):
-        meta = _gmail("messages/" + m["id"], {"format": "metadata"})
+        meta = _gmail("messages/" + m["id"], {"format": "metadata"}, token_path=token_path)
         headers = {h["name"].lower(): h["value"] for h in meta.get("payload", {}).get("headers", [])}
         out.append({
             "id": m["id"],
@@ -62,12 +66,12 @@ def summary(limit=10, q=None):
     return out
 
 
-def search(q, limit=20):
-    return summary(limit=limit, q=q)
+def search(q, limit=20, token_path=None):
+    return summary(limit=limit, q=q, token_path=token_path)
 
 
-def read_message(mid):
-    m = _gmail("messages/" + mid, {"format": "full"})
+def read_message(mid, token_path=None):
+    m = _gmail("messages/" + mid, {"format": "full"}, token_path=token_path)
     payload = m.get("payload", {})
     headers = {h["name"].lower(): h["value"] for h in payload.get("headers", [])}
     return {"id": mid, "from": headers.get("from", ""), "subject": headers.get("subject", ""),
@@ -91,8 +95,8 @@ def _extract_body(payload):
     return base64.urlsafe_b64decode(data).decode("utf-8", "replace")
 
 
-def send(to, subject, body):
-    token = _token()
+def send(to, subject, body, token_path=None):
+    token = _token(token_path)
     msg = MIMEText(body, "plain", "utf-8")
     msg["To"] = to
     msg["Subject"] = subject
@@ -105,8 +109,8 @@ def send(to, subject, body):
         return json.loads(r.read())
 
 
-def message_headers(mid):
+def message_headers(mid, token_path=None):
     """خلفيات خفيفة (from/subject) لرسالة — لبناء draft الرد دون جلب الجسم كاملاً."""
-    meta = _gmail("messages/" + mid, {"format": "metadata"})
+    meta = _gmail("messages/" + mid, {"format": "metadata"}, token_path=token_path)
     headers = {h["name"].lower(): h["value"] for h in meta.get("payload", {}).get("headers", [])}
     return {"from": headers.get("from", ""), "subject": headers.get("subject", "")}
