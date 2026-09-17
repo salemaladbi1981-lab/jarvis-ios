@@ -88,5 +88,23 @@ check("realtime.py registers telegram tools", "TELEGRAM_TOOLS" in rt)
 check("realtime.py routes telegram_* calls", 'name.startswith("telegram_")' in rt)
 check("realtime.py separate pending (email + tg)", "pending_tg" in rt and "pending_email" in rt)
 
+# K) _creds يقرأ من الملف (مصدر معتمد) + env fallback
+import telegram_provider, tempfile, json as _json
+_tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".json")
+_tmp.write(_json.dumps({"api_id": "12345", "api_hash": "abc"}).encode())
+_tmp.close()
+_old_path = telegram_provider.TG_CRED_PATH
+_old_id = telegram_provider.TG_API_ID
+_old_hash = telegram_provider.TG_API_HASH
+telegram_provider.TG_CRED_PATH = _tmp.name
+telegram_provider.TG_API_ID = 0
+telegram_provider.TG_API_HASH = ""
+_cid, _chash = telegram_provider._creds()
+check("_creds reads from file (primary)", _cid == 12345 and _chash == "abc")
+os.unlink(_tmp.name)
+telegram_provider.TG_CRED_PATH = _old_path
+telegram_provider.TG_API_ID = _old_id
+telegram_provider.TG_API_HASH = _old_hash
+
 print(f"\n== RESULT: {PASS} PASS / {FAIL} FAIL ==")
 sys.exit(0 if FAIL == 0 else 1)

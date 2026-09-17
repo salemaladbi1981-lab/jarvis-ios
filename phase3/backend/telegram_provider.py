@@ -3,11 +3,24 @@
 يقرأ/يرد على حساب تيليقرام الشخصي للمالك. الجلسة في /opt/data/telegram_session
 (خارج الـ repo). لا token ولا secrets في repo أو Memory.
 """
-import os, asyncio
+import os, asyncio, json
 
 TG_API_ID = int(os.environ.get("TG_API_ID", "0"))
 TG_API_HASH = os.environ.get("TG_API_HASH", "")
 TG_SESSION_PATH = os.environ.get("TG_SESSION_PATH", "/opt/data/telegram_session")
+TG_CRED_PATH = os.environ.get("TG_CRED_PATH", "/opt/data/telegram_credentials.json")
+
+
+def _creds():
+    """يقرأ API ID/Hash من الملف كمصدر معتمد، وenv fallback فقط إذا لزم."""
+    cid, chash = 0, ""
+    if os.path.exists(TG_CRED_PATH):
+        d = json.load(open(TG_CRED_PATH))
+        cid = int(d.get("api_id", 0) or 0)
+        chash = d.get("api_hash", "")
+    if not cid or not chash:
+        cid, chash = TG_API_ID, TG_API_HASH
+    return cid, chash
 
 
 def _run(coro):
@@ -22,7 +35,8 @@ class TelegramProvider:
 
     def _client(self):
         from telethon import TelegramClient
-        return TelegramClient(self.session_path, TG_API_ID, TG_API_HASH)
+        cid, chash = _creds()
+        return TelegramClient(self.session_path, cid, chash)
 
     # --- القراءة ---
     def summary(self, limit=10):
