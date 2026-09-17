@@ -16,6 +16,7 @@ from realtime_tools import build_email_tools, execute_email_tool
 from telegram_tools import TELEGRAM_TOOLS, execute_telegram_tool
 from youtube_tools import YOUTUBE_TOOLS, execute_youtube_tool
 from instagram_tools import INSTAGRAM_TOOLS, execute_instagram_tool
+from maps_tools import MAPS_TOOLS, execute_maps_tool
 
 OPENAI_REALTIME_URL = "wss://api.openai.com/v1/realtime"
 
@@ -46,7 +47,7 @@ async def openai_realtime_proxy(client_ws, session_config: dict):
         inp["turn_detection"] = {"type": "semantic_vad", "interrupt_response": True, "create_response": True}
         session.setdefault("instructions", config.REALTIME_INSTRUCTIONS)
         # email tools + auto tool choice → the model can call them mid-turn
-        session["tools"] = build_email_tools() + TELEGRAM_TOOLS + YOUTUBE_TOOLS + INSTAGRAM_TOOLS
+        session["tools"] = build_email_tools() + TELEGRAM_TOOLS + YOUTUBE_TOOLS + INSTAGRAM_TOOLS + MAPS_TOOLS
         session["tool_choice"] = "auto"
         await upstream.send(json.dumps({"type": "session.update", "session": session}))
 
@@ -87,6 +88,8 @@ async def openai_realtime_proxy(client_ws, session_config: dict):
                             output = await asyncio.to_thread(execute_youtube_tool, name, args)
                         elif name.startswith("instagram_"):
                             output = await asyncio.to_thread(execute_instagram_tool, name, args)
+                        elif name.startswith("maps_"):
+                            output = await asyncio.to_thread(execute_maps_tool, name, args)
                         else:
                             output = await asyncio.to_thread(execute_email_tool, name, args, pending_email)
                         print(f"[TRACE tool] {name} -> {json.dumps(output, ensure_ascii=False)[:200]}", flush=True)
@@ -99,6 +102,12 @@ async def openai_realtime_proxy(client_ws, session_config: dict):
                                        "video_id": output.get("video_id", "")}
                             await client_ws.send_text(json.dumps(handoff, ensure_ascii=False))
                             print(f"[TRACE handoff] -> {output.get('play_url', '')}", flush=True)
+                        if name == "maps_navigate" and output.get("ok"):
+                            nav = {"type": "navigation_handoff",
+                                   "maps_url": output.get("maps_url", ""),
+                                   "destination": output.get("destination", "")}
+                            await client_ws.send_text(json.dumps(nav, ensure_ascii=False))
+                            print(f"[TRACE nav] -> {output.get('maps_url', '')}", flush=True)
                         # relay the function-call event (transparency) then feed the grounded result back
                         await client_ws.send_text(msg)
                         await upstream.send(json.dumps({

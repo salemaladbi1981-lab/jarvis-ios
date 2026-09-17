@@ -17,6 +17,17 @@ struct JarvisShortcuts: AppShortcutsProvider {
             shortTitle: "Start Jarvis",
             systemImageName: "mic.fill"
         )
+        AppShortcut(
+            intent: JarvisNavigateIntent(),
+            phrases: [
+                "Navigate to \(\.$destination)",
+                "Directions to \(\.$destination)",
+                "وصّلني إلى \(\.$destination)",
+                "خذني إلى \(\.$destination)",
+            ],
+            shortTitle: "Navigate",
+            systemImageName: "location.fill"
+        )
     }
 }
 #endif

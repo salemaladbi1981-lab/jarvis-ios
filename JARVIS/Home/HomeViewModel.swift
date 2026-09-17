@@ -113,6 +113,15 @@ final class HomeViewModel: ObservableObject {
                 #endif
             }
         }
+        // Navigation handoff: فتح تطبيق الخرائط (Google Maps) على الوجهة (من أداة maps_navigate).
+        voiceSession.onNavigationHandoff = { [weak self] url in
+            Task { @MainActor in
+                guard let u = URL(string: url) else { return }
+                #if canImport(UIKit)
+                UIApplication.shared.open(u)
+                #endif
+            }
+        }
     }
 
     func load() async {

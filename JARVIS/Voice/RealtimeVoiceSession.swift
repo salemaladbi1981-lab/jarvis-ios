@@ -16,6 +16,8 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     var onNeedSpokenResponse: (() -> Void)?
     /// Playback handoff: يفتح فيديو في تطبيق YouTube الرسمي (url, title) من السيرفر.
     var onPlaybackHandoff: ((String, String) -> Void)?
+    /// Navigation handoff: يفتح تطبيق الخرائط (Google Maps) على وجهة (url).
+    var onNavigationHandoff: ((String) -> Void)?
 
     private var ws: URLSessionWebSocketTask?
     private var session = URLSession(configuration: .default)
@@ -312,6 +314,15 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                 }
                 trace("playback_handoff -> \(url)")
                 onPlaybackHandoff?(url, title)
+            case "navigation_handoff":
+                // فتح تطبيق الخرائط (Google Maps) على الوجهة (من أداة maps_navigate).
+                let navUrl = SessionEventParser.field(text, "maps_url") ?? ""
+                guard !navUrl.isEmpty else {
+                    trace("navigation_handoff بلا maps_url — تجاهل")
+                    break
+                }
+                trace("navigation_handoff -> \(navUrl)")
+                onNavigationHandoff?(navUrl)
             case "error":
                 // تسجيل الـ error code/message كاملاً (كان مخفياً).
                 trace("recv error payload: \(text)")
