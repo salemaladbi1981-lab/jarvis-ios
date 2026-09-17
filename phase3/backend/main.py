@@ -14,6 +14,7 @@ import realtime
 import ms_oauth
 import telegram_auth
 import youtube_provider
+import yt_oauth
 
 app = FastAPI(title="JARVIS Control Plane")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -184,6 +185,47 @@ async def yt_key_post(request: Request):
         return HTMLResponse("<h3>Missing API key</h3>")
     youtube_provider.store_api_key(api_key)
     return HTMLResponse("<h3>✓ Stored</h3><p>YouTube search + details جاهزان.</p>")
+
+@app.get("/yt/oauth")
+def yt_oauth_client_form(code: str = ""):
+    """نموذج إدخال OAuth Web Client (client_id + secret) — مرة واحدة."""
+    html = f"""<!doctype html><html dir="ltr"><head><meta charset="utf-8"><title>JARVIS — YouTube OAuth Client</title></head>
+<body style="font-family:sans-serif;max-width:520px;margin:40px auto">
+<h3>JARVIS — YouTube OAuth Web Client</h3>
+<p>ألصق بيانات الـ OAuth Client (نوع Web application). تُخزَّن سيرفراً فقط.</p>
+<form method="POST" action="/yt/oauth">
+<input type="hidden" name="code" value="{code}">
+<p>Client ID:<br><input name="client_id" size="52" required></p>
+<p>Client Secret:<br><input name="client_secret" type="password" size="52" required></p>
+<button type="submit">حفظ</button>
+</form></body></html>"""
+    return HTMLResponse(html)
+
+@app.post("/yt/oauth")
+async def yt_oauth_client_post(request: Request):
+    data = parse_qs((await request.body()).decode())
+    code = (data.get("code") or [""])[0]
+    client_id = (data.get("client_id") or [""])[0].strip()
+    client_secret = (data.get("client_secret") or [""])[0].strip()
+    if not yt_oauth.consume_client_code(code):
+        return HTMLResponse("<h3>Invalid or expired code</h3>")
+    if not client_id or not client_secret:
+        return HTMLResponse("<h3>Missing client_id/secret</h3>")
+    yt_oauth.store_web_client(client_id, client_secret)
+    return HTMLResponse("<h3>✓ Stored</h3><p>الآن اطلب رابط التفويض.</p>")
+
+@app.get("/yt/oauth/callback")
+def yt_oauth_callback(code: str = "", state: str = "", error: str = ""):
+    """Redirect تلقائي بعد موافقة Google — يربط حساب YouTube."""
+    if error:
+        return HTMLResponse(f"<h3>Authorization cancelled</h3><p>{error}</p>")
+    if not code:
+        return HTMLResponse("<h3>Missing code</h3>")
+    try:
+        result = yt_oauth.complete(code)
+        return HTMLResponse("<h3>✓ Connected</h3><pre>" + json.dumps(result, indent=2, ensure_ascii=False) + "</pre>")
+    except Exception as e:
+        return HTMLResponse(f"<h3>Link failed</h3><pre>{e}</pre>")
 
 @app.post("/session")
 def create_session(req: SessionReq):
