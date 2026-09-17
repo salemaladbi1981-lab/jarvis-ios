@@ -16,6 +16,7 @@ jobs:
           python3 phase3/backend/tests_multi_email.py
           python3 phase3/backend/tests_microsoft.py
           python3 phase3/backend/tests_telegram.py
+          python3 phase3/backend/tests_youtube.py
           for f in Tools/*_test.py; do python3 "$f" || exit 1; done
 
   ios:
