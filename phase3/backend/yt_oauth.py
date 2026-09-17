@@ -127,3 +127,23 @@ def store_web_client(client_id, client_secret):
     with open(YT_WEB_CLIENT_PATH, "w", encoding="utf-8") as f:
         json.dump({"client_id": client_id.strip(), "client_secret": client_secret.strip()}, f, indent=2)
     os.chmod(YT_WEB_CLIENT_PATH, 0o600)
+
+
+# --- idempotency: معالجة الـ code مرة واحدة فقط (منع re-exchange عند refresh) ---
+PROCESSED_CODES_PATH = "/opt/data/yt_processed_codes.json"
+
+def is_processed(code):
+    if not os.path.exists(PROCESSED_CODES_PATH):
+        return False
+    d = json.load(open(PROCESSED_CODES_PATH))
+    return code in d.get("codes", [])
+
+def mark_processed(code):
+    d = {"codes": []}
+    if os.path.exists(PROCESSED_CODES_PATH):
+        d = json.load(open(PROCESSED_CODES_PATH))
+    codes = list(set(d.get("codes", [])))
+    codes.append(code)
+    d["codes"] = codes[-100:]
+    with open(PROCESSED_CODES_PATH, "w", encoding="utf-8") as f:
+        json.dump(d, f)

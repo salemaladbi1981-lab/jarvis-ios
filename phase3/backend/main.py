@@ -224,16 +224,25 @@ async def yt_oauth_client_post(request: Request):
 
 @app.get("/yt/oauth/callback")
 def yt_oauth_callback(code: str = "", state: str = "", error: str = ""):
-    """Redirect تلقائي بعد موافقة Google — يربط حساب YouTube."""
+    """Redirect تلقائي بعد موافقة Google — يعالج الـ code مرة واحدة فقط (idempotent)."""
     if error:
         return HTMLResponse(f"<h3>Authorization cancelled</h3><p>{error}</p>")
     if not code:
         return HTMLResponse("<h3>Missing code</h3>")
+    if yt_oauth.is_processed(code):
+        return HTMLResponse("<h3>Already processed</h3><p>هذا الكود عولج مسبقاً — لا إعادة exchange.</p>")
     try:
         result = yt_oauth.complete(code)
-        return HTMLResponse("<h3>✓ Connected</h3><pre>" + json.dumps(result, indent=2, ensure_ascii=False) + "</pre>")
+        yt_oauth.mark_processed(code)
+        return RedirectResponse(f"/yt/oauth/done?email={result['email']}", status_code=302)
     except Exception as e:
+        yt_oauth.mark_processed(code)
         return HTMLResponse(f"<h3>Link failed</h3><pre>{e}</pre>")
+
+@app.get("/yt/oauth/done")
+def yt_oauth_done(email: str = ""):
+    """صفحة نجاح نظيفة (بدون code في الـ URL — آمنة للـ refresh)."""
+    return HTMLResponse(f"<h3>✓ Connected</h3><p>{email}</p>")
 
 @app.post("/session")
 def create_session(req: SessionReq):
