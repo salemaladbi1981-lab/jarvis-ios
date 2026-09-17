@@ -26,9 +26,9 @@ class FakeYT:
         return None
 
 
-# A) الأدوات الثلاث
+# A) الأدوات
 names = [t["name"] for t in YOUTUBE_TOOLS]
-for n in ["youtube_search", "youtube_transcript", "youtube_details"]:
+for n in ["youtube_search", "youtube_transcript", "youtube_details", "youtube_play"]:
     check(f"tool defined: {n}", n in names)
 
 # B) search يتطلب query + transcript يتطلب video_id
@@ -63,10 +63,22 @@ check("details missing → video_not_found", r.get("ok") is False and r.get("err
 r = execute_youtube_tool("not_a_tool", {}, prov)
 check("unknown tool → unknown_tool", r.get("ok") is False and r.get("error") == "unknown_tool")
 
+# H2) youtube_play → play_url (grounded video_id + play_url صحيح)
+play_tool = [t for t in YOUTUBE_TOOLS if t["name"] == "youtube_play"][0]
+check("youtube_play requires video_id", "video_id" in play_tool["parameters"]["required"])
+r = execute_youtube_tool("youtube_play", {"video_id": "abc123"}, prov)
+check("play returns ok + play_url", r.get("ok") and r["play_url"] == "https://www.youtube.com/watch?v=abc123")
+check("play returns title", r.get("title") == "Test")
+
+# H3) youtube_play بلا video_id → video_id_required
+r = execute_youtube_tool("youtube_play", {}, prov)
+check("play missing video_id → video_id_required", r.get("ok") is False and r.get("error") == "video_id_required")
+
 # I) realtime.py wiring
 rt = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "realtime.py"), encoding="utf-8").read()
 check("realtime.py registers youtube tools", "YOUTUBE_TOOLS" in rt)
 check("realtime.py routes youtube_* calls", 'name.startswith("youtube_")' in rt)
+check("realtime.py sends playback_handoff event", 'playback_handoff' in rt and 'youtube_play' in rt)
 
 print(f"\n== RESULT: {PASS} PASS / {FAIL} FAIL ==")
 sys.exit(0 if FAIL == 0 else 1)

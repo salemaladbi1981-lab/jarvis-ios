@@ -87,6 +87,15 @@ async def openai_realtime_proxy(client_ws, session_config: dict):
                         else:
                             output = await asyncio.to_thread(execute_email_tool, name, args, pending_email)
                         print(f"[TRACE tool] {name} -> {json.dumps(output, ensure_ascii=False)[:200]}", flush=True)
+                        # Playback handoff: يفتح الفيديو في تطبيق YouTube الرسمي على الجهاز
+                        # (event مخصص من السيرفر إلى العميل، قبل إرجاع النتيجة إلى النموذج).
+                        if name == "youtube_play" and output.get("ok"):
+                            handoff = {"type": "playback_handoff",
+                                       "play_url": output.get("play_url", ""),
+                                       "title": output.get("title", ""),
+                                       "video_id": output.get("video_id", "")}
+                            await client_ws.send_text(json.dumps(handoff, ensure_ascii=False))
+                            print(f"[TRACE handoff] -> {output.get('play_url', '')}", flush=True)
                         # relay the function-call event (transparency) then feed the grounded result back
                         await client_ws.send_text(msg)
                         await upstream.send(json.dumps({

@@ -14,6 +14,8 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     var onOutputLevel: ((Double) -> Void)?
     /// Tool-result text to speak back (calendar/reminders result).
     var onNeedSpokenResponse: (() -> Void)?
+    /// Playback handoff: يفتح فيديو في تطبيق YouTube الرسمي (url, title) من السيرفر.
+    var onPlaybackHandoff: ((String, String) -> Void)?
 
     private var ws: URLSessionWebSocketTask?
     private var session = URLSession(configuration: .default)
@@ -300,6 +302,16 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                 }
             case "response.function_call_arguments.done":
                 eventPublisher.send(.toolExecuting)
+            case "playback_handoff":
+                // فتح الفيديو في تطبيق YouTube الرسمي (من أداة youtube_play).
+                let url = SessionEventParser.field(text, "play_url") ?? ""
+                let title = SessionEventParser.field(text, "title") ?? ""
+                guard !url.isEmpty else {
+                    trace("playback_handoff بلا play_url — تجاهل")
+                    break
+                }
+                trace("playback_handoff -> \(url)")
+                onPlaybackHandoff?(url, title)
             case "error":
                 // تسجيل الـ error code/message كاملاً (كان مخفياً).
                 trace("recv error payload: \(text)")

@@ -1,5 +1,8 @@
 import SwiftUI
 import Combine
+#if canImport(UIKit)
+import UIKit
+#endif
 
 /// ViewModel bridging views → provider abstractions + registry policy.
 /// Views never construct domain mock data directly.
@@ -100,6 +103,15 @@ final class HomeViewModel: ObservableObject {
         }
         voiceSession.onOutputLevel = { [weak self] level in
             Task { @MainActor in self?.levels.setOutputLevel(level) }
+        }
+        // Playback handoff: فتح الفيديو في تطبيق YouTube الرسمي (من أداة youtube_play).
+        voiceSession.onPlaybackHandoff = { [weak self] url, title in
+            Task { @MainActor in
+                guard let u = URL(string: url) else { return }
+                #if canImport(UIKit)
+                UIApplication.shared.open(u)
+                #endif
+            }
         }
     }
 

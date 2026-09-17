@@ -31,6 +31,15 @@ YOUTUBE_TOOLS = [
             "video_id": {"type": "string"},
         }, "required": ["video_id"]},
     },
+
+    {
+        "type": "function",
+        "name": "youtube_play",
+        "description": "Playback handoff: open a video in the official YouTube app on the user's iPhone. ALWAYS call youtube_search first to find a real video_id (e.g. the user says 'play the latest video from channel X'), then call youtube_play with that video_id. Returns a play_url the device opens. Do NOT call this without a real video_id from a search result.",
+        "parameters": {"type": "object", "properties": {
+            "video_id": {"type": "string", "description": "the 11-char video id from youtube_search results"},
+        }, "required": ["video_id"]},
+    },
     {
         "type": "function",
         "name": "youtube_my_channel",
@@ -75,6 +84,20 @@ def execute_youtube_tool(name, args, provider=None):
             if not d:
                 return {"ok": False, "error": "video_not_found"}
             return {"ok": True, "video": d}
+
+        if name == "youtube_play":
+            vid = args.get("video_id", "")
+            if not vid:
+                return {"ok": False, "error": "video_id_required"}
+            title = ""
+            try:
+                d = provider.details(vid)
+                if d:
+                    title = d.get("title", "")
+            except Exception:
+                title = ""
+            return {"ok": True, "video_id": vid, "title": title,
+                    "play_url": "https://www.youtube.com/watch?v=" + vid}
 
         if name == "youtube_my_channel":
             import yt_channel
