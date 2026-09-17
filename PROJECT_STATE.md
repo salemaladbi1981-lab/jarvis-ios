@@ -31,6 +31,16 @@
 ### V1.1 Phase 2 / Phase 1 / V1.0 (سابقة — تبقى صالحة)
 - ✅ Realtime Function Calling · Gmail · Memory · Calendar/Reminders · Golden Voice · Barge-in.
 
+### V1.1 YouTube
+- ✅ `youtube_search` · `youtube_details` · `youtube_transcript` (بحث/تفاصيل/تفريغ).
+- ✅ `youtube_play` — Playback Handoff بدون OAuth: يفتح الفيديو في تطبيق YouTube الرسمي (DEVICE PASS).
+- ⏸ OAuth للقناة معلّق مؤقتاً بقرار المالك (invalid_client سابقاً — credentials تُعاد لاحقاً).
+
+### V1.1 Instagram
+- ✅ `instagram_profile` · `instagram_insights` · `instagram_recent_media` (Meta Graph API read).
+- ✅ تحقق حيّاً: 99,848 متابع · reach 7d · media حقيقي (media_id).
+- ⏸ publish / messaging = blocker خارجي (App Review / business verification).
+
 ## Frozen — لا تُعدَّل بدون regression مثبت + موافقة المالك
 - **Golden Voice** · **Barge-in** · **Memory** · **Calendar/Reminders**
 - **Email (Gmail + Hotmail)** · **Telegram** · **Realtime Tool Orchestration** · **Grounded Tool Contract**
@@ -46,8 +56,8 @@
 - **Core Motion** — غير مكتملة بصرياً، مؤجلة (قرار المالك: بعد الإطلاق).
 
 ## Next Phase (الأولوية القادمة)
-- **YouTube integration** — ثم Instagram → Web/Search → Files/Documents → WhatsApp → Device Control.
+- **WhatsApp** — ثم Web/Search → Files/Documents → Device Control.
 - كلها عبر نفس Realtime Function Calling + Grounded Tool Contract.
 
 ## قرار المالك
-اعتماد V1.1 Telegram كـ stable Live baseline وتجميده (لا تعديل إضافي). التالي: YouTube.
+اعتماد V1.1 YouTube + Instagram كـ stable. التالي: WhatsApp (Cloud API).
