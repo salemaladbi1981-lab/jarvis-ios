@@ -1,0 +1,78 @@
+name: TestFlight Upload
+
+# يدوي — لا يعمل تلقائياً. يحتاج أسرار التوقيع + App Store Connect.
+on:
+  workflow_dispatch:
+
+jobs:
+  upload:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Import Apple distribution certificate
+        env:
+          CERT_B64: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_B64 }}
+          CERT_PASS: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD }}
+        run: |
+          echo "$CERT_B64" | base64 --decode > cert.p12
+          security create-keychain -p "" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "" build.keychain
+          security import cert.p12 -k build.keychain -P "$CERT_PASS" -A
+          security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
+
+      - name: Install provisioning profile
+        env:
+          PROFILE_B64: ${{ secrets.APPLE_PROVISIONING_PROFILE_B64 }}
+        run: |
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          echo "$PROFILE_B64" | base64 --decode > ~/Library/MobileDevice/Provisioning\ Profiles/TestFlight.mobileprovision
+
+      - name: Archive (App Store)
+        run: |
+          xcodebuild archive \
+            -project JARVIS.xcodeproj \
+            -scheme JARVIS \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/JARVIS.xcarchive \
+            -allowProvisioningUpdates
+
+      - name: Export IPA
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          cat > ExportOptions.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store</string>
+            <key>teamID</key><string>${APPLE_TEAM_ID}</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>uploadSymbols</key><true/>
+          </dict></plist>
+          EOF
+          xcodebuild -exportArchive \
+            -archivePath build/JARVIS.xcarchive \
+            -exportOptionsPlist ExportOptions.plist \
+            -exportPath build/export \
+            -allowProvisioningUpdates
+
+      - name: Upload to TestFlight (App Store Connect)
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_ISSUER: ${{ secrets.ASC_API_KEY_ISSUER_ID }}
+          ASC_KEY_B64: ${{ secrets.ASC_API_KEY_B64 }}
+        run: |
+          echo "$ASC_KEY_B64" | base64 --decode > asc_key.p8
+          xcrun altool --upload-app \
+            -f build/export/JARVIS.ipa \
+            -t ios \
+            --apiKey "$ASC_KEY_ID" \
+            --apiIssuer "$ASC_ISSUER" \
+            --apiKeyFile asc_key.p8
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jarvis-ipa
+          path: build/export/JARVIS.ipa
