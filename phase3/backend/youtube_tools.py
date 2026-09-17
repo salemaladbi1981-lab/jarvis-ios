@@ -31,6 +31,20 @@ YOUTUBE_TOOLS = [
             "video_id": {"type": "string"},
         }, "required": ["video_id"]},
     },
+    {
+        "type": "function",
+        "name": "youtube_my_channel",
+        "description": "Get the user's OWN YouTube channel stats (title, subscribers, views, video count). Requires OAuth. Use when the user asks about their channel.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    {
+        "type": "function",
+        "name": "youtube_my_subscriptions",
+        "description": "List the channels the user is subscribed to. Requires OAuth.",
+        "parameters": {"type": "object", "properties": {
+            "limit": {"type": "integer"},
+        }, "required": []},
+    },
 ]
 
 
@@ -61,6 +75,17 @@ def execute_youtube_tool(name, args, provider=None):
             if not d:
                 return {"ok": False, "error": "video_not_found"}
             return {"ok": True, "video": d}
+
+        if name == "youtube_my_channel":
+            import yt_channel
+            ch = yt_channel.my_channel()
+            if not ch:
+                return {"ok": False, "error": "channel_not_found"}
+            return {"ok": True, "channel": ch}
+
+        if name == "youtube_my_subscriptions":
+            import yt_channel
+            return {"ok": True, "subscriptions": yt_channel.my_subscriptions(args.get("limit", 10))}
 
         return {"ok": False, "error": "unknown_tool"}
     except Exception as e:

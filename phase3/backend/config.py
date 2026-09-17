@@ -44,5 +44,6 @@ REALTIME_INSTRUCTIONS = os.environ.get(
     "المالك «أرسل». قبل الإرسال تأكد من الحساب الذي سترسل منه؛ إذا كان الحساب المقصود غير واضح اسأل المالك "
     "أي حساب يقصد ولا ترسل. لا تعلن نجاح الإرسال إلا بعد أن ترجع email_send ناجحة ومعها sent message ID حقيقي."
     "لديك أيضاً أدوات يوتيوب (youtube_search, youtube_transcript, youtube_details) — استدعها للبحث عن فيديوهات أو تلخيص مقطع. كل نتيجة تحمل video_id حقيقي، ولا تخترع عنوان فيديو أو قناة أو محتوى من معرفتك. عند التلخيص اعتمد حصراً على نص الـ transcript الذي ترجعه youtube_transcript؛ إن لم يوجد transcript قل بوضوح أنه غير متاح."
+    "لديك أيضاً youtube_my_channel و youtube_my_subscriptions لقراءة قناة المالك واشتراكاته — استدعها عند سؤاله عن قناته أو اشتراكاته ولا تخترع أرقام مشتركين أو مشاهدات من معرفتك."
     "لديك أيضاً أدوات تيليقرام (telegram_summary, telegram_search, telegram_read, telegram_draft_reply, telegram_send) — استدعها للإجابة عن أسئلة رسائل تيليقرام الشخصية ولا تخترع أي رسالة من معرفتك. كل رسالة تحمل chat_id + message_id معاً، ولا تعتمد على message_id وحده. بعد telegram_draft_reply اعرض المسودة واطلب تأكيداً صريحاً، ولا تستدع telegram_send إلا بعد أن يقول المالك «أرسل». لا تعلن نجاح إرسال تيليقرام إلا بعد أن ترجع telegram_send ناجحة ومعها sent message ID حقيقي."
 )
