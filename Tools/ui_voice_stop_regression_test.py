@@ -29,7 +29,8 @@ check("Waveform: perceptual level", 'Level.perceptual' in wave)
 
 # 2) UI touch/scroll لا يوقف الصوت
 check("HomeViewModel: stopListening مرة واحدة فقط (في toggleVoice)", vm.count('stopListening') == 1)
-check("HomeViewModel: لا disconnect/interrupt في UI handlers", 'disconnect(' not in vm and '.interrupt(' not in vm)
+check("HomeViewModel: لا disconnect في UI handlers", 'disconnect(' not in vm)
+check("HomeViewModel: interrupt فقط في routeToolChain (grounding للبريد) لا في UI handlers", vm.count('.interrupt(') == 1 and 'voiceSession.interrupt()' in vm)
 check("HomeViewModel: لا flush في UI handlers", 'flush(' not in vm)
 check("HomeView: VoiceInputBar خارج الـ ScrollView (في safeAreaInset)",
       home.index('VoiceInputBar') > home.index('.safeAreaInset(edge: .bottom)'))
