@@ -39,6 +39,21 @@ final class HomeViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var isVoiceActive = false
 
+    // V1.1 Memory + write tools (minimal coupling)
+    private var memory: MemoryStore?
+    private let eventWriter = AppleEventKitWriter()
+    private var pendingWrite: PendingWrite?
+
+    private enum PendingWrite {
+        case createReminder(title: String)
+        case createEvent(title: String, start: Date, end: Date)
+        case updateReminder(id: String, title: String)
+        case updateEvent(id: String, title: String)
+        case completeReminder(id: String)
+        case deleteReminder(id: String)
+        case deleteEvent(id: String)
+    }
+
     init(
         smartHome: SmartHomeProvider = MockSmartHomeProvider(),
         security: SecurityProvider = MockSecurityProvider(),
@@ -174,25 +189,43 @@ final class HomeViewModel: ObservableObject {
         }
     }
 
-    /// Voice transcript (free text from speech) → local tool route → spoken result.
+    /// Voice transcript → local tool route → spoken result.
+    /// V1.1: إضافة إنشاء تذكير (بتأكيد) + أسئلة شخصية تعتمد على الذاكرة.
     func routeVoiceTranscript(_ text: String) async {
         let t = text.lowercased()
+        // 1) إنشاء تذكير (يتطلب تأكيد)
+        if let reminderTitle = Self.parseCreateReminder(t) {
+            requestReminderCreate(title: reminderTitle)
+            return
+        }
+        // 2) قراءة التذكيرات
         if t.contains("تذكير") || t.contains("reminder") {
             await runReminders()
             speakResult()
-        } else if t.contains("جدول") || t.contains("موعد") || t.contains("اليوم") || t.contains("بكرة") || t.contains("calendar") {
+            return
+        }
+        // 3) قراءة التقويم
+        if t.contains("جدول") || t.contains("موعد") || t.contains("اليوم") || t.contains("بكرة") || t.contains("calendar") {
             await runCalendar(kind: "today")
             speakResult()
-        } else {
-            // محادثة مباشرة — النموذج رد بالفعل من الصوت، لا نعيد إرسال النص
-            // (منع الرد المزدوج/loop). لا شيء هنا.
+            return
         }
+        // 4) سؤال شخصي يعتمد على الذاكرة
+        if let answer = memoryAnswer(for: t) {
+            speak(answer)
+            return
+        }
+        // 5) محادثة مباشرة — النموذج رد بالفعل من الصوت، لا نعيد إرسال النص
     }
 
     private func speakResult() {
         if let msg = calendarMessage {
             voiceSession.sendText(msg)
         }
+    }
+
+    private func speak(_ msg: String) {
+        voiceSession.sendText(msg)
     }
 
     // MARK: Quick commands (typed routing — no fragile text matching)
@@ -279,6 +312,87 @@ final class HomeViewModel: ObservableObject {
         return reminders.prefix(5).map { "• \($0.title)" }.joined(separator: "\n")
     }
 
+    // MARK: V1.1 — Memory + write confirmation (minimal coupling)
+
+    private func ensureMemory() -> MemoryStore {
+        if let m = memory { return m }
+        let m = MemoryStore.seeded()
+        memory = m
+        return m
+    }
+
+    private static func parseCreateReminder(_ t: String) -> String? {
+        let markers = ["ذكرني", "ذكّرني", "remind me"]
+        for m in markers {
+            guard let r = t.range(of: m) else { continue }
+            var title = String(t[r.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            if title.hasPrefix("بـ") { title = String(title.dropFirst(2)) }
+            else if title.hasPrefix("ب") { title = String(title.dropFirst(1)) }
+            title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !title.isEmpty { return title }
+        }
+        return nil
+    }
+
+    private func memoryAnswer(for t: String) -> String? {
+        let mem = ensureMemory()
+        let identity = ["من أنا", "وش اسمي", "من سالم", "عرفني"]
+        let project = ["مشروع", "مشاريع", "شغال"]
+        let decision = ["قرار", "قررنا", "نسخة", "مجمّد", "مجمد", "اعتماد"]
+
+        var query = ""
+        var scope = MemoryScope.current
+        if identity.contains(where: { t.contains($0) }) {
+            query = "اسم سالم هوية"
+        } else if project.contains(where: { t.contains($0) }) {
+            query = "مشروع"
+        } else if decision.contains(where: { t.contains($0) }) {
+            query = "قرار نسخة"
+        } else if t.contains("قبل") || t.contains("سابق") || t.contains("تاريخ") || t.contains("قديم") {
+            query = t; scope = .historical
+        } else {
+            return nil
+        }
+
+        let items = MemoryRetrieval.retrieve(from: mem.allItems(), query: query, scope: scope, limit: 3)
+        guard !items.isEmpty else { return nil }
+        return items.map { $0.content }.joined(separator: "\n")
+    }
+
+    private func requestReminderCreate(title: String) {
+        pendingWrite = .createReminder(title: title)
+        pendingApproval = "إنشاء تذكير: \(title)"
+        state = .approval
+    }
+
+    private func executeWrite(_ w: PendingWrite) async {
+        state = .executing
+        let result: ToolWriteResult
+        switch w {
+        case .createReminder(let title):
+            result = eventWriter.createReminder(title: title, due: nil)
+        case .createEvent(let title, let start, let end):
+            result = eventWriter.createEvent(title: title, start: start, end: end)
+        case .updateReminder(let id, let title):
+            result = eventWriter.updateReminder(id: id, title: title, due: nil)
+        case .updateEvent(let id, let title):
+            result = eventWriter.updateEvent(id: id, title: title, start: nil, end: nil)
+        case .completeReminder(let id):
+            result = eventWriter.completeReminder(id: id)
+        case .deleteReminder(let id):
+            result = eventWriter.deleteReminder(id: id)
+        case .deleteEvent(let id):
+            result = eventWriter.deleteEvent(id: id)
+        }
+        if result.ok {
+            state = .idle
+            calendarMessage = "تم التنفيذ بنجاح"
+        } else {
+            state = .alert
+            calendarMessage = "تعذّر التنفيذ: \(result.error ?? "خطأ غير معروف")"
+        }
+    }
+
     // MARK: Agents
     func agents(in group: String) -> [Agent] {
         registry?.agents(in: group) ?? []
@@ -315,10 +429,17 @@ final class HomeViewModel: ObservableObject {
     }
 
     func approve() {
-        pendingApproval = nil
-        state = .idle
+        if let w = pendingWrite {
+            pendingWrite = nil
+            pendingApproval = nil
+            Task { await executeWrite(w) }
+        } else {
+            pendingApproval = nil
+            state = .idle
+        }
     }
     func reject() {
+        pendingWrite = nil
         pendingApproval = nil
         state = .idle
     }

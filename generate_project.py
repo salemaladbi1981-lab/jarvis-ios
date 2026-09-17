@@ -28,6 +28,9 @@ APP_SOURCES = [
     "JARVIS/DesignSystem/JarvisTokens.swift", "JARVIS/DesignSystem/JarvisIconResolver.swift",
     "JARVIS/Providers/ApprovalPolicyEvaluator.swift",
     "JARVIS/Mocks/MockProviders.swift", "JARVIS/Mocks/MockData.swift",
+    "JARVIS/Memory/MemoryItem.swift", "JARVIS/Memory/MemoryStore.swift",
+    "JARVIS/Memory/MemoryRetrieval.swift", "JARVIS/Memory/MemorySeed.swift",
+    "JARVIS/Integrations/AppleEventKitWriter.swift",
 ]
 APP_RESOURCES = [
     "JARVIS/Assets/Fonts/IBMPlexSansArabic-Regular.ttf",
@@ -41,12 +44,20 @@ TEST_SOURCES = [
     "JARVISTests/HomeViewModelTests.swift",
     "JARVISTests/AgentRegistryTests.swift",
     "JARVISTests/SessionGuardTests.swift",
+    "JARVISTests/MemoryTests.swift",
 ]
 
 # مصادر Foundation المشتركة (تُبنى في app + test targets مباشرة، بلا @testable import)
 SESSION_GUARD_SOURCES = [
     "JARVIS/Voice/SessionEventParser.swift",
     "JARVIS/Voice/SessionGuardState.swift",
+]
+# مصادر Memory (Foundation خالصة — تُبنى في app + test targets للاختبار بلا @testable import)
+MEMORY_SOURCES = [
+    "JARVIS/Memory/MemoryItem.swift",
+    "JARVIS/Memory/MemoryStore.swift",
+    "JARVIS/Memory/MemoryRetrieval.swift",
+    "JARVIS/Memory/MemorySeed.swift",
 ]
 
 objs = {}
@@ -74,6 +85,7 @@ app_src_bf = {p: add("PBXBuildFile", fileRef=app_src_refs[p]) for p in APP_SOURC
 app_res_bf = {p: add("PBXBuildFile", fileRef=app_res_refs[p]) for p in APP_RESOURCES}
 test_bf = {p: add("PBXBuildFile", fileRef=test_refs[p]) for p in TEST_SOURCES}
 session_guard_bf = {p: add("PBXBuildFile", fileRef=app_src_refs[p]) for p in SESSION_GUARD_SOURCES}
+memory_bf = {p: add("PBXBuildFile", fileRef=app_src_refs[p]) for p in MEMORY_SOURCES}
 
 def subgroup(name, paths):
     refs = [app_src_refs[p] for p in paths]
@@ -94,6 +106,7 @@ groups["macOS"] = subgroup("macOS", [p for p in APP_SOURCES if "/macOS/" in p])
 groups["Voice"] = subgroup("Voice", [p for p in APP_SOURCES if "/Voice/" in p])
 groups["Integrations"] = subgroup("Integrations", [p for p in APP_SOURCES if "/Integrations/" in p])
 groups["Diagnostics"] = subgroup("Diagnostics", [p for p in APP_SOURCES if "/Diagnostics/" in p])
+groups["Memory"] = subgroup("Memory", [p for p in APP_SOURCES if "/Memory/" in p])
 
 font_refs = [app_res_refs[p] for p in APP_RESOURCES if "Fonts" in p]
 json_refs = [app_res_refs[p] for p in APP_RESOURCES if "Resources" in p]
@@ -106,7 +119,7 @@ resources_group = group(sorted(json_refs), "Resources", "Resources")
 jarvis_group = group(
     [groups["App"], groups["Home"], groups["Core"], groups["Cards"],
      groups["State"], groups["Agents"], groups["DesignSystem"],
-     groups["Providers"], groups["Mocks"], groups["iPad"], groups["macOS"], groups["Voice"], groups["Integrations"], groups["Diagnostics"], assets_group, resources_group, plist_ref],
+     groups["Providers"], groups["Mocks"], groups["iPad"], groups["macOS"], groups["Voice"], groups["Integrations"], groups["Diagnostics"], groups["Memory"], assets_group, resources_group, plist_ref],
     "JARVIS", "JARVIS"
 )
 tests_group = group(sorted(test_refs.values()), "JARVISTests", "JARVISTests")
@@ -116,7 +129,7 @@ main_group = add("PBXGroup", children=[jarvis_group, tests_group, products_group
 app_sources_phase = add("PBXSourcesBuildPhase", files=sorted(app_src_bf.values()), buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)
 app_resources_phase = add("PBXResourcesBuildPhase", files=sorted(app_res_bf.values()), buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)
 app_frameworks_phase = add("PBXFrameworksBuildPhase", files=[], buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)
-test_sources_phase = add("PBXSourcesBuildPhase", files=sorted(list(test_bf.values()) + list(session_guard_bf.values())), buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)
+test_sources_phase = add("PBXSourcesBuildPhase", files=sorted(list(test_bf.values()) + list(session_guard_bf.values()) + list(memory_bf.values())), buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)
 test_resources_phase = add("PBXResourcesBuildPhase", files=[], buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)
 test_frameworks_phase = add("PBXFrameworksBuildPhase", files=[], buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)
 
@@ -190,8 +203,8 @@ mac_test_settings = {
 mac_test_debug = add("XCBuildConfiguration", buildSettings=dict(mac_test_settings), name="Debug")
 mac_test_release = add("XCBuildConfiguration", buildSettings=dict(mac_test_settings), name="Release")
 mac_test_config_list = add("XCConfigurationList", buildConfigurations=[mac_test_debug, mac_test_release], defaultConfigurationIsVisible=0, defaultConfigurationName="Release")
-mac_test_bf = {p: add("PBXBuildFile", fileRef=test_refs[p]) for p in TEST_SOURCES if "SessionGuardTests" in p}
-mac_test_sources_phase = add("PBXSourcesBuildPhase", files=sorted(list(mac_test_bf.values()) + list(session_guard_bf.values())), buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)
+mac_test_bf = {p: add("PBXBuildFile", fileRef=test_refs[p]) for p in TEST_SOURCES if "SessionGuardTests" in p or "MemoryTests" in p}
+mac_test_sources_phase = add("PBXSourcesBuildPhase", files=sorted(list(mac_test_bf.values()) + list(session_guard_bf.values()) + list(memory_bf.values())), buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)
 mac_test_target = add("PBXNativeTarget", buildConfigurationList=mac_test_config_list,
     buildPhases=[mac_test_sources_phase, test_frameworks_phase, test_resources_phase],
     buildRules=[], dependencies=[], name="JARVISTestsMac", productName="JARVISTestsMac",
@@ -257,3 +270,29 @@ scheme_xml = f'''<?xml version="1.0" encoding="UTF-8"?>
 os.makedirs("JARVIS.xcodeproj/xcshareddata/xcschemes", exist_ok=True)
 open("JARVIS.xcodeproj/xcshareddata/xcschemes/JARVISTestsMac.xcscheme", "w", encoding="utf-8").write(scheme_xml)
 print(f"Wrote pbxproj ({len(objs)} objects) + scheme (JARVISTestsMac)")
+
+# JARVIS (app) scheme — regenerated from the same-run app_target (fixes ghost BlueprintIdentifier durably)
+app_scheme_xml = f'''<?xml version="1.0" encoding="UTF-8"?>
+<Scheme LastUpgradeVersion="1500" version="1.7">
+  <BuildAction parallelizeBuildables="YES" buildImplicitDependencies="YES">
+    <BuildActionEntries>
+      <BuildActionEntry buildForTesting="YES" buildForRunning="YES" buildForProfiling="YES" buildForArchiving="YES" buildForAnalyzing="YES">
+        <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="{app_target}" BuildableName="JARVIS.app" BlueprintName="JARVIS" ReferencedContainer="container:JARVIS.xcodeproj"/>
+      </BuildActionEntry>
+    </BuildActionEntries>
+  </BuildAction>
+  <LaunchAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.DebuggerFoundation.Launcher.LLDB" launchStyle="0" useCustomWorkingDirectory="NO" ignoresPersistentStateOnLaunch="NO" debugDocumentVersioning="YES" debugServiceExtension="internal" allowLocationSimulation="YES">
+    <BuildableProductRunnable runnableDebuggingMode="0">
+      <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="{app_target}" BuildableName="JARVIS.app" BlueprintName="JARVIS" ReferencedContainer="container:JARVIS.xcodeproj"/>
+    </BuildableProductRunnable>
+  </LaunchAction>
+  <ProfileAction buildConfiguration="Release" shouldUseLaunchSchemeArgsEnv="YES" savedToolIdentifier="" useCustomWorkingDirectory="NO" debugDocumentVersioning="YES">
+    <BuildableProductRunnable runnableDebuggingMode="0">
+      <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="{app_target}" BuildableName="JARVIS.app" BlueprintName="JARVIS" ReferencedContainer="container:JARVIS.xcodeproj"/>
+    </BuildableProductRunnable>
+  </ProfileAction>
+  <AnalyzeAction buildConfiguration="Debug"/>
+  <ArchiveAction buildConfiguration="Release" revealArchiveInOrganizer="YES"/>
+</Scheme>
+'''
+open("JARVIS.xcodeproj/xcshareddata/xcschemes/JARVIS.xcscheme", "w", encoding="utf-8").write(app_scheme_xml)
