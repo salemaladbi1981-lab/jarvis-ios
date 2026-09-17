@@ -40,6 +40,7 @@ APP_RESOURCES = [
     "JARVIS/Assets/Fonts/CormorantGaramond-SemiBold.ttf",
     "JARVIS/Resources/AGENT-REGISTRY.json",
     "JARVIS/Resources/DESIGN-TOKENS.json",
+    "JARVIS/Assets.xcassets",
 ]
 TEST_SOURCES = [
     "JARVISTests/ApprovalPolicyEvaluatorTests.swift",
@@ -75,7 +76,12 @@ def group(children, name, path):
     return add("PBXGroup", children=children, name=name, path=path, sourceTree="<group>")
 
 app_src_refs = {p: file_ref(p, "sourcecode.swift") for p in APP_SOURCES}
-app_res_refs = {p: file_ref(p, "sourcecode.fonts" if p.endswith(".ttf") else "text.json") for p in APP_RESOURCES}
+def _res_type(p):
+    if p.endswith(".ttf"): return "sourcecode.fonts"
+    if p.endswith(".xcassets"): return "folder.assetcatalog"
+    return "text.json"
+
+app_res_refs = {p: file_ref(p, _res_type(p)) for p in APP_RESOURCES}
 test_refs = {p: file_ref(p, "sourcecode.swift") for p in TEST_SOURCES}
 plist_ref = file_ref("JARVIS/Info.plist", "text.plist.xml")
 app_prod_ref = add("PBXFileReference", explicitFileType="wrapper.application", includeInIndex=0, path="JARVIS.app", sourceTree="BUILT_PRODUCTS_DIR")
@@ -121,7 +127,7 @@ resources_group = group(sorted(json_refs), "Resources", "Resources")
 jarvis_group = group(
     [groups["App"], groups["Home"], groups["Core"], groups["Cards"],
      groups["State"], groups["Agents"], groups["DesignSystem"],
-     groups["Providers"], groups["Mocks"], groups["iPad"], groups["macOS"], groups["Voice"], groups["Integrations"], groups["Diagnostics"], groups["Memory"], assets_group, resources_group, plist_ref],
+     groups["Providers"], groups["Mocks"], groups["iPad"], groups["macOS"], groups["Voice"], groups["Integrations"], groups["Diagnostics"], groups["Memory"], assets_group, resources_group, app_res_refs["JARVIS/Assets.xcassets"], plist_ref],
     "JARVIS", "JARVIS"
 )
 tests_group = group(sorted(test_refs.values()), "JARVISTests", "JARVISTests")
@@ -142,6 +148,7 @@ app_settings = {
     "PRODUCT_BUNDLE_IDENTIFIER": "com.salemai.jarvis", "PRODUCT_NAME": "$(TARGET_NAME)",
     "SDKROOT": "iphoneos", "SWIFT_VERSION": "5.0", "TARGETED_DEVICE_FAMILY": "1,2",
     "LD_RUNPATH_SEARCH_PATHS": "$(inherited) @executable_path/Frameworks",
+    "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
 }
 test_settings = {
     "BUNDLE_LOADER": "$(TEST_HOST)", "CODE_SIGN_STYLE": "Automatic",
