@@ -12,7 +12,7 @@ tool result returns (function_call_output + response.create).
 """
 import asyncio, json, os
 import config
-from realtime_tools import EMAIL_TOOLS, execute_email_tool
+from realtime_tools import build_email_tools, execute_email_tool
 
 OPENAI_REALTIME_URL = "wss://api.openai.com/v1/realtime"
 
@@ -42,7 +42,7 @@ async def openai_realtime_proxy(client_ws, session_config: dict):
         inp["turn_detection"] = {"type": "semantic_vad", "interrupt_response": True, "create_response": True}
         session.setdefault("instructions", config.REALTIME_INSTRUCTIONS)
         # email tools + auto tool choice → the model can call them mid-turn
-        session["tools"] = EMAIL_TOOLS
+        session["tools"] = build_email_tools()
         session["tool_choice"] = "auto"
         await upstream.send(json.dumps({"type": "session.update", "session": session}))
 

@@ -50,7 +50,7 @@ check("unknown tool → unknown_tool", r.get("ok") is False and r.get("error") =
 
 # G) realtime.py يربط tools + tool_choice + اعتراض function call
 rt = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "realtime.py"), encoding="utf-8").read()
-check("realtime.py registers tools", 'session["tools"] = EMAIL_TOOLS' in rt)
+check("realtime.py registers tools", 'session["tools"] = build_email_tools()' in rt)
 check("realtime.py tool_choice auto", 'session["tool_choice"] = "auto"' in rt)
 check("realtime.py intercepts function_call_arguments.done", '"response.function_call_arguments.done"' in rt)
 check("realtime.py feeds function_call_output", '"function_call_output"' in rt and '"response.create"' in rt)

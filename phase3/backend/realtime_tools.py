@@ -15,7 +15,7 @@ EMAIL_TOOLS = [
     {
         "type": "function",
         "name": "email_summary",
-        "description": "List the user's recent inbox emails across ALL linked accounts (or ONE account if account_id given). Each result carries account_id + account (display name) + id (message id). Use when the user asks about their email/inbox/important messages. If the user says 'work only' or 'personal only', pass the matching account_id.",
+        "description": "List the user's recent inbox emails across ALL linked accounts (or ONE account if account_id given). Each result carries account_id + account (display name) + id (message id). Use when the user asks about their email/inbox/important messages. If the user specifies a particular account, use that exact account_id from the list (do not guess).",
         "parameters": {"type": "object", "properties": {
             "limit": {"type": "integer", "description": "max emails per account (1-20, default 8)"},
             "account_id": {"type": "string", "description": "optional — restrict to one account (e.g. 'personal', 'work'). Omit to search all."},
@@ -61,22 +61,58 @@ EMAIL_TOOLS = [
 ]
 
 
+def account_list_hint(registry=None):
+    """قائمة الحسابات الحقيقية المسجّلة — تُحقن في وصف الأدوات (لا hard-code)."""
+    registry = registry or email_accounts.default_registry()
+    accounts = registry.all_accounts()
+    if not accounts:
+        return "No accounts linked."
+    return "Available accounts: " + ", ".join(f"{a.account_id} ({a.display_name})" for a in accounts) + "."
+
+
+def build_email_tools(registry=None):
+    """يبني الأدوات مع قائمة الحسابات الفعلية محقونة في الوصف (Dynamic Account Grounding)."""
+    import copy
+    registry = registry or email_accounts.default_registry()
+    hint = account_list_hint(registry)
+    rule = " Use ONLY one of these exact account_ids. NEVER invent or guess an account_id. A non-existent account_id returns account_not_found."
+    tools = copy.deepcopy(EMAIL_TOOLS)
+    for t in tools:
+        if t["name"] in ("email_summary", "email_search"):
+            t["description"] = t["description"] + " " + hint + rule
+        elif t["name"] in ("email_read", "email_draft_reply"):
+            t["parameters"]["properties"]["account_id"]["description"] = "account id from the list. " + hint + rule
+        elif t["name"] == "email_send":
+            p = t["parameters"]["properties"].get("account_id")
+            if p:
+                p["description"] = "optional, to verify against the draft. " + hint + rule
+    return tools
+
+
 def execute_email_tool(name, args, pending, registry=None):
     """تنفيذ أداة بريد. `pending` قاموس لكل جلسة يحمل المسودة المعلّقة (بوابة التأكيد)."""
     registry = registry or email_accounts.default_registry()
     try:
         if name == "email_summary":
+            aid = args.get("account_id")
+            if aid and not registry.get(aid):
+                return {"ok": False, "error": "account_not_found"}
             limit = min(int(args.get("limit", 8)), 20)
-            return {"ok": True, "emails": registry.summary(account_id=args.get("account_id"), limit=limit)}
+            return {"ok": True, "emails": registry.summary(account_id=aid, limit=limit)}
 
         if name == "email_search":
-            return {"ok": True, "emails": registry.search(account_id=args.get("account_id"), query=args.get("query", ""))}
+            aid = args.get("account_id")
+            if aid and not registry.get(aid):
+                return {"ok": False, "error": "account_not_found"}
+            return {"ok": True, "emails": registry.search(account_id=aid, query=args.get("query", ""))}
 
         if name == "email_read":
             account_id = args.get("account_id", "")
             mid = args.get("message_id", "")
             if not account_id:
                 return {"ok": False, "error": "account_required"}
+            if not registry.get(account_id):
+                return {"ok": False, "error": "account_not_found"}
             if not mid:
                 return {"ok": False, "error": "message_id_required"}
             m = registry.read(account_id, mid)
@@ -91,6 +127,8 @@ def execute_email_tool(name, args, pending, registry=None):
             mid = args.get("message_id", "")
             if not account_id:
                 return {"ok": False, "error": "account_required"}
+            if not registry.get(account_id):
+                return {"ok": False, "error": "account_not_found"}
             if not mid:
                 return {"ok": False, "error": "message_id_required"}
             h = registry.headers(account_id, mid)
