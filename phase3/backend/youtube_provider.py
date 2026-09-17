@@ -3,7 +3,7 @@
 Read-only. مفتاح الـ Data API في /opt/data/youtube_api_key.json (خارج الـ repo).
 الـ transcript لا يحتاج مفتاحاً (youtube-transcript-api).
 """
-import os, json, urllib.request, urllib.parse
+import os, json, secrets, time, urllib.request, urllib.parse
 
 YT_API_KEY = os.environ.get("YT_API_KEY", "")
 YT_KEY_PATH = os.environ.get("YT_KEY_PATH", "/opt/data/youtube_api_key.json")
@@ -86,3 +86,30 @@ class YouTubeProvider:
         if truncated:
             text = text[:TRANSCRIPT_MAX]
         return {"video_id": video_id, "text": text, "segments": len(result), "truncated": truncated}
+
+
+# --- إدخال مفتاح آمن (نموذج ويب بنافذة كود واحدة) ---
+YT_INPUT_CODE_PATH = "/opt/data/yt_key_code.json"
+
+def generate_key_code(ttl=1800):
+    code = secrets.token_urlsafe(24)
+    with open(YT_INPUT_CODE_PATH, "w", encoding="utf-8") as f:
+        json.dump({"code": code, "expires_at": time.time() + ttl}, f)
+    os.chmod(YT_INPUT_CODE_PATH, 0o600)
+    return code
+
+def consume_key_code(code):
+    if not os.path.exists(YT_INPUT_CODE_PATH):
+        return False
+    d = json.load(open(YT_INPUT_CODE_PATH))
+    if not code or d.get("code") != code:
+        return False
+    if time.time() > d.get("expires_at", 0):
+        return False
+    json.dump({"code": "", "expires_at": 0}, open(YT_INPUT_CODE_PATH, "w"))
+    return True
+
+def store_api_key(api_key):
+    with open(YT_KEY_PATH, "w", encoding="utf-8") as f:
+        json.dump({"api_key": api_key.strip()}, f, indent=2)
+    os.chmod(YT_KEY_PATH, 0o600)

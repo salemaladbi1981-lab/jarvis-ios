@@ -13,6 +13,7 @@ from orchestrator import Orchestrator
 import realtime
 import ms_oauth
 import telegram_auth
+import youtube_provider
 
 app = FastAPI(title="JARVIS Control Plane")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -157,6 +158,32 @@ async def tg_verify_post(request: Request):
         return HTMLResponse("<h3>✓ Connected</h3><pre>" + json.dumps(me, indent=2, ensure_ascii=False) + "</pre>")
     except Exception as e:
         return HTMLResponse(f"<h3>Sign in failed</h3><pre>{e}</pre>")
+
+@app.get("/yt/key")
+def yt_key_form(code: str = ""):
+    """نموذج إدخال YouTube Data API Key بشكل آمن."""
+    html = f"""<!doctype html><html dir="ltr"><head><meta charset="utf-8"><title>JARVIS — YouTube API Key</title></head>
+<body style="font-family:sans-serif;max-width:520px;margin:40px auto">
+<h3>JARVIS — YouTube Data API Key</h3>
+<p>ألصق مفتاح الـ API هنا. يُخزَّن سيرفراً فقط ولا يظهر لأي أحد.</p>
+<form method="POST" action="/yt/key">
+<input type="hidden" name="code" value="{code}">
+<p>API Key:<br><input name="api_key" type="password" size="52" required></p>
+<button type="submit">حفظ</button>
+</form></body></html>"""
+    return HTMLResponse(html)
+
+@app.post("/yt/key")
+async def yt_key_post(request: Request):
+    data = parse_qs((await request.body()).decode())
+    code = (data.get("code") or [""])[0]
+    api_key = (data.get("api_key") or [""])[0].strip()
+    if not youtube_provider.consume_key_code(code):
+        return HTMLResponse("<h3>Invalid or expired code</h3>")
+    if not api_key:
+        return HTMLResponse("<h3>Missing API key</h3>")
+    youtube_provider.store_api_key(api_key)
+    return HTMLResponse("<h3>✓ Stored</h3><p>YouTube search + details جاهزان.</p>")
 
 @app.post("/session")
 def create_session(req: SessionReq):
