@@ -3,20 +3,20 @@
    <BuildAction parallelizeBuildables="YES" buildImplicitDependencies="YES">
       <BuildActionEntries>
          <BuildActionEntry buildForTesting="YES" buildForRunning="YES" buildForProfiling="NO" buildForArchiving="NO" buildForAnalyzing="YES">
-            <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="EB7F0C7D1435C67EE902E7F7" BuildableName="JARVISTestsMac.xctest" BlueprintName="JARVISTestsMac" ReferencedContainer="container:JARVIS.xcodeproj"/>
+            <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="4EB279F2AE0FC521AAA13004" BuildableName="JARVISTestsMac.xctest" BlueprintName="JARVISTestsMac" ReferencedContainer="container:JARVIS.xcodeproj"/>
          </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.DebuggerFoundation.Launcher.LLDB" shouldUseLaunchSchemeArgsEnv="YES">
       <Testables>
          <TestableReference skipped="NO">
-            <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="EB7F0C7D1435C67EE902E7F7" BuildableName="JARVISTestsMac.xctest" BlueprintName="JARVISTestsMac" ReferencedContainer="container:JARVIS.xcodeproj"/>
+            <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="4EB279F2AE0FC521AAA13004" BuildableName="JARVISTestsMac.xctest" BlueprintName="JARVISTestsMac" ReferencedContainer="container:JARVIS.xcodeproj"/>
          </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.DebuggerFoundation.Launcher.LLDB" launchStyle="0" useCustomWorkingDirectory="NO" ignoresPersistentStateOnLaunch="NO" debugDocumentVersioning="YES" debugServiceExtension="internal" allowLocationSimulation="YES">
       <MacroExpansion>
-         <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="EB7F0C7D1435C67EE902E7F7" BuildableName="JARVISTestsMac.xctest" BlueprintName="JARVISTestsMac" ReferencedContainer="container:JARVIS.xcodeproj"/>
+         <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="4EB279F2AE0FC521AAA13004" BuildableName="JARVISTestsMac.xctest" BlueprintName="JARVISTestsMac" ReferencedContainer="container:JARVIS.xcodeproj"/>
       </MacroExpansion>
    </LaunchAction>
    <ProfileAction buildConfiguration="Release" shouldUseLaunchSchemeArgsEnv="YES" savedToolIdentifier="" useCustomWorkingDirectory="NO" debugDocumentVersioning="YES"/>

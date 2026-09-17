@@ -201,6 +201,15 @@ final class HomeViewModel: ObservableObject {
         }
     }
 
+    /// App Intent / App Shortcut (استدعاء من قفل الشاشة): يبدأ الصوت إن كانت هناك علامة معلّقة.
+    func handleAppIntentStart() {
+        #if os(iOS)
+        guard AppBridge.pendingStartVoice else { return }
+        AppBridge.pendingStartVoice = false
+        toggleVoice()
+        #endif
+    }
+
     /// Voice transcript → local tool route → spoken result.
     /// V1.1: إضافة إنشاء تذكير (بتأكيد) + أسئلة شخصية تعتمد على الذاكرة.
     func routeVoiceTranscript(_ text: String) async {

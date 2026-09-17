@@ -70,7 +70,10 @@ struct HomeView: View {
             LinearGradient(colors: [JarvisColor.bg_0, JarvisColor.bg_1], startPoint: .top, endPoint: .bottom)
                 .ignoresSafeArea()
         )
-        .task { await vm.load() }
+        .task {
+            await vm.load()
+            vm.handleAppIntentStart()
+        }
     }
 
 }
