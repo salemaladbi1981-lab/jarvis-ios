@@ -17,6 +17,7 @@ struct JarvisShortcuts: AppShortcutsProvider {
             shortTitle: "Start Jarvis",
             systemImageName: "mic.fill"
         )
+
         AppShortcut(
             intent: JarvisNavigateIntent(),
             phrases: [
