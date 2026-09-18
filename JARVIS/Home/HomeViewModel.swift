@@ -84,8 +84,8 @@ final class HomeViewModel: ObservableObject {
                     self.orbit.items.forEach { self.orbit.deactivate($0.id) }
                     self.successPulse = true
                 case .toolExecuting:
-                    // agent نشط حقيقي أثناء tool execution (core_home للـ prototype)
-                    self.orbit.activate("core_home", name: "البيت", group: "core")
+                    // Runtime agent events drive the orbit; never fake core_home here.
+                    break
                 case .interrupted:
                     // barge-in: transition سريع — يبقى agent إن وُجد
                     break
@@ -104,6 +104,31 @@ final class HomeViewModel: ObservableObject {
         voiceSession.onOutputLevel = { [weak self] level in
             Task { @MainActor in self?.levels.setOutputLevel(level) }
         }
+        // Real agent runtime events from backend drive the active orbit.
+        voiceSession.onAgentRuntime = { [weak self] phase, agentID, fromAgentID in
+            Task { @MainActor in
+                guard let self,
+                      let registry = self.registry,
+                      let agent = registry.agents.first(where: { $0.id == agentID }) else { return }
+
+                switch phase {
+                case "handoff":
+                    if let fromAgentID,
+                       let from = registry.agents.first(where: { $0.id == fromAgentID }) {
+                        self.orbit.activate(from.id, name: from.name, group: from.group)
+                        self.orbit.activate(agent.id, name: agent.name, group: agent.group)
+                        self.orbit.handoff(from: from.id, to: agent.id)
+                    } else {
+                        self.orbit.activate(agent.id, name: agent.name, group: agent.group)
+                    }
+                case "started", "finished":
+                    self.orbit.activate(agent.id, name: agent.name, group: agent.group)
+                default:
+                    break
+                }
+            }
+        }
+
         // Playback handoff: فتح الفيديو في تطبيق YouTube الرسمي (من أداة youtube_play).
         voiceSession.onPlaybackHandoff = { [weak self] url, title in
             Task { @MainActor in

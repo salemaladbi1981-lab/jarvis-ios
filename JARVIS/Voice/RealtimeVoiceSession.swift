@@ -18,6 +18,8 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     var onPlaybackHandoff: ((String, String) -> Void)?
     /// Navigation handoff: يفتح تطبيق الخرائط (Google Maps) على وجهة (url).
     var onNavigationHandoff: ((String) -> Void)?
+    /// Agent runtime lifecycle from backend: phase, agent_id, from_agent.
+    var onAgentRuntime: ((String, String, String?) -> Void)?
 
     private var ws: URLSessionWebSocketTask?
     private var session = URLSession(configuration: .default)
@@ -304,6 +306,16 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                 }
             case "response.function_call_arguments.done":
                 eventPublisher.send(.toolExecuting)
+            case "agent_runtime":
+                let phase = SessionEventParser.field(text, "phase") ?? ""
+                let agentID = SessionEventParser.field(text, "agent_id") ?? ""
+                let fromAgent = SessionEventParser.field(text, "from_agent")
+                guard !phase.isEmpty, !agentID.isEmpty else {
+                    trace("agent_runtime missing phase/agent_id")
+                    break
+                }
+                trace("agent_runtime phase=\(phase) agent=\(agentID) from=\(fromAgent ?? "-")")
+                onAgentRuntime?(phase, agentID, fromAgent)
             case "playback_handoff":
                 // فتح الفيديو في تطبيق YouTube الرسمي (من أداة youtube_play).
                 let url = SessionEventParser.field(text, "play_url") ?? ""
