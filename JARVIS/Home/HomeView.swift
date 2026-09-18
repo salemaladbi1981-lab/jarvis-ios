@@ -5,6 +5,10 @@ import SwiftUI
 struct HomeView: View {
     @StateObject private var vm = HomeViewModel()
     @State private var selectedTab = "home"
+    @State private var composerText = ""
+    @State private var showAttachments = false
+    @State private var showCameraPhoto = false
+    @State private var showCameraVideo = false
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -62,8 +66,18 @@ struct HomeView: View {
         }
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 0) {
-                VoiceInputBar(isListening: vm.isListening) { vm.toggleVoice() }
-                    .padding(.horizontal, JarvisSpacing.lg)
+                WorkspaceComposerView(
+                    text: $composerText,
+                    onSend: {
+                        let t = composerText.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard !t.isEmpty else { return }
+                        composerText = ""
+                        Task { await vm.routeVoiceTranscript(t) }
+                    },
+                    onAttach: { showAttachments = true },
+                    onMic: { vm.toggleVoice() }
+                )
+                .padding(.horizontal, JarvisSpacing.lg)
                 BottomNavBar(selected: $selectedTab)
             }
         }
@@ -77,6 +91,27 @@ struct HomeView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .background { vm.handleAppBackgrounded() }
+        }
+        .sheet(isPresented: $showAttachments) {
+            AttachmentMenu(
+                onPickPhotos: { },
+                onPickVideos: { },
+                onPickFiles: { },
+                onCameraPhoto: { showCameraPhoto = true },
+                onCameraVideo: { showCameraVideo = true },
+                onScanDocument: { },
+                onRecordAudio: { }
+            )
+        }
+        .fullScreenCover(isPresented: $showCameraPhoto) {
+            CameraCaptureView { data, mime in
+                showCameraPhoto = false
+            }
+        }
+        .fullScreenCover(isPresented: $showCameraVideo) {
+            CameraVideoView { url in
+                showCameraVideo = false
+            }
         }
     }
 
