@@ -17,6 +17,7 @@ from telegram_tools import TELEGRAM_TOOLS, execute_telegram_tool
 from youtube_tools import YOUTUBE_TOOLS, execute_youtube_tool
 from instagram_tools import INSTAGRAM_TOOLS, execute_instagram_tool
 from maps_tools import MAPS_TOOLS, execute_maps_tool
+from agent_runtime import AgentRuntime
 
 OPENAI_REALTIME_URL = "wss://api.openai.com/v1/realtime"
 
@@ -37,6 +38,9 @@ async def openai_realtime_proxy(client_ws, session_config: dict):
     # pending drafts — per-session confirmation gate (email + telegram منفصلان)
     pending_email = {}
     pending_tg = {}
+    # agent runtime — one per session; routes tool calls to specialist agents
+    runtime = AgentRuntime()
+    active_agent_id = "core_coordinator"
 
     async with websockets.connect(url, additional_headers=headers) as upstream:
         session = dict(session_config) if session_config else {}
@@ -67,6 +71,7 @@ async def openai_realtime_proxy(client_ws, session_config: dict):
 
         async def u2c():
             # upstream → client, intercepting function calls for grounded execution
+            nonlocal active_agent_id
             try:
                 async for msg in upstream:
                     try:
@@ -82,6 +87,15 @@ async def openai_realtime_proxy(client_ws, session_config: dict):
                         except Exception:
                             args = {}
                         print(f"[TRACE tool] call {name} args={json.dumps(args)[:200]}", flush=True)
+                        specialist = runtime.agent_for_tool(name)
+                        if specialist != active_agent_id:
+                            await client_ws.send_text(json.dumps(
+                                runtime.event_payload("handoff", specialist, tool=name, from_agent=active_agent_id),
+                                ensure_ascii=False))
+                            active_agent_id = specialist
+                        await client_ws.send_text(json.dumps(
+                            runtime.event_payload("started", active_agent_id, tool=name),
+                            ensure_ascii=False))
                         if name.startswith("telegram_"):
                             output = await asyncio.to_thread(execute_telegram_tool, name, args, pending_tg)
                         elif name.startswith("youtube_"):
@@ -93,6 +107,14 @@ async def openai_realtime_proxy(client_ws, session_config: dict):
                         else:
                             output = await asyncio.to_thread(execute_email_tool, name, args, pending_email)
                         print(f"[TRACE tool] {name} -> {json.dumps(output, ensure_ascii=False)[:200]}", flush=True)
+                        await client_ws.send_text(json.dumps(
+                            runtime.event_payload("finished", active_agent_id, tool=name),
+                            ensure_ascii=False))
+                        if active_agent_id != "core_coordinator":
+                            await client_ws.send_text(json.dumps(
+                                runtime.event_payload("handoff", "core_coordinator", tool=name, from_agent=active_agent_id),
+                                ensure_ascii=False))
+                            active_agent_id = "core_coordinator"
                         # Playback handoff: يفتح الفيديو في تطبيق YouTube الرسمي على الجهاز
                         # (event مخصص من السيرفر إلى العميل، قبل إرجاع النتيجة إلى النموذج).
                         if name == "youtube_play" and output.get("ok"):
