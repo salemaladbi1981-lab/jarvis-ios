@@ -266,6 +266,17 @@ final class HomeViewModel: ObservableObject {
         #endif
     }
 
+    /// إعادة تعيين الجلسة عند الخروج للخلفية — حتى يعمل المايك من أول ضغطة عند العودة
+    /// (بدل ما يظن أن الجلسة ما زالت نشطة ويحاول stop بدل connect).
+    func handleAppBackgrounded() {
+        if isVoiceActive {
+            voiceSession.stopListening()
+            isVoiceActive = false
+            isListening = false
+            state = .idle
+        }
+    }
+
     /// Voice transcript → local tool route → spoken result.
     /// V1.1: إضافة إنشاء تذكير (بتأكيد) + أسئلة شخصية تعتمد على الذاكرة.
     func routeVoiceTranscript(_ text: String) async {

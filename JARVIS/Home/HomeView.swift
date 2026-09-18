@@ -5,6 +5,7 @@ import SwiftUI
 struct HomeView: View {
     @StateObject private var vm = HomeViewModel()
     @State private var selectedTab = "home"
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -73,6 +74,9 @@ struct HomeView: View {
         .task {
             await vm.load()
             vm.handleAppIntentStart()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background { vm.handleAppBackgrounded() }
         }
     }
 

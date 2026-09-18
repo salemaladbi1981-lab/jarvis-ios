@@ -32,7 +32,7 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     // Barge-in confirmation: نافذة قصيرة لفلترة الضوضاء/النقرة قبل إلغاء الرد.
     private var pendingBargeIn = false
     private var bargeConfirmTask: Task<Void, Never>?
-    private let bargeConfirmWindow: TimeInterval = 0.15
+    private let bargeConfirmWindow: TimeInterval = 0.45
     /// تنفيذ تسلسلي واحد لحالة الجلسة وحراسة أحداثها.
     private let stateQueue = DispatchQueue(label: "jarvis.session.state")
 
