@@ -1,87 +1,142 @@
 import SwiftUI
 import AVFoundation
 
-/// كاميرا حقيقية (AVFoundation): أمامي/خلفي، فلاش، معاينة، إعادة تصوير.
-/// ليست PhotosPicker — التقاط مباشر من الكاميرا.
+/// كاميرا صورة حقيقية (AVFoundation): أمامي/خلفي، فلاش، معاينة، Use/Retake.
+/// ليست PhotosPicker — التقاط مباشر. لا تُرفع الصورة قبل موافقة المستخدم.
 struct CameraCaptureView: View {
     @StateObject private var model = CameraModel()
-    let onCapture: (Data, String) -> Void  // (data, mimeType)
+    let onUsePhoto: (Data, String) -> Void
 
     var body: some View {
         ZStack {
-            CameraPreview(session: model.session).ignoresSafeArea()
-            VStack {
-                HStack {
-                    Button(action: model.toggleCamera) {
-                        Image(systemName: "arrow.triangle.2.circlepath.camera").font(.title).foregroundColor(.white)
+            Color.black.ignoresSafeArea()
+            if let img = model.capturedImage {
+                Image(uiImage: img).resizable().scaledToFit()
+                VStack {
+                    Spacer()
+                    HStack {
+                        Button("إعادة التصوير") { model.retake() }
+                            .padding().background(.red.opacity(0.8)).foregroundColor(.white).cornerRadius(10)
+                        Button("استخدام الصورة") {
+                            if let d = model.capturedData { onUsePhoto(d, "image/jpeg") }
+                        }.padding().background(.green).foregroundColor(.white).cornerRadius(10)
+                    }.padding(.bottom, 30)
+                }
+            } else {
+                CameraPreviewLayer(session: model.session).ignoresSafeArea()
+                VStack {
+                    HStack {
+                        Button(action: model.toggleCamera) {
+                            Image(systemName: "arrow.triangle.2.circlepath.camera").font(.title).foregroundColor(.white)
+                        }.padding()
+                        Spacer()
+                        Button(action: model.toggleFlash) {
+                            Image(systemName: model.isFlashOn ? "bolt.fill" : "bolt.slash").font(.title)
+                                .foregroundColor(model.isFlashOn ? .yellow : .white)
+                        }.padding()
                     }
                     Spacer()
-                    Button(action: model.toggleFlash) {
-                        Image(systemName: model.isFlashOn ? "bolt.fill" : "bolt.slash").font(.title)
-                            .foregroundColor(model.isFlashOn ? .yellow : .white)
-                    }
-                }.padding()
-                Spacer()
-                Button(action: { model.capture(onCapture) }) {
-                    Circle().strokeBorder(.white, lineWidth: 3).frame(width: 74, height: 74)
-                        .overlay(Circle().fill(.white).frame(width: 60, height: 60))
+                    Button(action: model.capture) {
+                        Circle().strokeBorder(.white, lineWidth: 3).frame(width: 74, height: 74)
+                            .overlay(Circle().fill(.white).frame(width: 60, height: 60))
+                    }.padding(.bottom, 30)
                 }
-                Button("إعادة التصوير") { model.retake() }.foregroundColor(.white).padding(.top, 8)
             }
         }
-        .onAppear { model.start() }
+        .onAppear { model.requestAndStart() }
         .onDisappear { model.stop() }
     }
 }
 
+@MainActor
 final class CameraModel: NSObject, ObservableObject {
     @Published var isFlashOn = false
-    @Published var captured: Data?
-    let session = AVCaptureSession()
-    private var input: AVCaptureDeviceInput?
-    private let output = AVCapturePhotoOutput()
-    private var usingFront = false
-    private var previewLayer: AVCaptureVideoPreviewLayer?
+    @Published var capturedImage: UIImage?
+    @Published var capturedData: Data?
+    @Published var permissionDenied = false
 
-    func start() {
-        session.sessionPreset = .high
-        guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: usingFront ? .front : .back) else { return }
-        do {
-            input = try AVCaptureDeviceInput(device: device)
-            if let i = input, session.canAddInput(i) { session.addInput(i) }
-            if session.canAddOutput(output) { session.addOutput(output) }
-            session.startRunning()
-        } catch { /* handle */ }
+    let session = AVCaptureSession()
+    private var videoInput: AVCaptureDeviceInput?
+    private let photoOutput = AVCapturePhotoOutput()
+    private var usingFront = false
+    private var cameraDelegate: PhotoDelegate?
+
+    func requestAndStart() {
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            configure()
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { granted in
+                Task { @MainActor in
+                    if granted { self.configure() } else { self.permissionDenied = true }
+                }
+            }
+        default:
+            permissionDenied = true
+        }
     }
-    func stop() { session.stopRunning() }
-    func toggleCamera() { usingFront.toggle(); stop(); start() }
+
+    private func device() -> AVCaptureDevice? {
+        AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: usingFront ? .front : .back)
+    }
+
+    func configure() {
+        session.beginConfiguration()
+        // إزالة input القديم قبل إضافة الجديد (إصلاح التبديل)
+        if let old = videoInput {
+            session.removeInput(old)
+            videoInput = nil
+        }
+        if let d = device(), let input = try? AVCaptureDeviceInput(device: d),
+           session.canAddInput(input) {
+            session.addInput(input)
+            videoInput = input
+        }
+        if session.canAddOutput(photoOutput) && !session.outputs.contains(where: { $0 === photoOutput }) {
+            session.addOutput(photoOutput)
+        }
+        session.commitConfiguration()
+        if !session.isRunning { session.startRunning() }
+    }
+
+    func stop() { if session.isRunning { session.stopRunning() } }
+    func toggleCamera() { usingFront.toggle(); configure() }
     func toggleFlash() { isFlashOn.toggle() }
-    func capture(_ onCapture: @escaping (Data, String) -> Void) {
+
+    func capture() {
         let settings = AVCapturePhotoSettings()
         settings.flashMode = isFlashOn ? .on : .off
-        output.capturePhoto(with: settings, delegate: Self.delegate(onCapture))
-    }
-    func retake() { captured = nil }
-    private static func delegate(_ onCapture: @escaping (Data, String) -> Void) -> NSObject & AVCapturePhotoCaptureDelegate {
-        final class D: NSObject, AVCapturePhotoCaptureDelegate {
-            let cb: (Data, String) -> Void
-            init(_ cb: @escaping (Data, String) -> Void) { self.cb = cb }
-            func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
-                if let d = photo.fileDataRepresentation() { cb(d, "image/jpeg") }
+        let delegate = PhotoDelegate { [weak self] data in
+            Task { @MainActor in
+                self?.capturedData = data
+                self?.capturedImage = UIImage(data: data)
             }
         }
-        return D(onCapture)
+        cameraDelegate = delegate
+        photoOutput.capturePhoto(with: settings, delegate: delegate)
+    }
+    func retake() { capturedImage = nil; capturedData = nil }
+}
+
+final class PhotoDelegate: NSObject, AVCapturePhotoCaptureDelegate {
+    private let onPhoto: (Data) -> Void
+    init(_ onPhoto: @escaping (Data) -> Void) { self.onPhoto = onPhoto }
+    func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
+        if let d = photo.fileDataRepresentation() { onPhoto(d) }
     }
 }
 
-struct CameraPreview: UIViewRepresentable {
+struct CameraPreviewLayer: UIViewRepresentable {
     let session: AVCaptureSession
     func makeUIView(context: Context) -> UIView {
         let v = UIView()
         let layer = AVCaptureVideoPreviewLayer(session: session)
         layer.videoGravity = .resizeAspectFill
+        layer.frame = UIScreen.main.bounds
         v.layer.addSublayer(layer)
         return v
     }
-    func updateUIView(_ uiView: UIView, context: Context) {}
+    func updateUIView(_ v: UIView, context: Context) {
+        (v.layer.sublayers?.first as? AVCaptureVideoPreviewLayer)?.session = session
+    }
 }

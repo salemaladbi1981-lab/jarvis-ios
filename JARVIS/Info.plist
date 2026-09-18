@@ -52,5 +52,11 @@
     <string>يحتاج جارفس الوصول إلى التذكيرات لعرض مهامك عند طلبك.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>يحتاج جارفس الميكروفون للمحادثة الصوتية معك.</string>
+    <key>NSCameraUsageDescription</key>
+    <string>يحتاج جارفس الكاميرا لالتقاط الصور والفيديو عند طلبك.</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>يحتاج جارفس الوصول إلى مكتبة الصور لاختيار المرفقات.</string>
+    <key>NSPhotoLibraryAddUsageDescription</key>
+    <string>يحتاج جارفس حفظ المخرجات في مكتبة الصور.</string>
 </dict>
 </plist>

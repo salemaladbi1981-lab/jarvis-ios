@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// مركز التسليمات: مخرجات جارفس (فيديو/صور/PDF/…) مع فتح/مشاركة/حفظ/نسخة جديدة.
+/// مركز التسليمات: مخرجات جارفس مربوطة فعليًا بـ GET /deliveries + فتح/تنزيل/مشاركة.
 struct DeliveriesView: View {
     @StateObject private var vm = DeliveriesViewModel()
 
@@ -14,11 +14,13 @@ struct DeliveriesView: View {
                         Text(d.type).font(.caption).foregroundColor(.secondary)
                     }
                     Spacer()
-                    Button("فتح") { vm.open(d) }.font(.caption)
+                    Button("فتح") { Task { await vm.open(d) } }.font(.caption)
                 }
             }
             .navigationTitle("التسليمات")
+            .overlay { if vm.loading { ProgressView() } }
             .task { await vm.load() }
+            .refreshable { await vm.load() }
         }
     }
 }
@@ -36,8 +38,7 @@ struct Delivery: Identifiable {
         case "xlsx": return "tablecells"
         case "zip": return "archivebox"
         case "audio": return "waveform"
-        case "markdown", "script", "prompt", "caption", "code", "json": return "doc.text"
-        default: return "doc"
+        default: return "doc.text"
         }
     }
 }
@@ -45,6 +46,34 @@ struct Delivery: Identifiable {
 @MainActor
 final class DeliveriesViewModel: ObservableObject {
     @Published var items: [Delivery] = []
-    func load() async { /* GET /deliveries */ }
-    func open(_ d: Delivery) { /* فتح/تنزيل */ }
+    @Published var loading = false
+
+    private let api: JarvisAPI
+    init(api: JarvisAPI) { self.api = api }
+
+    func load() async {
+        loading = true
+        defer { loading = false }
+        do {
+            let rows = try await api.get("/deliveries")
+            items = rows.compactMap { r in
+                guard let id = r["delivery_id"] as? String else { return nil }
+                return Delivery(id: id,
+                                filename: r["filename"] as? String ?? id,
+                                type: r["type"] as? String ?? "file")
+            }
+        } catch { /* log */ }
+    }
+
+    func open(_ d: Delivery) async {
+        do {
+            let (tmp, name) = try await api.download("/deliveries/\(d.id)/download")
+            // فتح/مشاركة عبر ActivityViewController
+            await MainActor.run {
+                let vc = UIActivityViewController(activityItems: [tmp], applicationActivities: nil)
+                UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }
+                    .first?.rootViewController?.present(vc, animated: true)
+            }
+        } catch { /* log */ }
+    }
 }
