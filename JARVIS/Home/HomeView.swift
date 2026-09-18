@@ -181,30 +181,46 @@ struct HomeView: View {
     }
 
     /// إرسال: نص فقط → محادثة صوتية؛ مع مرفقات → رفع ثم task.
+    /// لا تُمسح pendingAttachments إلا بعد نجاح الرفع الكامل + POST /tasks.
     private func sendMessage(text: String) async {
         if pendingAttachments.isEmpty {
             if !text.isEmpty { await vm.routeVoiceTranscript(text) }
             return
         }
         let atts = pendingAttachments
-        pendingAttachments = []
         var fileIDs: [String] = []
+        var uploadFailed = false
         if let um = enrollment.uploadManager {
             for att in atts {
-                guard let data = att.data ?? (att.url.flatMap { try? Data(contentsOf: $0) }) else { continue }
+                guard let data = att.data ?? (att.url.flatMap { try? Data(contentsOf: $0) }) else {
+                    uploadFailed = true
+                    break
+                }
                 do {
                     let id = try await um.uploadAsync(data, filename: att.filename, mimeType: mime(for: att),
                                                       conversationID: conversationID(), sessionID: sessionID())
                     fileIDs.append(id)
-                } catch { /* تخطي الملف الفاشل */ }
+                } catch {
+                    uploadFailed = true
+                    break
+                }
             }
         }
+        guard !uploadFailed else { return }  // فشل رفع — المرفقات تبقى للمحاولة لاحقًا
+
+        var taskFailed = false
         if !text.isEmpty || !fileIDs.isEmpty {
             do {
                 if let api = enrollment.api {
                     _ = try await api.post("/tasks", body: ["prompt": text, "attachment_ids": fileIDs])
                 }
-            } catch { /* log */ }
+            } catch {
+                taskFailed = true
+            }
+        }
+        // نمسح المرفقات فقط بعد نجاح الرفع + POST /tasks
+        if !taskFailed {
+            pendingAttachments = []
         }
     }
 

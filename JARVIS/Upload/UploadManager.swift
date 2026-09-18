@@ -21,6 +21,7 @@ final class UploadManager: NSObject, ObservableObject, URLSessionDelegate, URLSe
     let baseURL: URL
     let sessionToken: String
     private var backgroundCompletionHandler: (() -> Void)?
+    private var continuations: [String: CheckedContinuation<String, Error>] = [:]
 
     private lazy var backgroundSession: URLSession = {
         let cfg = URLSessionConfiguration.background(withIdentifier: "com.jarvis.upload")
@@ -150,19 +151,28 @@ final class UploadManager: NSObject, ObservableObject, URLSessionDelegate, URLSe
             guard let self else { return }
             // النجاح فقط إذا: HTTP 2xx + ok == true + file_id موجود (تأكيد فعلي)
             var success = false
+            var fileID: String?
             if error == nil,
                let r = resp as? HTTPURLResponse, (200..<300).contains(r.statusCode),
                let d = data,
                let obj = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any],
-               (obj["ok"] as? Bool) == true,
-               obj["file_id"] as? String != nil {
-                success = true
+               (obj["ok"] as? Bool) == true {
+                fileID = obj["file_id"] as? String ?? (obj["file"] as? [String: Any])?["file_id"] as? String
+                success = fileID != nil
             }
-            if success {
+            if success, let fid = fileID {
                 self.clearState(state.checksum)
                 Task { @MainActor in self.isUploading = false; self.progress = 1.0 }
+                if let cont = self.continuations.removeValue(forKey: state.checksum) {
+                    cont.resume(returning: fid)
+                }
+            } else if error == nil {
+                // استجابة رفض (ok=false أو لا file_id) → فشل مؤكد، state تبقى، resume error
+                if let cont = self.continuations.removeValue(forKey: state.checksum) {
+                    cont.resume(throwing: NSError(domain: "Upload", code: 3, userInfo: [NSLocalizedDescriptionKey: "complete failed"]))
+                }
             }
-            // فشل complete: لا نمسح state، progress لا يصبح 1، retry لاحقًا عبر restoreOnLaunch/syncParts
+            // network error (error != nil بلا response) → لا نستأنف، retry لاحقًا عبر restoreOnLaunch/syncParts
         }.resume()
     }
 
@@ -171,15 +181,12 @@ final class UploadManager: NSObject, ObservableObject, URLSessionDelegate, URLSe
         for s in allPersistedStates() { syncParts(s) }
     }
 
-    /// async wrapper حول upload() للاستخدام من send flow.
+    /// async wrapper — يسجّل continuation ويُستأنف فقط عند نجاح /files/upload/complete.
     func uploadAsync(_ data: Data, filename: String, mimeType: String, conversationID: String, sessionID: String) async throws -> String {
-        try await withCheckedThrowingContinuation { cont in
-            upload(data, filename: filename, mimeType: mimeType, conversationID: conversationID, sessionID: sessionID) { result in
-                switch result {
-                case .success(let id): cont.resume(returning: id)
-                case .failure(let e): cont.resume(throwing: e)
-                }
-            }
+        let checksum = Self.sha256(data)
+        return try await withCheckedThrowingContinuation { cont in
+            continuations[checksum] = cont
+            upload(data, filename: filename, mimeType: mimeType, conversationID: conversationID, sessionID: sessionID)
         }
     }
 
