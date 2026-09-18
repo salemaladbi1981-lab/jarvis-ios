@@ -3,6 +3,7 @@ import SwiftUI
 /// Composer سفلي: زر +، نص، إرسال، مايك.
 struct WorkspaceComposerView: View {
     @Binding var text: String
+    let hasAttachments: Bool
     let onSend: () -> Void
     let onAttach: () -> Void
     let onMic: () -> Void
@@ -18,7 +19,7 @@ struct WorkspaceComposerView: View {
             Button(action: onSend) {
                 Image(systemName: "arrow.up.circle.fill").font(.title2)
             }
-            .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !hasAttachments)
             Button(action: onMic) {
                 Image(systemName: "mic.fill").font(.title2)
             }

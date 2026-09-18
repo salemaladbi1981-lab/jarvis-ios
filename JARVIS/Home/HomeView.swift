@@ -106,6 +106,7 @@ struct HomeView: View {
                 }
                 WorkspaceComposerView(
                     text: $composerText,
+                    hasAttachments: !pendingAttachments.isEmpty,
                     onSend: {
                         let t = composerText.trimmingCharacters(in: .whitespacesAndNewlines)
                         guard !t.isEmpty || !pendingAttachments.isEmpty else { return }
