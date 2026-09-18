@@ -19,7 +19,7 @@ def list_capabilities(summary: bool = True) -> list[dict]:
     if not summary:
         return doc["capabilities"]
     keys = ("capability_id", "display_name_ar", "display_name_en", "description",
-            "category", "skill_count", "tools", "execution_status", "tested")
+            "category", "skill_count", "tools", "status", "tested", "test_evidence", "last_tested_at")
     return [{k: c.get(k) for k in keys} for c in doc["capabilities"]]
 
 
@@ -42,7 +42,7 @@ def answer_what_can_you_do() -> dict:
         "capabilities": [
             {"id": c["capability_id"], "name_ar": c["display_name_ar"],
              "name_en": c["display_name_en"], "description": c["description"],
-             "skill_count": c["skill_count"]}
+             "skill_count": c["skill_count"], "status": c["status"]}
             for c in caps
         ],
     }
