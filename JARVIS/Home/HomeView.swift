@@ -28,6 +28,8 @@ struct HomeView: View {
     @State private var showFileImporter = false
     @State private var showScanner = false
     @State private var showAudioRecorder = false
+    @State private var sendError: String?
+    @State private var retryText = ""
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -87,6 +89,20 @@ struct HomeView: View {
             VStack(spacing: 0) {
                 AttachmentPreviewBar(attachments: pendingAttachments) { id in
                     pendingAttachments.removeAll { $0.id == id }
+                }
+                if let err = sendError {
+                    HStack {
+                        Text(err).font(.caption).foregroundColor(.red)
+                        Spacer()
+                        Button("إعادة المحاولة") {
+                            let t = retryText
+                            sendError = nil
+                            Task { await sendMessage(text: t) }
+                        }
+                        .font(.caption).foregroundColor(.blue)
+                    }
+                    .padding(.horizontal, JarvisSpacing.lg)
+                    .padding(.top, 6)
                 }
                 WorkspaceComposerView(
                     text: $composerText,
@@ -183,45 +199,54 @@ struct HomeView: View {
     /// إرسال: نص فقط → محادثة صوتية؛ مع مرفقات → رفع ثم task.
     /// لا تُمسح pendingAttachments إلا بعد نجاح الرفع الكامل + POST /tasks.
     private func sendMessage(text: String) async {
+        retryText = text
         if pendingAttachments.isEmpty {
             if !text.isEmpty { await vm.routeVoiceTranscript(text) }
             return
         }
         let atts = pendingAttachments
         var fileIDs: [String] = []
-        var uploadFailed = false
-        if let um = enrollment.uploadManager {
-            for att in atts {
-                guard let data = att.data ?? (att.url.flatMap { try? Data(contentsOf: $0) }) else {
-                    uploadFailed = true
-                    break
-                }
-                do {
-                    let id = try await um.uploadAsync(data, filename: att.filename, mimeType: mime(for: att),
-                                                      conversationID: conversationID(), sessionID: sessionID())
-                    fileIDs.append(id)
-                } catch {
-                    uploadFailed = true
-                    break
-                }
-            }
-        }
-        guard !uploadFailed else { return }  // فشل رفع — المرفقات تبقى للمحاولة لاحقًا
 
-        var taskFailed = false
-        if !text.isEmpty || !fileIDs.isEmpty {
+        // 1) uploadManager مطلوب — إن nil فهي failure (لا نمسح المرفقات)
+        guard let um = enrollment.uploadManager else {
+            sendError = "الرفع غير متاح — أعد المحاولة"
+            return
+        }
+
+        // 2) رفع كل المرفقات — لا نكمل بدون file_id ناجحة لكل ملف
+        for att in atts {
+            guard let data = att.data ?? (att.url.flatMap { try? Data(contentsOf: $0) }) else {
+                sendError = "تعذّر قراءة المرفق — أعد المحاولة"
+                return
+            }
             do {
-                if let api = enrollment.api {
-                    _ = try await api.post("/tasks", body: ["prompt": text, "attachment_ids": fileIDs])
-                }
+                let id = try await um.uploadAsync(data, filename: att.filename, mimeType: mime(for: att),
+                                                  conversationID: conversationID(), sessionID: sessionID())
+                fileIDs.append(id)
             } catch {
-                taskFailed = true
+                sendError = "فشل رفع المرفق — أعد المحاولة"
+                return
             }
         }
-        // نمسح المرفقات فقط بعد نجاح الرفع + POST /tasks
-        if !taskFailed {
-            pendingAttachments = []
+
+        // 3) api مطلوب — إن nil فهي failure (لا نمسح المرفقات)
+        guard let api = enrollment.api else {
+            sendError = "إنشاء المهمة غير متاح — أعد المحاولة"
+            return
         }
+
+        // 4) POST /tasks — لا نمسح إلا بعد نجاح فعلي
+        do {
+            _ = try await api.post("/tasks", body: ["prompt": text, "attachment_ids": fileIDs])
+        } catch {
+            sendError = "فشل إنشاء المهمة — أعد المحاولة"
+            return
+        }
+
+        // نجاح كامل — نمسح المرفقات
+        pendingAttachments = []
+        sendError = nil
+        retryText = ""
     }
 
     private func mime(for att: PendingAttachment) -> String {

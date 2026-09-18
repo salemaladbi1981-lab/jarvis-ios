@@ -18,7 +18,11 @@ struct JarvisAPI {
         req.setValue(sessionToken, forHTTPHeaderField: "X-Jarvis-Session")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
-        let (d, _) = try await URLSession.shared.data(for: req)
+        let (d, resp) = try await URLSession.shared.data(for: req)
+        if let r = resp as? HTTPURLResponse, !(200..<300).contains(r.statusCode) {
+            throw NSError(domain: "JarvisAPI", code: r.statusCode,
+                          userInfo: [NSLocalizedDescriptionKey: "HTTP \(r.statusCode)"])
+        }
         return (try JSONSerialization.jsonObject(with: d) as? [String: Any]) ?? [:]
     }
 
