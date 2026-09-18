@@ -1,7 +1,7 @@
 """JARVIS trusted control plane — FastAPI."""
 import uuid, json, os
 from urllib.parse import parse_qs
-from fastapi import FastAPI, WebSocket, HTTPException, Request
+from fastapi import FastAPI, WebSocket, HTTPException, Request, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from pydantic import BaseModel
@@ -15,6 +15,7 @@ import capabilities
 import files_api
 import tasks as tasks_mod
 import deliveries
+import auth
 import ms_oauth
 import telegram_auth
 import youtube_provider
@@ -35,6 +36,14 @@ approval_eval = ApprovalEvaluator()
 approval_store = ApprovalStore()
 gateway = ToolGateway()
 orchestrator = Orchestrator(gateway, approval_eval)
+
+
+def get_user_id(x_jarvis_session: str = Header(default="")):
+    """هوية server-side من session موثّق — لا نثق بـ user_id من العميل."""
+    uid = auth.resolve_user(x_jarvis_session)
+    if not uid:
+        raise HTTPException(status_code=401, detail="unauthorized")
+    return uid
 
 # --- demo safe tools (read-only) ---
 def read_temperature(params): return {"reading": "22°", "unit": "celsius"}
@@ -86,7 +95,6 @@ def get_capability(capability_id: str):
 # ================= FILES / TASKS / DELIVERIES (Phase D) =================
 
 class UploadInitReq(BaseModel):
-    user_id: str
     filename: str
     mime_type: str = ""
     size: int
@@ -98,7 +106,6 @@ class UploadCompleteReq(BaseModel):
     upload_id: str
 
 class TaskReq(BaseModel):
-    user_id: str
     session_id: str = ""
     conversation_id: str = ""
     prompt: str
@@ -108,14 +115,13 @@ class TaskReq(BaseModel):
 
 class DeliveryReq(BaseModel):
     task_id: str
-    user_id: str
     filename: str
     type: str
     content: str = None
 
 @app.post("/files/upload/init")
-def upload_init(req: UploadInitReq):
-    return files_api.init_upload(req.user_id, req.filename, req.mime_type, req.size,
+def upload_init(req: UploadInitReq, user_id: str = Depends(get_user_id)):
+    return files_api.init_upload(user_id, req.filename, req.mime_type, req.size,
                                  req.checksum, req.conversation_id, req.session_id)
 
 @app.post("/files/upload/part")
@@ -132,57 +138,57 @@ def upload_complete(req: UploadCompleteReq):
     return files_api.complete_upload(req.upload_id)
 
 @app.get("/files")
-def list_files(user_id: str = ""):
-    return files_api.list_files(user_id or None)
+def list_files(user_id: str = Depends(get_user_id)):
+    return files_api.list_files(user_id)
 
 @app.get("/files/{file_id}")
-def get_file(file_id: str, user_id: str = ""):
-    f = files_api.get_file(file_id, user_id or None)
+def get_file(file_id: str, user_id: str = Depends(get_user_id)):
+    f = files_api.get_file(file_id, user_id)
     if not f:
         raise HTTPException(status_code=404, detail="not_found")
     return f
 
 @app.get("/files/{file_id}/download")
-def download_file(file_id: str, user_id: str = ""):
-    f = files_api.get_file(file_id, user_id or None)
+def download_file(file_id: str, user_id: str = Depends(get_user_id)):
+    f = files_api.get_file(file_id, user_id)
     if not f or not os.path.exists(f.get("storage_ref", "")):
         raise HTTPException(status_code=404, detail="not_found")
     return FileResponse(f["storage_ref"], filename=f["filename"])
 
 @app.delete("/files/{file_id}")
-def delete_file(file_id: str, user_id: str = ""):
-    return files_api.delete_file(file_id, user_id or None)
+def delete_file(file_id: str, user_id: str = Depends(get_user_id)):
+    return files_api.delete_file(file_id, user_id)
 
 @app.post("/tasks")
-def create_task(req: TaskReq):
-    return tasks_mod.create_task(req.user_id, req.session_id, req.conversation_id, req.prompt,
+def create_task(req: TaskReq, user_id: str = Depends(get_user_id)):
+    return tasks_mod.create_task(user_id, req.session_id, req.conversation_id, req.prompt,
                                  req.attachment_ids, req.selected_agent, req.selected_capability)
 
 @app.get("/tasks")
-def list_tasks(user_id: str = ""):
-    return tasks_mod.list_tasks(user_id or None)
+def list_tasks(user_id: str = Depends(get_user_id)):
+    return tasks_mod.list_tasks(user_id)
 
 @app.get("/tasks/{task_id}")
-def get_task(task_id: str, user_id: str = ""):
-    t = tasks_mod.get_task(task_id, user_id or None)
+def get_task(task_id: str, user_id: str = Depends(get_user_id)):
+    t = tasks_mod.get_task(task_id, user_id)
     if not t:
         raise HTTPException(status_code=404, detail="not_found")
     return t
 
 @app.get("/deliveries")
-def list_deliveries(user_id: str = ""):
-    return deliveries.list_deliveries(user_id or None)
+def list_deliveries(user_id: str = Depends(get_user_id)):
+    return deliveries.list_deliveries(user_id)
 
 @app.get("/deliveries/{delivery_id}")
-def get_delivery(delivery_id: str, user_id: str = ""):
-    d = deliveries.get_delivery(delivery_id, user_id or None)
+def get_delivery(delivery_id: str, user_id: str = Depends(get_user_id)):
+    d = deliveries.get_delivery(delivery_id, user_id)
     if not d:
         raise HTTPException(status_code=404, detail="not_found")
     return d
 
 @app.get("/deliveries/{delivery_id}/download")
-def download_delivery(delivery_id: str, user_id: str = ""):
-    d = deliveries.get_delivery(delivery_id, user_id or None)
+def download_delivery(delivery_id: str, user_id: str = Depends(get_user_id)):
+    d = deliveries.get_delivery(delivery_id, user_id)
     if not d or not os.path.exists(d.get("storage_ref", "")):
         raise HTTPException(status_code=404, detail="not_found")
     return FileResponse(d["storage_ref"], filename=d["filename"])
