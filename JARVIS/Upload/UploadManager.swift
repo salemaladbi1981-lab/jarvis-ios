@@ -84,10 +84,25 @@ final class UploadManager: NSObject, ObservableObject, URLSessionDelegate, URLSe
             "filename": filename, "mime_type": mimeType, "size": data.count,
             "checksum": checksum, "conversation_id": conversationID, "session_id": sessionID,
         ])
-        URLSession.shared.dataTask(with: req) { [weak self] d, _, _ in
-            guard let self, let d,
+        URLSession.shared.dataTask(with: req) { [weak self] d, resp, error in
+            guard let self else { return }
+            // network error
+            if let error = error {
+                self.resumeFailure(checksum, "init network error: \(error.localizedDescription)")
+                return
+            }
+            // HTTP status
+            if let r = resp as? HTTPURLResponse, !(200..<300).contains(r.statusCode) {
+                self.resumeFailure(checksum, "init HTTP \(r.statusCode)")
+                return
+            }
+            // JSON valid + upload_id
+            guard let d = d,
                   let obj = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any],
-                  let uploadID = obj["upload_id"] as? String else { return }
+                  let uploadID = obj["upload_id"] as? String else {
+                self.resumeFailure(checksum, "init invalid response")
+                return
+            }
             let state = self.loadState(checksum) ?? UploadState(
                 uploadID: uploadID, filename: filename, mimeType: mimeType, checksum: checksum,
                 totalParts: totalParts, uploadedParts: [], sourcePath: src.path)
@@ -97,13 +112,34 @@ final class UploadManager: NSObject, ObservableObject, URLSessionDelegate, URLSe
         }.resume()
     }
 
+    /// فشل → resume continuation (لا hang) + إيقاف مؤشر الرفع.
+    private func resumeFailure(_ checksum: String, _ message: String) {
+        if let cont = continuations.removeValue(forKey: checksum) {
+            cont.resume(throwing: NSError(domain: "Upload", code: 4,
+                                          userInfo: [NSLocalizedDescriptionKey: message]))
+        }
+        Task { @MainActor in self.isUploading = false }
+    }
+
     /// السيرفر مصدر الحقيقة: نستعلم الأجزاء المرفوعة، نرفع الناقص، ونكمل فقط عند الاكتمال.
     private func syncParts(_ state: UploadState) {
         var req = URLRequest(url: baseURL.appendingPathComponent("/files/upload/\(state.uploadID)/status"))
         req.setValue(sessionToken, forHTTPHeaderField: "X-Jarvis-Session")
-        URLSession.shared.dataTask(with: req) { [weak self] d, _, _ in
-            guard let self, let d,
-                  let obj = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] else { return }
+        URLSession.shared.dataTask(with: req) { [weak self] d, resp, error in
+            guard let self else { return }
+            if error != nil {
+                self.resumeFailure(state.checksum, "status network error")
+                return
+            }
+            if let r = resp as? HTTPURLResponse, !(200..<300).contains(r.statusCode) {
+                self.resumeFailure(state.checksum, "status HTTP \(r.statusCode)")
+                return
+            }
+            guard let d = d,
+                  let obj = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] else {
+                self.resumeFailure(state.checksum, "status invalid response")
+                return
+            }
             let uploaded = Set((obj["uploaded_parts"] as? [Int]) ?? [])
             var s = state
             s.uploadedParts = uploaded.sorted()
@@ -114,7 +150,10 @@ final class UploadManager: NSObject, ObservableObject, URLSessionDelegate, URLSe
                 return
             }
             // رفع الأجزاء الناقصة (عبر backgroundSession)
-            guard let data = try? Data(contentsOf: URL(fileURLWithPath: state.sourcePath)) else { return }
+            guard let data = try? Data(contentsOf: URL(fileURLWithPath: state.sourcePath)) else {
+                self.resumeFailure(state.checksum, "source file missing")
+                return
+            }
             for i in 0..<state.totalParts where !uploaded.contains(i) {
                 let lo = i * self.partSize
                 let hi = min(lo + self.partSize, data.count)
