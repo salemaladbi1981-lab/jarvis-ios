@@ -33,6 +33,9 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     private var pendingBargeIn = false
     private var bargeConfirmTask: Task<Void, Never>?
     private let bargeConfirmWindow: TimeInterval = 0.45
+    /// هوية item الصوت الحالي (للـ conversation.item.truncate عند المقاطعة).
+    private var currentOutputItemID: String?
+    private var currentContentIndex = 0
     /// تنفيذ تسلسلي واحد لحالة الجلسة وحراسة أحداثها.
     private let stateQueue = DispatchQueue(label: "jarvis.session.state")
 
@@ -110,9 +113,16 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     /// Barge-in: إلغاء الرد الجاري + مسح الـ playback (الـ mic يبقى شغّالاً).
     /// (لا يغيّر الحالة — المتصلون يبطلون الرد عبر onBarge قبل النداء).
     private func bargeIn() {
-        trace("BARGE speech_started → response.cancel + flush")
+        trace("BARGE speech_started → response.cancel + truncate + flush")
         let cancel = #"{"type":"response.cancel"}"#
         ws?.send(.string(cancel)) { _ in }
+        // قطع الجزء غير المسموع من item الصوت الحالي (item_id + content_index + مدة الصوت المشغّل فعلاً)
+        if let itemID = currentOutputItemID {
+            let playedMs = audio.playedDurationMs
+            let truncate = #"{"type":"conversation.item.truncate","item_id":"\#(itemID)","content_index":\#(currentContentIndex),"audio_end_ms":\#(playedMs)}"#
+            ws?.send(.string(truncate)) { _ in }
+            trace("BARGE truncate item_id=\(itemID) content_index=\(currentContentIndex) audio_end_ms=\(playedMs)")
+        }
         audio.flush()
         let latency = Int((Date().timeIntervalSinceReferenceDate - bargeStartTime) * 1000)
         trace("BARGE playback stopped (latency=\(latency)ms)")
@@ -226,6 +236,8 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
             case "session.updated":
                 trace("session.updated received")
             case "response.created":
+                currentOutputItemID = nil   // رد جديد — لا item صوتي بعد
+                currentContentIndex = 0
                 if guardState.onResponseCreated(text) {
                     trace("response.created id=\(guardState.currentResponseID ?? "?")")
                     eventPublisher.send(.thinking)   // V1 Visual: model بدأ يولد الرد
@@ -283,6 +295,15 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                 }
             case "response.output_audio_transcript.done":
                 // نص رد جارفس — لا يُعاد توجيهه (يمنع الـ loop).
+                break
+            case "response.output_item.done":
+                // تتبع هوية item الصوت الحالي للـ conversation.item.truncate عند المقاطعة.
+                if let iid = SessionEventParser.nested(text, "item", "id") {
+                    currentOutputItemID = iid
+                }
+                if let ci = SessionEventParser.fieldInt(text, "content_index") {
+                    currentContentIndex = ci
+                }
                 break
             case "response.done":
                 // الرد انتهى — ألغي أي pending barge-in (لا barge spurious بعد نهاية الرد).

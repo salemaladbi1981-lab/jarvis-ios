@@ -49,6 +49,13 @@ final class VoiceAudioEngine {
     var currentGeneration: Int {
         workQueue.sync { self.playbackGeneration }
     }
+
+    /// مدة الصوت المشغّل فعلاً (مللي ثانية) من الـ buffers المكتملة (~100ms لكل buffer).
+    /// تُستخدم في conversation.item.truncate لقطع الجزء غير المسموع عند المقاطعة.
+    var playedDurationMs: Int {
+        // 24kHz mono 16-bit = 48 بايت/ms؛ الـ buffer الافتراضي 4800 بايت ≈ 100ms.
+        workQueue.sync { completedBuffers * (targetBufferBytes / 48) }
+    }
     private let targetBufferBytes = 4800        // ~100ms @24kHz 16-bit mono
     private let maxScheduledAhead = 3           // keep up to 3 buffers queued in the player
     private var isSpeaking = false              // response audio still streaming

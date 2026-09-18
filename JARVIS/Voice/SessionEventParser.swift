@@ -16,6 +16,13 @@ enum SessionEventParser {
         return nested[subKey] as? String
     }
 
+    /// استخراج حقل int من المستوى الأعلى (مثل content_index في response.output_item.done).
+    static func fieldInt(_ json: String, _ key: String) -> Int? {
+        guard let data = json.data(using: .utf8),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        return obj[key] as? Int
+    }
+
     static func transcript(_ json: String) -> String? {
         guard let data = json.data(using: .utf8),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
