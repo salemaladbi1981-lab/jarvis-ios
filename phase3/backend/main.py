@@ -11,6 +11,7 @@ from approval import ApprovalEvaluator, ApprovalStore
 from tools import Tool, ToolGateway
 from orchestrator import Orchestrator
 import realtime
+import capabilities
 import ms_oauth
 import telegram_auth
 import youtube_provider
@@ -59,6 +60,25 @@ class ApproveReq(BaseModel):
 @app.get("/health")
 def health():
     return {"ok": True, "provider": config.REALTIME_PROVIDER}
+
+
+@app.get("/capabilities")
+def list_capabilities():
+    """قائمة القدرات المنظمة (بدل raw skills)."""
+    return capabilities.list_capabilities(summary=True)
+
+
+@app.get("/capabilities/overlaps")
+def list_overlaps():
+    return capabilities.overlap_groups()
+
+
+@app.get("/capabilities/{capability_id}")
+def get_capability(capability_id: str):
+    c = capabilities.get_capability(capability_id)
+    if not c:
+        raise HTTPException(status_code=404, detail="unknown_capability")
+    return c
 
 @app.get("/ms/oauth/callback")
 def ms_oauth_callback(code: str = "", state: str = "", error: str = ""):
