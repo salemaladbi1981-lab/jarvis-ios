@@ -94,6 +94,24 @@ class TelegramProvider:
                         "text": m.text or m.message or "", "date": str(m.date or "")}
         return _run(_s())
 
+    def recent_messages(self, chat_id, limit=20):
+        """آخر رسائل محادثة (غير المثبّتة) بالترتيب — لقراءة المسجات الحديثة."""
+        async def _s():
+            async with self._client() as c:
+                msgs = await c.get_messages(int(chat_id), limit=min(limit, 50))
+                out = []
+                for m in msgs:
+                    if m is None:
+                        continue
+                    out.append({
+                        "message_id": str(m.id),
+                        "sender": str(getattr(m, "sender_id", "") or ""),
+                        "text": (m.text or m.message or "")[:500],
+                        "date": str(getattr(m, "date", "") or ""),
+                    })
+                return out
+        return _run(_s())
+
     def message_headers(self, chat_id, message_id):
         """عنوان المحادثة + آخر نص — لبناء الرد (لا نص كامل)."""
         async def _s():

@@ -9,7 +9,7 @@ YOUTUBE_TOOLS = [
     {
         "type": "function",
         "name": "youtube_search",
-        "description": "Search YouTube for videos by a query. Each result carries video_id + title + channel + description. Use when the user asks to find videos or research a topic on YouTube.",
+        "description": "Search YouTube for videos by a query — including songs and music videos. Each result carries video_id + title + channel + description. Use when the user asks to find videos, play a song/music, or research a topic on YouTube. To actually play, follow up with youtube_play using a returned video_id.",
         "parameters": {"type": "object", "properties": {
             "query": {"type": "string"},
             "limit": {"type": "integer", "description": "max results (1-20, default 5)"},
@@ -35,7 +35,7 @@ YOUTUBE_TOOLS = [
     {
         "type": "function",
         "name": "youtube_play",
-        "description": "Playback handoff: open a video in the official YouTube app on the user's iPhone. ALWAYS call youtube_search first to find a real video_id (e.g. the user says 'play the latest video from channel X'), then call youtube_play with that video_id. Returns a play_url the device opens. Do NOT call this without a real video_id from a search result.",
+        "description": "Playback handoff: open a video or song in the official YouTube app on the user's iPhone. ALWAYS call youtube_search first to find a real video_id (e.g. the user says 'play a song by artist X' or 'play the latest video from channel X'), then call youtube_play with that video_id. Returns a play_url the device opens. Do NOT call this without a real video_id from a search result.",
         "parameters": {"type": "object", "properties": {
             "video_id": {"type": "string", "description": "the 11-char video id from youtube_search results"},
         }, "required": ["video_id"]},

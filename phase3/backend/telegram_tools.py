@@ -35,6 +35,15 @@ TELEGRAM_TOOLS = [
     },
     {
         "type": "function",
+        "name": "telegram_recent_messages",
+        "description": "Read the most recent (unpinned) messages in ONE Telegram chat by chat_id, in order. Use when the user asks to read recent messages in a chat (not just the last or pinned one).",
+        "parameters": {"type": "object", "properties": {
+            "chat_id": {"type": "string"},
+            "limit": {"type": "integer", "description": "max messages (1-50, default 20)"},
+        }, "required": ["chat_id"]},
+    },
+    {
+        "type": "function",
         "name": "telegram_draft_reply",
         "description": "Prepare a draft message to a Telegram chat (chat_id). Returns the draft WITHOUT sending. Then show the draft and ask the user to confirm.",
         "parameters": {"type": "object", "properties": {
@@ -77,6 +86,12 @@ def execute_telegram_tool(name, args, pending, provider=None):
             if not m:
                 return {"ok": False, "error": "message_not_found"}
             return {"ok": True, "message": m}
+
+        if name == "telegram_recent_messages":
+            chat_id = args.get("chat_id", "")
+            if not chat_id:
+                return {"ok": False, "error": "chat_id_required"}
+            return {"ok": True, "messages": provider.recent_messages(chat_id, args.get("limit", 20))}
 
         if name == "telegram_draft_reply":
             chat_id = args.get("chat_id", "")
