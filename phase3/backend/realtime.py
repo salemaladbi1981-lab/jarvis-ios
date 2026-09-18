@@ -20,6 +20,7 @@ from maps_tools import MAPS_TOOLS, execute_maps_tool
 from brain_tools import BRAIN_TOOLS, execute_brain_tool
 from memory_tools import MEMORY_TOOLS, execute_memory_tool
 from capabilities_tools import CAPABILITIES_TOOLS, execute_capabilities_tool
+from agent_tools import AGENT_TOOLS, execute_agent_tool
 from agent_runtime import AgentRuntime
 
 OPENAI_REALTIME_URL = "wss://api.openai.com/v1/realtime"
@@ -54,7 +55,7 @@ async def openai_realtime_proxy(client_ws, session_config: dict):
         inp["turn_detection"] = {"type": "semantic_vad", "interrupt_response": False, "create_response": True}
         session.setdefault("instructions", config.REALTIME_INSTRUCTIONS)
         # email tools + auto tool choice → the model can call them mid-turn
-        session["tools"] = build_email_tools() + TELEGRAM_TOOLS + YOUTUBE_TOOLS + INSTAGRAM_TOOLS + MAPS_TOOLS + BRAIN_TOOLS + MEMORY_TOOLS + CAPABILITIES_TOOLS
+        session["tools"] = build_email_tools() + TELEGRAM_TOOLS + YOUTUBE_TOOLS + INSTAGRAM_TOOLS + MAPS_TOOLS + BRAIN_TOOLS + MEMORY_TOOLS + CAPABILITIES_TOOLS + AGENT_TOOLS
         session["tool_choice"] = "auto"
         await upstream.send(json.dumps({"type": "session.update", "session": session}))
 
@@ -105,6 +106,8 @@ async def openai_realtime_proxy(client_ws, session_config: dict):
                             output = await asyncio.to_thread(execute_memory_tool, name, args)
                         elif name == "jarvis_capabilities":
                             output = await asyncio.to_thread(execute_capabilities_tool, name, args)
+                        elif name == "jarvis_agent":
+                            output = await asyncio.to_thread(execute_agent_tool, name, args)
                         elif name.startswith("telegram_"):
                             output = await asyncio.to_thread(execute_telegram_tool, name, args, pending_tg)
                         elif name.startswith("youtube_"):
