@@ -270,7 +270,7 @@ final class HomeViewModel: ObservableObject {
     /// (بدل ما يظن أن الجلسة ما زالت نشطة ويحاول stop بدل connect).
     func handleAppBackgrounded() {
         if isVoiceActive {
-            voiceSession.stopListening()
+            voiceSession.disconnect()
             isVoiceActive = false
             isListening = false
             state = .idle
