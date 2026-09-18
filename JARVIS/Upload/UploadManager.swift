@@ -146,10 +146,23 @@ final class UploadManager: NSObject, ObservableObject, URLSessionDelegate, URLSe
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue(sessionToken, forHTTPHeaderField: "X-Jarvis-Session")
         req.httpBody = try? JSONSerialization.data(withJSONObject: ["upload_id": state.uploadID])
-        URLSession.shared.dataTask(with: req) { [weak self] _, _, _ in
+        URLSession.shared.dataTask(with: req) { [weak self] data, resp, error in
             guard let self else { return }
-            self.clearState(state.checksum)
-            Task { @MainActor in self.isUploading = false; self.progress = 1.0 }
+            // النجاح فقط إذا: HTTP 2xx + ok == true + file_id موجود (تأكيد فعلي)
+            var success = false
+            if error == nil,
+               let r = resp as? HTTPURLResponse, (200..<300).contains(r.statusCode),
+               let d = data,
+               let obj = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any],
+               (obj["ok"] as? Bool) == true,
+               obj["file_id"] as? String != nil {
+                success = true
+            }
+            if success {
+                self.clearState(state.checksum)
+                Task { @MainActor in self.isUploading = false; self.progress = 1.0 }
+            }
+            // فشل complete: لا نمسح state، progress لا يصبح 1، retry لاحقًا عبر restoreOnLaunch/syncParts
         }.resume()
     }
 

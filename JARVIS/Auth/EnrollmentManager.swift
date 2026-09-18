@@ -1,6 +1,7 @@
 import Foundation
 
 /// Enrollment flow: one-time pairing code → POST /auth/enroll → session_token → Keychain.
+/// يمتلك UploadManager/JarvisAPI المشتركين ويربطهما بـ BackgroundSessionBridge.
 @MainActor
 final class EnrollmentManager: ObservableObject {
     @Published var sessionToken: String?
@@ -8,14 +9,19 @@ final class EnrollmentManager: ObservableObject {
     @Published var error: String?
 
     let baseURL: URL
+    var uploadManager: UploadManager?
+    var api: JarvisAPI?
 
     init(baseURL: URL) {
         self.baseURL = baseURL
         self.sessionToken = KeychainStore.load()
         self.isEnrolled = sessionToken != nil
+        if let t = sessionToken {
+            wire(t)
+        }
     }
 
-    /// يُدخل الرمز → يستلم token → يخزّنه في Keychain.
+    /// يُدخل الرمز → يستلم token → يخزّنه في Keychain → يربط UploadManager.
     func enroll(code: String) async -> Bool {
         let trimmed = code.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { error = "أدخل الرمز"; return false }
@@ -36,10 +42,19 @@ final class EnrollmentManager: ObservableObject {
             KeychainStore.save(token)
             sessionToken = token
             isEnrolled = true
+            wire(token)
             return true
         } catch {
             error = "فشل الاتصال"
             return false
         }
+    }
+
+    /// يُنشئ نفس UploadManager المستخدم في التطبيق ويربطه بـ background bridge.
+    private func wire(_ token: String) {
+        let um = UploadManager(baseURL: baseURL, sessionToken: token)
+        uploadManager = um
+        api = JarvisAPI(baseURL: baseURL, sessionToken: token)
+        BackgroundSessionBridge.shared = um   // <== الربط الفعلي هنا
     }
 }

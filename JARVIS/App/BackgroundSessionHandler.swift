@@ -13,10 +13,5 @@ enum BackgroundSessionBridge {
     }
 }
 
-// مثال الاستدعاء داخل AppDelegate:
-//   func application(_ application: UIApplication,
-//                    handleEventsForBackgroundURLSession identifier: String,
-//                    completionHandler: @escaping () -> Void) {
-//       BackgroundSessionBridge.handleEventsForBackgroundURLSession(identifier: identifier,
-//                                                                  completionHandler: completionHandler)
-//   }
+// AppDelegate (JARVIS/App/AppDelegate.swift) يستدعي handleEventsForBackgroundURLSession.
+// BackgroundSessionBridge.shared يُربط في EnrollmentManager.wire(token).
