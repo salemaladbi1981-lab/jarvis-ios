@@ -5,6 +5,8 @@
 import json
 import urllib.request
 import config
+import identity
+import audit_memory
 
 BRAIN_TIMEOUT = 180  # Hermes run قد يستغرق دقائق لمهام معقدة
 
@@ -21,6 +23,10 @@ BRAIN_TOOLS = [
         ),
         "parameters": {"type": "object", "properties": {
             "query": {"type": "string", "description": "the user's full request (Arabic or English)"},
+            "user_id": {"type": "string", "description": "stable user identity (default: salem-aladbi)"},
+            "session_id": {"type": "string", "description": "stable id for the active session"},
+            "conversation_id": {"type": "string", "description": "stable id for this conversation"},
+            "memory_namespace": {"type": "string", "description": "memory scope tied to user+conversation"},
         }, "required": ["query"]},
     },
 ]
@@ -35,12 +41,22 @@ def execute_brain_tool(name, args):
     key = config.API_SERVER_KEY
     if not key:
         return {"ok": False, "error": "hermes_key_missing"}
-    body = json.dumps({"model": "hermes-agent",
-                       "messages": [{"role": "user", "content": query}]}).encode("utf-8")
-    req = urllib.request.Request(config.JARVIS_HERMES_API_URL, data=body, headers={
+    ident = identity.from_args(args)
+    sys_msg = (f"Identity: user_id={ident.user_id}, conversation_id={ident.conversation_id}, "
+               f"memory_namespace={ident.memory_namespace}")
+    body = json.dumps({
+        "model": "hermes-agent",
+        "messages": [
+            {"role": "system", "content": sys_msg},
+            {"role": "user", "content": query},
+        ],
+    }).encode("utf-8")
+    headers = {
         "Content-Type": "application/json",
         "Authorization": "Bearer " + key,
-    })
+        **ident.to_headers(),
+    }
+    req = urllib.request.Request(config.JARVIS_HERMES_API_URL, data=body, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=BRAIN_TIMEOUT) as r:
             d = json.loads(r.read())
@@ -50,4 +66,5 @@ def execute_brain_tool(name, args):
         answer = d["choices"][0]["message"]["content"]
     except Exception:
         return {"ok": False, "error": "bad_hermes_response"}
-    return {"ok": True, "answer": answer}
+    audit_memory.log("brain_delegate", ident.to_dict(), query=query[:120])
+    return {"ok": True, "answer": answer, "identity": ident.to_dict()}

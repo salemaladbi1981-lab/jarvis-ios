@@ -18,6 +18,7 @@ from youtube_tools import YOUTUBE_TOOLS, execute_youtube_tool
 from instagram_tools import INSTAGRAM_TOOLS, execute_instagram_tool
 from maps_tools import MAPS_TOOLS, execute_maps_tool
 from brain_tools import BRAIN_TOOLS, execute_brain_tool
+from memory_tools import MEMORY_TOOLS, execute_memory_tool
 from agent_runtime import AgentRuntime
 
 OPENAI_REALTIME_URL = "wss://api.openai.com/v1/realtime"
@@ -52,7 +53,7 @@ async def openai_realtime_proxy(client_ws, session_config: dict):
         inp["turn_detection"] = {"type": "semantic_vad", "interrupt_response": False, "create_response": True}
         session.setdefault("instructions", config.REALTIME_INSTRUCTIONS)
         # email tools + auto tool choice → the model can call them mid-turn
-        session["tools"] = build_email_tools() + TELEGRAM_TOOLS + YOUTUBE_TOOLS + INSTAGRAM_TOOLS + MAPS_TOOLS + BRAIN_TOOLS
+        session["tools"] = build_email_tools() + TELEGRAM_TOOLS + YOUTUBE_TOOLS + INSTAGRAM_TOOLS + MAPS_TOOLS + BRAIN_TOOLS + MEMORY_TOOLS
         session["tool_choice"] = "auto"
         await upstream.send(json.dumps({"type": "session.update", "session": session}))
 
@@ -99,6 +100,8 @@ async def openai_realtime_proxy(client_ws, session_config: dict):
                             ensure_ascii=False))
                         if name == "jarvis_brain":
                             output = await asyncio.to_thread(execute_brain_tool, name, args)
+                        elif name == "jarvis_recall":
+                            output = await asyncio.to_thread(execute_memory_tool, name, args)
                         elif name.startswith("telegram_"):
                             output = await asyncio.to_thread(execute_telegram_tool, name, args, pending_tg)
                         elif name.startswith("youtube_"):
