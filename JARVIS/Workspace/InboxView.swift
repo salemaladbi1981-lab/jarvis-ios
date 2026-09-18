@@ -2,7 +2,11 @@ import SwiftUI
 
 /// صندوق الوارد: الملفات الواردة (اسم/نوع/حجم/حالة) مربوطة فعليًا بـ GET /files.
 struct InboxView: View {
-    @StateObject private var vm = InboxViewModel()
+    @StateObject private var vm: InboxViewModel
+
+    init(api: JarvisAPI) {
+        _vm = StateObject(wrappedValue: InboxViewModel(api: api))
+    }
 
     var body: some View {
         NavigationView {

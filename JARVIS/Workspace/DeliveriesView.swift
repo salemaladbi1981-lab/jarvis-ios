@@ -2,7 +2,11 @@ import SwiftUI
 
 /// مركز التسليمات: مخرجات جارفس مربوطة فعليًا بـ GET /deliveries + فتح/تنزيل/مشاركة.
 struct DeliveriesView: View {
-    @StateObject private var vm = DeliveriesViewModel()
+    @StateObject private var vm: DeliveriesViewModel
+
+    init(api: JarvisAPI) {
+        _vm = StateObject(wrappedValue: DeliveriesViewModel(api: api))
+    }
 
     var body: some View {
         NavigationView {
