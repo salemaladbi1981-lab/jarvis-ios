@@ -4,7 +4,7 @@
 بدون session موثّق → تُرفض الطلبات (401).
 """
 from __future__ import annotations
-import json, os, time, uuid
+import json, os, time, uuid, secrets
 
 SESSION_PATH = os.environ.get("JARVIS_SESSIONS", "/opt/data/logs/jarvis-sessions.json")
 
@@ -48,6 +48,46 @@ def revoke_session(session_token: str) -> None:
     d = _load()
     d.pop(session_token, None)
     _save(d)
+
+
+ENROLL_PATH = os.environ.get("JARVIS_ENROLL", "/opt/data/logs/jarvis-enroll.json")
+
+
+def _load_enroll() -> dict:
+    try:
+        with open(ENROLL_PATH, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _save_enroll(d: dict) -> None:
+    os.makedirs(os.path.dirname(ENROLL_PATH), exist_ok=True)
+    tmp = ENROLL_PATH + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(d, f, ensure_ascii=False)
+    os.replace(tmp, ENROLL_PATH)
+
+
+def create_enrollment_code(ttl_seconds: int = 600) -> str:
+    """يولّد رمز pairing لمرة واحدة (server-side)، يُسلَّم للمالك out-of-band."""
+    code = secrets.token_urlsafe(24)
+    d = _load_enroll()
+    d[code] = {"created_at": time.time(), "expires_at": time.time() + ttl_seconds, "used": False}
+    _save_enroll(d)
+    return code
+
+
+def redeem_enrollment(code: str) -> str | None:
+    """يستبدل رمز pairing (مرة واحدة، تنتهي صلاحيته) بـ session_token."""
+    d = _load_enroll()
+    rec = d.get(code)
+    if not rec or rec.get("used") or time.time() > rec.get("expires_at", 0):
+        return None
+    rec["used"] = True
+    d[code] = rec
+    _save_enroll(d)
+    return create_session(PRIMARY_USER_ID)
 
 
 PRIMARY_USER_ID = "salem-aladbi"

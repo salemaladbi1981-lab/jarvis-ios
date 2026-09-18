@@ -61,6 +61,29 @@ def auth_bootstrap(req: BootstrapReq):
         raise HTTPException(status_code=401, detail="unauthorized")
     return {"session_token": token}
 
+
+class EnrollReq(BaseModel):
+    code: str
+
+
+@app.post("/auth/enroll")
+def auth_enroll(req: EnrollReq):
+    """Secure pairing: يستبدل رمز enrollment (مرة واحدة، قصير الصلاحية) بـ session_token.
+
+    الرمز يولّده السيرفر ويُسلَّم للمالك out-of-band (ليس داخل التطبيق).
+    """
+    token = auth.redeem_enrollment(req.code)
+    if not token:
+        raise HTTPException(status_code=401, detail="unauthorized")
+    return {"session_token": token}
+
+
+@app.post("/auth/enroll/code")
+def auth_enroll_code(user_id: str = Depends(get_user_id)):
+    """يولّد رمز pairing جديد لجهاز آخر — يتطلب session موثّقًا (المالك فقط)."""
+    code = auth.create_enrollment_code()
+    return {"enrollment_code": code, "expires_in": 600}
+
 # --- demo safe tools (read-only) ---
 def read_temperature(params): return {"reading": "22°", "unit": "celsius"}
 def read_light_state(params): return {"device": params.get("device", "all"), "level": "35%"}
