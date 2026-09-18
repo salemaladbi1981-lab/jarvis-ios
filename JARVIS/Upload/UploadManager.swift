@@ -160,7 +160,12 @@ final class UploadManager: NSObject, ObservableObject, URLSessionDelegate, URLSe
                 let part = data.subdata(in: lo..<hi)
                 let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("part-\(i)-\(UUID().uuidString)")
                 try? part.write(to: tmp)
-                var pr = URLRequest(url: self.baseURL.appendingPathComponent("/files/upload/part?upload_id=\(state.uploadID)&part_number=\(i)"))
+                var comps = URLComponents(url: self.baseURL.appendingPathComponent("/files/upload/part"), resolvingAgainstBaseURL: false)!
+                comps.queryItems = [
+                    URLQueryItem(name: "upload_id", value: state.uploadID),
+                    URLQueryItem(name: "part_number", value: String(i)),
+                ]
+                var pr = URLRequest(url: comps.url!)
                 pr.httpMethod = "POST"
                 pr.setValue(self.sessionToken, forHTTPHeaderField: "X-Jarvis-Session")
                 let t = self.backgroundSession.uploadTask(with: pr, fromFile: tmp)
