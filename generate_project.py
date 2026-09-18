@@ -33,6 +33,16 @@ APP_SOURCES = [
     "JARVIS/Memory/MemoryItem.swift", "JARVIS/Memory/MemoryStore.swift",
     "JARVIS/Memory/MemoryRetrieval.swift", "JARVIS/Memory/MemorySeed.swift",
     "JARVIS/Integrations/AppleEventKitWriter.swift",
+    "JARVIS/App/AppDelegate.swift", "JARVIS/App/BackgroundSessionHandler.swift",
+    "JARVIS/Auth/EnrollmentManager.swift", "JARVIS/Auth/JarvisConfig.swift",
+    "JARVIS/Auth/KeychainStore.swift", "JARVIS/Auth/PairingView.swift",
+    "JARVIS/Camera/CameraCaptureView.swift", "JARVIS/Camera/CameraVideoView.swift",
+    "JARVIS/Upload/UploadManager.swift",
+    "JARVIS/Workspace/WorkspaceComposerView.swift", "JARVIS/Workspace/AttachmentMenu.swift",
+    "JARVIS/Workspace/AttachmentPreviewBar.swift", "JARVIS/Workspace/AudioRecorderView.swift",
+    "JARVIS/Workspace/DeliveriesView.swift", "JARVIS/Workspace/DocumentScanner.swift",
+    "JARVIS/Workspace/InboxView.swift", "JARVIS/Workspace/JarvisAPI.swift",
+    "JARVIS/Agents/AgentRouter.swift",
 ]
 APP_RESOURCES = [
     "JARVIS/Assets/Fonts/IBMPlexSansArabic-Regular.ttf",
@@ -115,6 +125,10 @@ groups["Voice"] = subgroup("Voice", [p for p in APP_SOURCES if "/Voice/" in p])
 groups["Integrations"] = subgroup("Integrations", [p for p in APP_SOURCES if "/Integrations/" in p])
 groups["Diagnostics"] = subgroup("Diagnostics", [p for p in APP_SOURCES if "/Diagnostics/" in p])
 groups["Memory"] = subgroup("Memory", [p for p in APP_SOURCES if "/Memory/" in p])
+groups["Auth"] = subgroup("Auth", [p for p in APP_SOURCES if "/Auth/" in p])
+groups["Camera"] = subgroup("Camera", [p for p in APP_SOURCES if "/Camera/" in p])
+groups["Upload"] = subgroup("Upload", [p for p in APP_SOURCES if "/Upload/" in p])
+groups["Workspace"] = subgroup("Workspace", [p for p in APP_SOURCES if "/Workspace/" in p])
 
 font_refs = [app_res_refs[p] for p in APP_RESOURCES if "Fonts" in p]
 json_refs = [app_res_refs[p] for p in APP_RESOURCES if "Resources" in p]
@@ -127,7 +141,9 @@ resources_group = group(sorted(json_refs), "Resources", "Resources")
 jarvis_group = group(
     [groups["App"], groups["Home"], groups["Core"], groups["Cards"],
      groups["State"], groups["Agents"], groups["DesignSystem"],
-     groups["Providers"], groups["Mocks"], groups["iPad"], groups["macOS"], groups["Voice"], groups["Integrations"], groups["Diagnostics"], groups["Memory"], assets_group, resources_group, app_res_refs["JARVIS/Assets.xcassets"], plist_ref],
+     groups["Providers"], groups["Mocks"], groups["iPad"], groups["macOS"], groups["Voice"], groups["Integrations"], groups["Diagnostics"], groups["Memory"],
+     groups["Auth"], groups["Camera"], groups["Upload"], groups["Workspace"],
+     assets_group, resources_group, app_res_refs["JARVIS/Assets.xcassets"], plist_ref],
     "JARVIS", "JARVIS"
 )
 tests_group = group(sorted(test_refs.values()), "JARVISTests", "JARVISTests")
