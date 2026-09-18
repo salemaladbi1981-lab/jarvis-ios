@@ -10,9 +10,9 @@ struct JarvisShortcuts: AppShortcutsProvider {
                 "Start \(.applicationName)",
                 "Ask \(.applicationName)",
                 "Talk to \(.applicationName)",
-                "شغّل جارفس",
-                "اسأل جارفس",
-                "افتح جارفس",
+                "شغل \(.applicationName)",
+                "اسأل \(.applicationName)",
+                "افتح \(.applicationName)"
             ],
             shortTitle: "Start Jarvis",
             systemImageName: "mic.fill"
@@ -20,10 +20,10 @@ struct JarvisShortcuts: AppShortcutsProvider {
         AppShortcut(
             intent: JarvisNavigateIntent(),
             phrases: [
-                "Navigate to \(\.$destination)",
-                "Directions to \(\.$destination)",
-                "وصّلني إلى \(\.$destination)",
-                "خذني إلى \(\.$destination)",
+                "Navigate with \(.applicationName)",
+                "Directions with \(.applicationName)",
+                "وديني عبر \(.applicationName)",
+                "خذني عبر \(.applicationName)"
             ],
             shortTitle: "Navigate",
             systemImageName: "location.fill"
