@@ -77,7 +77,10 @@ final class HomeViewModel: ObservableObject {
                 guard let self else { return }
                 self.state = JarvisStateMapper.state(for: event)
                 switch event {
-                case .listening: self.isListening = true
+                case .listening:
+                    self.isListening = true
+                    // بداية دور جديد = نهاية الرد السابق → نرجع الـ orbit للحياد.
+                    self.orbit.items.forEach { self.orbit.deactivate($0.id) }
                 case .disconnected, .connected:
                     self.isListening = false
                     // response.done / session ready → success + deactivate agents
@@ -113,6 +116,11 @@ final class HomeViewModel: ObservableObject {
 
                 switch phase {
                 case "handoff":
+                    if agentID == "core_coordinator" {
+                        // Return-to-coordinator handoff — لا نفعّل المنسق فوراً؛
+                        // يبقى الـ specialist ظاهراً حتى نهاية الرد الصوتي.
+                        break
+                    }
                     if let fromAgentID,
                        let from = registry.agents.first(where: { $0.id == fromAgentID }) {
                         self.orbit.activate(from.id, name: from.name, group: from.group)
