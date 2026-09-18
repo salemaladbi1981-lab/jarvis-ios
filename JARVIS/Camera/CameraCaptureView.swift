@@ -1,9 +1,9 @@
 import SwiftUI
 import AVFoundation
 
-/// كاميرا صورة حقيقية (AVFoundation): أمامي/خلفي، فلاش، معاينة، Use/Retake.
-/// ليست PhotosPicker — التقاط مباشر. لا تُرفع الصورة قبل موافقة المستخدم.
+/// كاميرا صورة (AVFoundation): زر X للإغلاق، معاينة Use/Retake، لا رفع قبل الموافقة.
 struct CameraCaptureView: View {
+    @Environment(\.dismiss) private var dismiss
     @StateObject private var model = CameraModel()
     let onUsePhoto: (Data, String) -> Void
 
@@ -11,25 +11,33 @@ struct CameraCaptureView: View {
         ZStack {
             Color.black.ignoresSafeArea()
             if let img = model.capturedImage {
-                Image(uiImage: img).resizable().scaledToFit()
+                Image(uiImage: img).resizable().scaledToFit().ignoresSafeArea()
                 VStack {
+                    closeButton
                     Spacer()
-                    HStack {
+                    HStack(spacing: 24) {
                         Button("إعادة التصوير") { model.retake() }
-                            .padding().background(.red.opacity(0.8)).foregroundColor(.white).cornerRadius(10)
+                            .padding(.horizontal).padding(.vertical, 10)
+                            .background(.red.opacity(0.85)).foregroundColor(.white).cornerRadius(10)
                         Button("استخدام الصورة") {
-                            if let d = model.capturedData { onUsePhoto(d, "image/jpeg") }
-                        }.padding().background(.green).foregroundColor(.white).cornerRadius(10)
+                            if let d = model.capturedData {
+                                onUsePhoto(d, "image/jpeg")
+                                dismiss()
+                            }
+                        }
+                        .padding(.horizontal).padding(.vertical, 10)
+                        .background(.green).foregroundColor(.white).cornerRadius(10)
                     }.padding(.bottom, 30)
                 }
             } else {
                 CameraPreviewLayer(session: model.session).ignoresSafeArea()
                 VStack {
                     HStack {
+                        closeButton
+                        Spacer()
                         Button(action: model.toggleCamera) {
                             Image(systemName: "arrow.triangle.2.circlepath.camera").font(.title).foregroundColor(.white)
                         }.padding()
-                        Spacer()
                         Button(action: model.toggleFlash) {
                             Image(systemName: model.isFlashOn ? "bolt.fill" : "bolt.slash").font(.title)
                                 .foregroundColor(model.isFlashOn ? .yellow : .white)
@@ -45,6 +53,16 @@ struct CameraCaptureView: View {
         }
         .onAppear { model.requestAndStart() }
         .onDisappear { model.stop() }
+    }
+
+    private var closeButton: some View {
+        HStack {
+            Button(action: { dismiss() }) {
+                Image(systemName: "xmark.circle.fill").font(.title).foregroundColor(.white)
+                    .shadow(radius: 3)
+            }
+            Spacer()
+        }.padding()
     }
 }
 
@@ -63,16 +81,14 @@ final class CameraModel: NSObject, ObservableObject {
 
     func requestAndStart() {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
-        case .authorized:
-            configure()
+        case .authorized: configure()
         case .notDetermined:
             AVCaptureDevice.requestAccess(for: .video) { granted in
                 Task { @MainActor in
-                    if granted { self.configure() } else { self.permissionDenied = true }
+                    granted ? self.configure() : (self.permissionDenied = true)
                 }
             }
-        default:
-            permissionDenied = true
+        default: permissionDenied = true
         }
     }
 
@@ -82,15 +98,9 @@ final class CameraModel: NSObject, ObservableObject {
 
     func configure() {
         session.beginConfiguration()
-        // إزالة input القديم قبل إضافة الجديد (إصلاح التبديل)
-        if let old = videoInput {
-            session.removeInput(old)
-            videoInput = nil
-        }
-        if let d = device(), let input = try? AVCaptureDeviceInput(device: d),
-           session.canAddInput(input) {
-            session.addInput(input)
-            videoInput = input
+        if let old = videoInput { session.removeInput(old); videoInput = nil }
+        if let d = device(), let input = try? AVCaptureDeviceInput(device: d), session.canAddInput(input) {
+            session.addInput(input); videoInput = input
         }
         if session.canAddOutput(photoOutput) && !session.outputs.contains(where: { $0 === photoOutput }) {
             session.addOutput(photoOutput)

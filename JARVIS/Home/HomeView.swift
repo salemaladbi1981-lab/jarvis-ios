@@ -1,4 +1,14 @@
 import SwiftUI
+import PhotosUI
+import UniformTypeIdentifiers
+
+struct PendingAttachment: Identifiable {
+    let id = UUID()
+    let kind: String  // photo | video | file | scan | audio
+    let data: Data?
+    let url: URL?
+    let filename: String
+}
 
 /// Single-column Home (iPhone + iPad portrait + narrow split view).
 /// Reuses shared hero/title/waveform components.
@@ -9,6 +19,14 @@ struct HomeView: View {
     @State private var showAttachments = false
     @State private var showCameraPhoto = false
     @State private var showCameraVideo = false
+    @State private var pendingAttachments: [PendingAttachment] = []
+    @State private var showPhotoPicker = false
+    @State private var showVideoPicker = false
+    @State private var photoItem: PhotosPickerItem?
+    @State private var videoItem: PhotosPickerItem?
+    @State private var showFileImporter = false
+    @State private var showScanner = false
+    @State private var showAudioRecorder = false
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -66,6 +84,11 @@ struct HomeView: View {
         }
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 0) {
+                if !pendingAttachments.isEmpty {
+                    Text("\(pendingAttachments.count) مرفق")
+                        .font(.caption).foregroundColor(JarvisColor.text_muted)
+                        .padding(.top, 4)
+                }
                 WorkspaceComposerView(
                     text: $composerText,
                     onSend: {
@@ -94,23 +117,66 @@ struct HomeView: View {
         }
         .sheet(isPresented: $showAttachments) {
             AttachmentMenu(
-                onPickPhotos: { },
-                onPickVideos: { },
-                onPickFiles: { },
-                onCameraPhoto: { showCameraPhoto = true },
-                onCameraVideo: { showCameraVideo = true },
-                onScanDocument: { },
-                onRecordAudio: { }
+                onPickPhotos: { showAttachments = false; showPhotoPicker = true },
+                onPickVideos: { showAttachments = false; showVideoPicker = true },
+                onPickFiles: { showAttachments = false; showFileImporter = true },
+                onCameraPhoto: {
+                    showAttachments = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { showCameraPhoto = true }
+                },
+                onCameraVideo: {
+                    showAttachments = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { showCameraVideo = true }
+                },
+                onScanDocument: { showAttachments = false; showScanner = true },
+                onRecordAudio: { showAttachments = false; showAudioRecorder = true }
             )
         }
         .fullScreenCover(isPresented: $showCameraPhoto) {
             CameraCaptureView { data, mime in
-                showCameraPhoto = false
+                pendingAttachments.append(PendingAttachment(kind: "photo", data: data, url: nil, filename: "photo-\(UUID().uuidString).jpg"))
             }
         }
         .fullScreenCover(isPresented: $showCameraVideo) {
             CameraVideoView { url in
-                showCameraVideo = false
+                pendingAttachments.append(PendingAttachment(kind: "video", data: nil, url: url, filename: url.lastPathComponent))
+            }
+        }
+        .photosPicker(isPresented: $showPhotoPicker, selection: $photoItem, matching: .images)
+        .onChange(of: photoItem) { _, item in
+            guard let item else { return }
+            Task {
+                if let data = try? await item.loadTransferable(type: Data.self) {
+                    pendingAttachments.append(PendingAttachment(kind: "photo", data: data, url: nil, filename: "photo-\(UUID().uuidString).jpg"))
+                }
+            }
+        }
+        .photosPicker(isPresented: $showVideoPicker, selection: $videoItem, matching: .videos)
+        .onChange(of: videoItem) { _, item in
+            guard let item else { return }
+            Task {
+                if let data = try? await item.loadTransferable(type: Data.self) {
+                    pendingAttachments.append(PendingAttachment(kind: "video", data: data, url: nil, filename: "video-\(UUID().uuidString).mov"))
+                }
+            }
+        }
+        .fileImporter(isPresented: $showFileImporter, allowedContentTypes: [.item]) { result in
+            if case .success(let url) = result {
+                let data = try? Data(contentsOf: url)
+                pendingAttachments.append(PendingAttachment(kind: "file", data: data, url: url, filename: url.lastPathComponent))
+            }
+        }
+        .fullScreenCover(isPresented: $showScanner) {
+            DocumentScanner { urls in
+                for url in urls {
+                    let data = try? Data(contentsOf: url)
+                    pendingAttachments.append(PendingAttachment(kind: "scan", data: data, url: url, filename: url.lastPathComponent))
+                }
+            }
+        }
+        .fullScreenCover(isPresented: $showAudioRecorder) {
+            AudioRecorderView { url in
+                pendingAttachments.append(PendingAttachment(kind: "audio", data: nil, url: url, filename: url.lastPathComponent))
             }
         }
     }

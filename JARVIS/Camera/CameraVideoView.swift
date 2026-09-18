@@ -1,9 +1,10 @@
 import SwiftUI
 import AVFoundation
-import AVKit  // لـ AVPlayerViewController
+import AVKit
 
-/// كاميرا فيديو حقيقية (AVCaptureMovieFileOutput): start/stop، أمامي/خلفي، ميكروفون، torch، preview، retake، use.
+/// كاميرا فيديو (AVCaptureMovieFileOutput): زر X، معاينة Use/Retake.
 struct CameraVideoView: View {
+    @Environment(\.dismiss) private var dismiss
     @StateObject private var model = CameraVideoModel()
     let onUseVideo: (URL) -> Void
 
@@ -13,22 +14,29 @@ struct CameraVideoView: View {
             if let url = model.recordedURL {
                 VideoPlayerLayer(url: url).ignoresSafeArea()
                 VStack {
+                    closeButton
                     Spacer()
-                    HStack {
+                    HStack(spacing: 24) {
                         Button("إعادة التصوير") { model.retake() }
-                            .padding().background(.red.opacity(0.8)).foregroundColor(.white).cornerRadius(10)
-                        Button("استخدام الفيديو") { onUseVideo(url) }
-                            .padding().background(.green).foregroundColor(.white).cornerRadius(10)
+                            .padding(.horizontal).padding(.vertical, 10)
+                            .background(.red.opacity(0.85)).foregroundColor(.white).cornerRadius(10)
+                        Button("استخدام الفيديو") {
+                            onUseVideo(url)
+                            dismiss()
+                        }
+                        .padding(.horizontal).padding(.vertical, 10)
+                        .background(.green).foregroundColor(.white).cornerRadius(10)
                     }.padding(.bottom, 30)
                 }
             } else {
                 CameraPreviewLayer(session: model.session).ignoresSafeArea()
                 VStack {
                     HStack {
+                        closeButton
+                        Spacer()
                         Button(action: model.toggleCamera) {
                             Image(systemName: "arrow.triangle.2.circlepath.camera").font(.title).foregroundColor(.white)
                         }.padding()
-                        Spacer()
                         Button(action: model.toggleTorch) {
                             Image(systemName: model.isTorchOn ? "bolt.fill" : "bolt.slash").font(.title)
                                 .foregroundColor(model.isTorchOn ? .yellow : .white)
@@ -43,6 +51,16 @@ struct CameraVideoView: View {
         }
         .onAppear { model.requestAndStart() }
         .onDisappear { model.stop() }
+    }
+
+    private var closeButton: some View {
+        HStack {
+            Button(action: { dismiss() }) {
+                Image(systemName: "xmark.circle.fill").font(.title).foregroundColor(.white)
+                    .shadow(radius: 3)
+            }
+            Spacer()
+        }.padding()
     }
 }
 
@@ -78,7 +96,6 @@ final class CameraVideoModel: NSObject, ObservableObject, AVCaptureFileOutputRec
         if let d = device(), let input = try? AVCaptureDeviceInput(device: d), session.canAddInput(input) {
             session.addInput(input); videoInput = input
         }
-        // ميكروفون
         if let mic = AVCaptureDevice.default(for: .audio),
            let a = try? AVCaptureDeviceInput(device: mic), session.canAddInput(a) {
             session.addInput(a); audioInput = a
@@ -105,10 +122,7 @@ final class CameraVideoModel: NSObject, ObservableObject, AVCaptureFileOutputRec
         movieOutput.startRecording(to: url, recordingDelegate: self)
         isRecording = true
     }
-    func stopRecording() {
-        movieOutput.stopRecording()
-        isRecording = false
-    }
+    func stopRecording() { movieOutput.stopRecording(); isRecording = false }
     func retake() { recordedURL = nil }
 
     nonisolated func fileOutput(_ output: AVCaptureFileOutput, didFinishRecordingTo outputFileURL: URL, from connections: [AVCaptureConnection], error: Error?) {
