@@ -3,7 +3,7 @@ import uuid, json, os
 from urllib.parse import parse_qs
 from fastapi import FastAPI, WebSocket, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from pydantic import BaseModel
 
 import config, audit
@@ -12,6 +12,9 @@ from tools import Tool, ToolGateway
 from orchestrator import Orchestrator
 import realtime
 import capabilities
+import files_api
+import tasks as tasks_mod
+import deliveries
 import ms_oauth
 import telegram_auth
 import youtube_provider
@@ -79,6 +82,111 @@ def get_capability(capability_id: str):
     if not c:
         raise HTTPException(status_code=404, detail="unknown_capability")
     return c
+
+# ================= FILES / TASKS / DELIVERIES (Phase D) =================
+
+class UploadInitReq(BaseModel):
+    user_id: str
+    filename: str
+    mime_type: str = ""
+    size: int
+    checksum: str = ""
+    conversation_id: str = ""
+    session_id: str = ""
+
+class UploadCompleteReq(BaseModel):
+    upload_id: str
+
+class TaskReq(BaseModel):
+    user_id: str
+    session_id: str = ""
+    conversation_id: str = ""
+    prompt: str
+    attachment_ids: list = []
+    selected_agent: str = None
+    selected_capability: str = None
+
+class DeliveryReq(BaseModel):
+    task_id: str
+    user_id: str
+    filename: str
+    type: str
+    content: str = None
+
+@app.post("/files/upload/init")
+def upload_init(req: UploadInitReq):
+    return files_api.init_upload(req.user_id, req.filename, req.mime_type, req.size,
+                                 req.checksum, req.conversation_id, req.session_id)
+
+@app.post("/files/upload/part")
+async def upload_part(upload_id: str, part_number: int, checksum: str = "", request: Request = None):
+    data = await request.body()
+    return files_api.upload_part(upload_id, part_number, data, checksum)
+
+@app.get("/files/upload/{upload_id}/status")
+def upload_status(upload_id: str):
+    return files_api.upload_status(upload_id)
+
+@app.post("/files/upload/complete")
+def upload_complete(req: UploadCompleteReq):
+    return files_api.complete_upload(req.upload_id)
+
+@app.get("/files")
+def list_files(user_id: str = ""):
+    return files_api.list_files(user_id or None)
+
+@app.get("/files/{file_id}")
+def get_file(file_id: str):
+    f = files_api.get_file(file_id)
+    if not f:
+        raise HTTPException(status_code=404, detail="not_found")
+    return f
+
+@app.get("/files/{file_id}/download")
+def download_file(file_id: str):
+    f = files_api.get_file(file_id)
+    if not f or not os.path.exists(f.get("storage_ref", "")):
+        raise HTTPException(status_code=404, detail="not_found")
+    return FileResponse(f["storage_ref"], filename=f["filename"])
+
+@app.delete("/files/{file_id}")
+def delete_file(file_id: str, user_id: str = ""):
+    return files_api.delete_file(file_id, user_id or None)
+
+@app.post("/tasks")
+def create_task(req: TaskReq):
+    return tasks_mod.create_task(req.user_id, req.session_id, req.conversation_id, req.prompt,
+                                 req.attachment_ids, req.selected_agent, req.selected_capability)
+
+@app.get("/tasks")
+def list_tasks(user_id: str = ""):
+    return tasks_mod.list_tasks(user_id or None)
+
+@app.get("/tasks/{task_id}")
+def get_task(task_id: str):
+    t = tasks_mod.get_task(task_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="not_found")
+    return t
+
+@app.get("/deliveries")
+def list_deliveries(user_id: str = ""):
+    return deliveries.list_deliveries(user_id or None)
+
+@app.get("/deliveries/{delivery_id}")
+def get_delivery(delivery_id: str):
+    d = deliveries.get_delivery(delivery_id)
+    if not d:
+        raise HTTPException(status_code=404, detail="not_found")
+    return d
+
+@app.get("/deliveries/{delivery_id}/download")
+def download_delivery(delivery_id: str):
+    d = deliveries.get_delivery(delivery_id)
+    if not d or not os.path.exists(d.get("storage_ref", "")):
+        raise HTTPException(status_code=404, detail="not_found")
+    return FileResponse(d["storage_ref"], filename=d["filename"])
+
 
 @app.get("/ms/oauth/callback")
 def ms_oauth_callback(code: str = "", state: str = "", error: str = ""):
