@@ -225,7 +225,7 @@ struct HomeView: View {
                                                   conversationID: conversationID(), sessionID: sessionID())
                 fileIDs.append(id)
             } catch {
-                sendError = "فشل رفع المرفق — أعد المحاولة"
+                sendError = "فشل رفع المرفق: \(error.localizedDescription)"
                 return
             }
         }
