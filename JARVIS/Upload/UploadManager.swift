@@ -163,19 +163,27 @@ final class UploadManager: NSObject, ObservableObject, URLSessionDelegate, URLSe
                 var pr = URLRequest(url: self.baseURL.appendingPathComponent("/files/upload/part?upload_id=\(state.uploadID)&part_number=\(i)"))
                 pr.httpMethod = "POST"
                 pr.setValue(self.sessionToken, forHTTPHeaderField: "X-Jarvis-Session")
-                self.backgroundSession.uploadTask(with: pr, fromFile: tmp).resume()
+                let t = self.backgroundSession.uploadTask(with: pr, fromFile: tmp)
+                t.taskDescription = state.checksum   // ربط الـ task بـ checksum لمعرفة أي continuation عند الفشل
+                t.resume()
             }
         }.resume()
     }
 
     /// completion handling لكل part — نتحقق من HTTP success ثم نعيد المزامنة من السيرفر.
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        // HTTP success؟
+        let checksum = task.taskDescription ?? ""
+        // HTTP فشل → resume (لا return صامت)
         if let resp = task.response as? HTTPURLResponse, !(200..<300).contains(resp.statusCode) {
-            return  // فشل — لا نعتبر الجزء uploaded
+            if !checksum.isEmpty { resumeFailure(checksum, "part HTTP \(resp.statusCode)") }
+            return
         }
-        guard error == nil else { return }
-        // بعد أي نجاح نعيد المزامنة من السيرفر (يقرر هل نكمل أم نرفع ناقصًا)
+        // network error → resume
+        if let error = error {
+            if !checksum.isEmpty { resumeFailure(checksum, "part error: \(error.localizedDescription)") }
+            return
+        }
+        // نجاح — نعيد المزامنة من السيرفر (يقرر هل نكمل أم نرفع ناقصًا)
         let states = allPersistedStates()
         for s in states { syncParts(s) }
     }
@@ -226,6 +234,13 @@ final class UploadManager: NSObject, ObservableObject, URLSessionDelegate, URLSe
         return try await withCheckedThrowingContinuation { cont in
             continuations[checksum] = cont
             upload(data, filename: filename, mimeType: mimeType, conversationID: conversationID, sessionID: sessionID)
+            // safety timeout — يمنع hang إلى الأبد لو فشل أي مسار آخر
+            DispatchQueue.global().asyncAfter(deadline: .now() + 600) { [weak self] in
+                if let c = self?.continuations.removeValue(forKey: checksum) {
+                    c.resume(throwing: NSError(domain: "Upload", code: 5,
+                                               userInfo: [NSLocalizedDescriptionKey: "upload timeout"]))
+                }
+            }
         }
     }
 
