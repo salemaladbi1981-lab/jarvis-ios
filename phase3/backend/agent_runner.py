@@ -4,8 +4,12 @@
 - run_agent(): تنفيذ + حالة persistent + audit trail persistent.
 """
 from __future__ import annotations
-import json, time, uuid, urllib.request
+import json, time, uuid, hashlib, urllib.request
 import config, identity, agent_profiles, agent_state, agent_audit
+
+# التقييد الحالي: request-level enforcement (يمنع tool/capability عند الطلب قبل Hermes).
+# ليس hermes-tool enforcement (Hermes يحتفظ بأدواته الداخلية الكاملة عند التنفيذ).
+ENFORCEMENT_TYPE = "request-level"
 
 
 def enforce(agent_id: str, tools=None, capabilities=None) -> dict:
@@ -74,18 +78,22 @@ def run_agent(agent_id: str, task: str, ident_dict: dict,
             data = json.loads(resp.read().decode("utf-8"))
         answer = data["choices"][0]["message"]["content"]
         dur = round(time.time() - t0, 1)
-        # persistent status
-        agent_state.mark_verified(agent_id, test_evidence=f"execution: {task[:80]}",
+        # persistent status (task_hash فقط، بلا نص المستخدم)
+        agent_state.mark_verified(agent_id,
+                                  task_hash=hashlib.sha256(task.encode("utf-8")).hexdigest()[:16],
+                                  test_type="execution",
                                   result_status="ok", result_len=len(answer))
         # persistent audit
         agent_audit.append({
             "task_id": task_id, "agent_id": agent_id, "started": t0,
+            "task_hash": hashlib.sha256(task.encode("utf-8")).hexdigest()[:16],
             "capability": active_capability, "tools_used": requested_tools or prof["allowed_tools"],
             "finished": time.time(), "duration_s": dur, "result_status": "ok", "result_len": len(answer),
+            "enforcement_type": ENFORCEMENT_TYPE,
         })
         return {
             "ok": True, "agent_id": agent_id, "name_ar": prof["name_ar"], "answer": answer,
-            "task_id": task_id, "execution_status": "verified",
+            "task_id": task_id, "execution_status": "verified", "enforcement_type": ENFORCEMENT_TYPE,
             "audit_trail": [
                 {"event": "started", "ts": t0, "agent_id": agent_id,
                  "active_capability": active_capability, "allowed_tools": prof["allowed_tools"]},

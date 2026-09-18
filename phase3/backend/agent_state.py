@@ -21,12 +21,12 @@ def _save(state: dict) -> None:
     os.replace(tmp, STATE_PATH)
 
 
-def mark_verified(agent_id: str, test_evidence: str, result_status: str, result_len: int) -> dict:
+def mark_verified(agent_id: str, task_hash: str, test_type: str, result_status: str, result_len: int) -> dict:
     state = _load()
     rec = {
         "execution_status": "verified",
         "last_tested_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "test_evidence": test_evidence,
+        "test_evidence": {"task_hash": task_hash, "test_type": test_type},
         "last_result": result_status,
         "result_len": result_len,
     }
