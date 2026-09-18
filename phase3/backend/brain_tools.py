@@ -66,5 +66,5 @@ def execute_brain_tool(name, args):
         answer = d["choices"][0]["message"]["content"]
     except Exception:
         return {"ok": False, "error": "bad_hermes_response"}
-    audit_memory.log("brain_delegate", ident.to_dict(), query=query[:120])
+    audit_memory.log("brain_delegate", ident.to_dict(), query=query, query_type="brain")
     return {"ok": True, "answer": answer, "identity": ident.to_dict()}
