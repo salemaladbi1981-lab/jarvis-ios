@@ -136,15 +136,15 @@ def list_files(user_id: str = ""):
     return files_api.list_files(user_id or None)
 
 @app.get("/files/{file_id}")
-def get_file(file_id: str):
-    f = files_api.get_file(file_id)
+def get_file(file_id: str, user_id: str = ""):
+    f = files_api.get_file(file_id, user_id or None)
     if not f:
         raise HTTPException(status_code=404, detail="not_found")
     return f
 
 @app.get("/files/{file_id}/download")
-def download_file(file_id: str):
-    f = files_api.get_file(file_id)
+def download_file(file_id: str, user_id: str = ""):
+    f = files_api.get_file(file_id, user_id or None)
     if not f or not os.path.exists(f.get("storage_ref", "")):
         raise HTTPException(status_code=404, detail="not_found")
     return FileResponse(f["storage_ref"], filename=f["filename"])
@@ -163,8 +163,8 @@ def list_tasks(user_id: str = ""):
     return tasks_mod.list_tasks(user_id or None)
 
 @app.get("/tasks/{task_id}")
-def get_task(task_id: str):
-    t = tasks_mod.get_task(task_id)
+def get_task(task_id: str, user_id: str = ""):
+    t = tasks_mod.get_task(task_id, user_id or None)
     if not t:
         raise HTTPException(status_code=404, detail="not_found")
     return t
@@ -174,15 +174,15 @@ def list_deliveries(user_id: str = ""):
     return deliveries.list_deliveries(user_id or None)
 
 @app.get("/deliveries/{delivery_id}")
-def get_delivery(delivery_id: str):
-    d = deliveries.get_delivery(delivery_id)
+def get_delivery(delivery_id: str, user_id: str = ""):
+    d = deliveries.get_delivery(delivery_id, user_id or None)
     if not d:
         raise HTTPException(status_code=404, detail="not_found")
     return d
 
 @app.get("/deliveries/{delivery_id}/download")
-def download_delivery(delivery_id: str):
-    d = deliveries.get_delivery(delivery_id)
+def download_delivery(delivery_id: str, user_id: str = ""):
+    d = deliveries.get_delivery(delivery_id, user_id or None)
     if not d or not os.path.exists(d.get("storage_ref", "")):
         raise HTTPException(status_code=404, detail="not_found")
     return FileResponse(d["storage_ref"], filename=d["filename"])

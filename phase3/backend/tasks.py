@@ -24,8 +24,14 @@ def create_task(user_id, session_id, conversation_id, prompt,
     return task
 
 
-def get_task(task_id: str) -> dict | None:
-    return storage.load_tasks().get(task_id)
+def get_task(task_id: str, user_id: str = None) -> dict | None:
+    """ownership: يُرجع المهمة فقط لصاحبها."""
+    t = storage.load_tasks().get(task_id)
+    if not t:
+        return None
+    if user_id and t.get("user_id") != user_id:
+        return None
+    return t
 
 
 def list_tasks(user_id=None) -> list:

@@ -37,8 +37,14 @@ def create_delivery(task_id, user_id, filename, dtype, content=None, size=None, 
     return {"ok": True, "delivery": rec}
 
 
-def get_delivery(delivery_id: str) -> dict | None:
-    return storage.load_deliveries().get(delivery_id)
+def get_delivery(delivery_id: str, user_id: str = None) -> dict | None:
+    """ownership: يُرجع التسليم فقط لصاحبه."""
+    d = storage.load_deliveries().get(delivery_id)
+    if not d:
+        return None
+    if user_id and d.get("user_id") != user_id:
+        return None
+    return d
 
 
 def list_deliveries(user_id=None) -> list:

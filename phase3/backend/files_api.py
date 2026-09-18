@@ -114,7 +114,13 @@ def complete_upload(upload_id: str) -> dict:
         "task_id": None, "filename": meta["filename"], "mime_type": meta["mime_type"],
         "size": meta["size"], "checksum": actual, "media_kind": media_kind,
         "storage_ref": orig_path,
-        "preview_ref": None, "thumbnail_ref": None, "proxy_ref": None,
+        "derivatives": {
+            "preview": {"status": "NOT_GENERATED", "ref": None},
+            "thumbnail": {"status": "NOT_GENERATED", "ref": None},
+            "proxy": {"status": "NOT_GENERATED", "ref": None},
+            "transcript": {"status": "NOT_GENERATED", "ref": None},
+            "scene_index": {"status": "NOT_GENERATED", "ref": None},
+        },
         "created_at": meta["created_at"], "processing_status": "stored",
     }
     files = storage.load_files()
@@ -134,8 +140,14 @@ def list_files(user_id=None) -> list:
     return out
 
 
-def get_file(file_id: str) -> dict | None:
-    return storage.load_files().get(file_id)
+def get_file(file_id: str, user_id: str = None) -> dict | None:
+    """ownership: يُرجع الملف فقط لصاحبه (user_id مطلوب للقراءة من عميل)."""
+    rec = storage.load_files().get(file_id)
+    if not rec:
+        return None
+    if user_id and rec.get("user_id") != user_id:
+        return None
+    return rec
 
 
 def delete_file(file_id: str, user_id=None) -> dict:
