@@ -14,6 +14,7 @@ struct PendingAttachment: Identifiable {
 /// Reuses shared hero/title/waveform components.
 struct HomeView: View {
     @StateObject private var vm = HomeViewModel()
+    @EnvironmentObject private var enrollment: EnrollmentManager
     @State private var selectedTab = "home"
     @State private var composerText = ""
     @State private var showAttachments = false
@@ -84,18 +85,16 @@ struct HomeView: View {
         }
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 0) {
-                if !pendingAttachments.isEmpty {
-                    Text("\(pendingAttachments.count) مرفق")
-                        .font(.caption).foregroundColor(JarvisColor.text_muted)
-                        .padding(.top, 4)
+                AttachmentPreviewBar(attachments: pendingAttachments) { id in
+                    pendingAttachments.removeAll { $0.id == id }
                 }
                 WorkspaceComposerView(
                     text: $composerText,
                     onSend: {
                         let t = composerText.trimmingCharacters(in: .whitespacesAndNewlines)
-                        guard !t.isEmpty else { return }
+                        guard !t.isEmpty || !pendingAttachments.isEmpty else { return }
                         composerText = ""
-                        Task { await vm.routeVoiceTranscript(t) }
+                        Task { await sendMessage(text: t) }
                     },
                     onAttach: { showAttachments = true },
                     onMic: { vm.toggleVoice() }
@@ -179,6 +178,59 @@ struct HomeView: View {
                 pendingAttachments.append(PendingAttachment(kind: "audio", data: nil, url: url, filename: url.lastPathComponent))
             }
         }
+    }
+
+    /// إرسال: نص فقط → محادثة صوتية؛ مع مرفقات → رفع ثم task.
+    private func sendMessage(text: String) async {
+        if pendingAttachments.isEmpty {
+            if !text.isEmpty { await vm.routeVoiceTranscript(text) }
+            return
+        }
+        let atts = pendingAttachments
+        pendingAttachments = []
+        var fileIDs: [String] = []
+        if let um = enrollment.uploadManager {
+            for att in atts {
+                guard let data = att.data ?? (att.url.flatMap { try? Data(contentsOf: $0) }) else { continue }
+                do {
+                    let id = try await um.uploadAsync(data, filename: att.filename, mimeType: mime(for: att),
+                                                      conversationID: conversationID(), sessionID: sessionID())
+                    fileIDs.append(id)
+                } catch { /* تخطي الملف الفاشل */ }
+            }
+        }
+        if !text.isEmpty || !fileIDs.isEmpty {
+            do {
+                if let api = enrollment.api {
+                    _ = try await api.post("/tasks", body: ["prompt": text, "attachment_ids": fileIDs])
+                }
+            } catch { /* log */ }
+        }
+    }
+
+    private func mime(for att: PendingAttachment) -> String {
+        switch att.kind {
+        case "photo", "scan": return "image/jpeg"
+        case "video": return "video/mp4"
+        case "audio": return "audio/m4a"
+        default: return "application/octet-stream"
+        }
+    }
+
+    private func conversationID() -> String {
+        let key = "jarvis.conversation.id"
+        if let v = UserDefaults.standard.string(forKey: key) { return v }
+        let v = UUID().uuidString
+        UserDefaults.standard.set(v, forKey: key)
+        return v
+    }
+
+    private func sessionID() -> String {
+        let key = "jarvis.session.id"
+        if let v = UserDefaults.standard.string(forKey: key) { return v }
+        let v = UUID().uuidString
+        UserDefaults.standard.set(v, forKey: key)
+        return v
     }
 
 }

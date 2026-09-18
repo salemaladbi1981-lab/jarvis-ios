@@ -171,6 +171,18 @@ final class UploadManager: NSObject, ObservableObject, URLSessionDelegate, URLSe
         for s in allPersistedStates() { syncParts(s) }
     }
 
+    /// async wrapper حول upload() للاستخدام من send flow.
+    func uploadAsync(_ data: Data, filename: String, mimeType: String, conversationID: String, sessionID: String) async throws -> String {
+        try await withCheckedThrowingContinuation { cont in
+            upload(data, filename: filename, mimeType: mimeType, conversationID: conversationID, sessionID: sessionID) { result in
+                switch result {
+                case .success(let id): cont.resume(returning: id)
+                case .failure(let e): cont.resume(throwing: e)
+                }
+            }
+        }
+    }
+
     // ---- background completion handler (AppDelegate) ----
     func setBackgroundCompletionHandler(_ handler: @escaping () -> Void) {
         backgroundCompletionHandler = handler
