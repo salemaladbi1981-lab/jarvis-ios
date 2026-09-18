@@ -6,19 +6,24 @@ struct JarvisHeroView: View {
     var coreSize: CGFloat = 250
 
     var body: some View {
-        ZStack {
-            JarvisCoreView(
-                levels: vm.levels,
-                state: vm.state,
-                successPulse: vm.successPulse,
-                size: coreSize,
-                onFrameTime: { vm.frameTimeMs = $0 }
-            )
-            JarvisOrbitView(orbit: vm.orbit, coreSize: coreSize)
+        VStack(spacing: 10) {
+            if let active = vm.orbit.items.last {
+                ActiveAgentBadge(agent: active)
+            }
+            ZStack {
+                JarvisCoreView(
+                    levels: vm.levels,
+                    state: vm.state,
+                    successPulse: vm.successPulse,
+                    size: coreSize,
+                    onFrameTime: { vm.frameTimeMs = $0 }
+                )
+                JarvisOrbitView(orbit: vm.orbit, coreSize: coreSize)
+            }
+            .frame(height: coreSize * 1.28)
         }
         .allowsHitTesting(false)
         .frame(maxWidth: .infinity)
-        .frame(height: coreSize * 1.28)
         .id(vm.activeGroup)
         .transition(.opacity)
         .animation(.easeInOut(duration: JarvisMotion.groupTransition), value: vm.activeGroup)
@@ -72,5 +77,37 @@ struct JarvisWaveformStatusView: View {
                 .foregroundColor(JarvisColor.text_secondary)
         }
         .accessibilityLabel(vm.statusText)
+    }
+}
+
+
+/// Cinematic active-agent indicator — فوق النواة عند وجود agent نشط من الـ runtime.
+private struct ActiveAgentBadge: View {
+    let agent: AgentOrbitItem
+
+    var body: some View {
+        VStack(spacing: 3) {
+            Text("ACTIVE AGENT")
+                .font(.system(size: 9, weight: .bold))
+                .kerning(2.5)
+                .foregroundColor(JarvisColor.primary_blue)
+            Text(agent.name)
+                .font(.custom("IBMPlexSansArabic-Bold", size: 17))
+                .foregroundColor(JarvisColor.text_primary)
+            Text(agent.id)
+                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                .foregroundColor(JarvisColor.text_muted)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(JarvisColor.primary_blue.opacity(0.10))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(JarvisColor.primary_blue.opacity(0.45), lineWidth: 1)
+        )
+        .shadow(color: JarvisColor.primary_blue.opacity(0.25), radius: 10, x: 0, y: 0)
     }
 }
