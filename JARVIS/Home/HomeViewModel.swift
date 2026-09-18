@@ -28,6 +28,8 @@ final class HomeViewModel: ObservableObject {
     // FPS metric (read-only, غير UI state — لا re-render). يُقرأ من Xcode console/Instruments فقط.
     var frameTimeMs: Double = 0
     let orbit = AgentOrbitModel()
+    // هل سبق هذا الاتصال ردٌ صوتي؟ (لتمييز .connected عند إعادة الاتصال)
+    private var hasSpokenSinceConnect = false
 
     // Dependencies
     private let smartHome: SmartHomeProvider
@@ -81,10 +83,22 @@ final class HomeViewModel: ObservableObject {
                     self.isListening = true
                     // بداية دور جديد = نهاية الرد السابق → نرجع الـ orbit للحياد.
                     self.orbit.items.forEach { self.orbit.deactivate($0.id) }
-                case .disconnected, .connected:
+                case .speaking:
+                    // سجّل أن رداً صوتياً بدأ — حتى لا نمسح الـ agent عند .connected دون رد سابق.
+                    self.hasSpokenSinceConnect = true
+                case .disconnected:
                     self.isListening = false
                     // response.done / session ready → success + deactivate agents
                     self.orbit.items.forEach { self.orbit.deactivate($0.id) }
+                    self.successPulse = true
+                    self.hasSpokenSinceConnect = false
+                case .connected:
+                    self.isListening = false
+                    // لا نمسح الـ active agent عند إعادة الاتصال إلا إذا سبقه رد صوتي فعلي.
+                    if self.hasSpokenSinceConnect {
+                        self.orbit.items.forEach { self.orbit.deactivate($0.id) }
+                        self.hasSpokenSinceConnect = false
+                    }
                     self.successPulse = true
                 case .toolExecuting:
                     // Runtime agent events drive the orbit; never fake core_home here.
