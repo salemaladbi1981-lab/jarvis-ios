@@ -48,3 +48,18 @@ def revoke_session(session_token: str) -> None:
     d = _load()
     d.pop(session_token, None)
     _save(d)
+
+
+PRIMARY_USER_ID = "salem-aladbi"
+
+
+def bootstrap(proof: str) -> str | None:
+    """App authentication/bootstrap: server يتحقق من سرّ enrollment ويصدر session للمستخدم الأساسي.
+
+    العميل لا يختار user_id — الهوية يحددها السيرفر.
+    """
+    import config
+    expected = getattr(config, "JARVIS_BOOTSTRAP_KEY", "") or os.environ.get("JARVIS_BOOTSTRAP_KEY", "")
+    if not expected or not proof or proof != expected:
+        return None
+    return create_session(PRIMARY_USER_ID)

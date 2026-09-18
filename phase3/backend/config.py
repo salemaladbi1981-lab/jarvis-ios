@@ -16,6 +16,7 @@ DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY", "")
 API_SERVER_KEY = os.environ.get("API_SERVER_KEY", "")
 JARVIS_HERMES_API_URL = os.environ.get("JARVIS_HERMES_API_URL", "http://127.0.0.1:8642/v1/chat/completions")
+JARVIS_BOOTSTRAP_KEY = os.environ.get("JARVIS_BOOTSTRAP_KEY", "")
 
 # Realtime provider preference
 REALTIME_PROVIDER = os.environ.get("JARVIS_REALTIME_PROVIDER", "openai")  # openai | openrouter

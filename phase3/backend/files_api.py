@@ -34,6 +34,16 @@ def _save_meta(upload_id: str, meta: dict) -> None:
         json.dump(meta, f, ensure_ascii=False)
 
 
+def _authorize_upload(upload_id: str, user_id: str) -> dict:
+    """تحقق أن upload_id يخص المستخدم server-side."""
+    meta = _load_meta(upload_id)
+    if not meta:
+        return {"authorized": False, "reason": "unknown_upload", "meta": None}
+    if user_id and meta.get("user_id") != user_id:
+        return {"authorized": False, "reason": "forbidden", "meta": meta}
+    return {"authorized": True, "reason": "", "meta": meta}
+
+
 def init_upload(user_id, filename, mime_type, size, checksum, conversation_id, session_id="") -> dict:
     storage.ensure_dirs()
     upload_id = storage.new_id()
@@ -50,10 +60,11 @@ def init_upload(user_id, filename, mime_type, size, checksum, conversation_id, s
     return meta
 
 
-def upload_part(upload_id: str, part_number: int, data: bytes, part_checksum: str = "") -> dict:
-    meta = _load_meta(upload_id)
-    if not meta:
-        return {"ok": False, "error": "unknown_upload"}
+def upload_part(upload_id: str, part_number: int, data: bytes, part_checksum: str = "", user_id: str = None) -> dict:
+    authz = _authorize_upload(upload_id, user_id)
+    if not authz["authorized"]:
+        return {"ok": False, "error": authz["reason"]}
+    meta = authz["meta"]
     if part_number < 0 or part_number >= meta["total_parts"]:
         return {"ok": False, "error": "bad_part_number"}
     if part_checksum and storage.sha256_bytes(data) != part_checksum:
@@ -69,10 +80,11 @@ def upload_part(upload_id: str, part_number: int, data: bytes, part_checksum: st
     return {"ok": True, "uploaded_parts": meta["uploaded_parts"], "total_parts": meta["total_parts"]}
 
 
-def upload_status(upload_id: str) -> dict:
-    meta = _load_meta(upload_id)
-    if not meta:
-        return {"ok": False, "error": "unknown_upload"}
+def upload_status(upload_id: str, user_id: str = None) -> dict:
+    authz = _authorize_upload(upload_id, user_id)
+    if not authz["authorized"]:
+        return {"ok": False, "error": authz["reason"]}
+    meta = authz["meta"]
     missing = [n for n in range(meta["total_parts"]) if n not in meta["uploaded_parts"]]
     return {
         "ok": True, "upload_id": upload_id, "file_id": meta["file_id"],
@@ -81,10 +93,11 @@ def upload_status(upload_id: str) -> dict:
     }
 
 
-def complete_upload(upload_id: str) -> dict:
-    meta = _load_meta(upload_id)
-    if not meta:
-        return {"ok": False, "error": "unknown_upload"}
+def complete_upload(upload_id: str, user_id: str = None) -> dict:
+    authz = _authorize_upload(upload_id, user_id)
+    if not authz["authorized"]:
+        return {"ok": False, "error": authz["reason"]}
+    meta = authz["meta"]
     missing = [n for n in range(meta["total_parts"]) if n not in meta["uploaded_parts"]]
     if missing:
         return {"ok": False, "error": "incomplete_upload", "missing_parts": missing}

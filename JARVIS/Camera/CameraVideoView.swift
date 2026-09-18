@@ -1,5 +1,6 @@
 import SwiftUI
 import AVFoundation
+import AVKit  // لـ AVPlayerViewController
 
 /// كاميرا فيديو حقيقية (AVCaptureMovieFileOutput): start/stop، أمامي/خلفي، ميكروفون، torch، preview، retake، use.
 struct CameraVideoView: View {
@@ -110,7 +111,7 @@ final class CameraVideoModel: NSObject, ObservableObject, AVCaptureFileOutputRec
     }
     func retake() { recordedURL = nil }
 
-    func fileOutput(_ output: AVCaptureFileOutput, didFinishRecordingTo outputFileURL: URL, from connections: [AVCaptureConnection], error: Error?) {
+    nonisolated func fileOutput(_ output: AVCaptureFileOutput, didFinishRecordingTo outputFileURL: URL, from connections: [AVCaptureConnection], error: Error?) {
         Task { @MainActor in
             if error == nil { self.recordedURL = outputFileURL }
         }

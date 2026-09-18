@@ -45,6 +45,22 @@ def get_user_id(x_jarvis_session: str = Header(default="")):
         raise HTTPException(status_code=401, detail="unauthorized")
     return uid
 
+
+class BootstrapReq(BaseModel):
+    proof: str
+
+
+@app.post("/auth/bootstrap")
+def auth_bootstrap(req: BootstrapReq):
+    """App authentication/bootstrap: السيرفر يتحقق من سرّ enrollment ويصدر session token.
+
+    العميل لا يختار user_id — الهوية يحددها السيرفر (المستخدم الأساسي).
+    """
+    token = auth.bootstrap(req.proof)
+    if not token:
+        raise HTTPException(status_code=401, detail="unauthorized")
+    return {"session_token": token}
+
 # --- demo safe tools (read-only) ---
 def read_temperature(params): return {"reading": "22°", "unit": "celsius"}
 def read_light_state(params): return {"device": params.get("device", "all"), "level": "35%"}
@@ -125,17 +141,17 @@ def upload_init(req: UploadInitReq, user_id: str = Depends(get_user_id)):
                                  req.checksum, req.conversation_id, req.session_id)
 
 @app.post("/files/upload/part")
-async def upload_part(upload_id: str, part_number: int, checksum: str = "", request: Request = None):
+async def upload_part(upload_id: str, part_number: int, checksum: str = "", request: Request = None, user_id: str = Depends(get_user_id)):
     data = await request.body()
-    return files_api.upload_part(upload_id, part_number, data, checksum)
+    return files_api.upload_part(upload_id, part_number, data, checksum, user_id)
 
 @app.get("/files/upload/{upload_id}/status")
-def upload_status(upload_id: str):
-    return files_api.upload_status(upload_id)
+def upload_status(upload_id: str, user_id: str = Depends(get_user_id)):
+    return files_api.upload_status(upload_id, user_id)
 
 @app.post("/files/upload/complete")
-def upload_complete(req: UploadCompleteReq):
-    return files_api.complete_upload(req.upload_id)
+def upload_complete(req: UploadCompleteReq, user_id: str = Depends(get_user_id)):
+    return files_api.complete_upload(req.upload_id, user_id)
 
 @app.get("/files")
 def list_files(user_id: str = Depends(get_user_id)):
