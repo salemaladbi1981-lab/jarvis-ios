@@ -10,6 +10,7 @@
 from __future__ import annotations
 import os, sqlite3
 from pathlib import Path
+import memory_store
 
 MEMORY_DIR = os.environ.get("JARVIS_MEMORY_DIR", "/opt/data/memories")
 USER_MEMORY = os.environ.get("JARVIS_USER_MEMORY", "/opt/data/USER.md")
@@ -24,9 +25,23 @@ RECALL_PHRASES = (
 )
 
 
-def _list_memory_files() -> list[str]:
+_WORKSPACE_DIRS = ("PERSONAL", "SALEM_AI_STUDIO", "VENTURES", "QREC_LOCKED")
+
+
+def _list_memory_files(workspace_id: str = "PERSONAL") -> list[str]:
+    """ملفات الذاكرة الخاصة بمساحة العمل فقط (مجلد منفصل لكل مساحة).
+
+    PERSONAL يبحث أيضًا في المجلد المسطح القديم (legacy) عدا مجلدات المساحات الأخرى — توافق رجعي.
+    """
     out = []
-    for root, _dirs, files in os.walk(MEMORY_DIR):
+    if workspace_id == "PERSONAL":
+        for root, dirs, files in os.walk(MEMORY_DIR):
+            dirs[:] = [d for d in dirs if d not in _WORKSPACE_DIRS]  # لا ننزل لمجلدات المساحات
+            for f in files:
+                if f.endswith(".md"):
+                    out.append(os.path.join(root, f))
+    ws_dir = os.path.join(MEMORY_DIR, workspace_id)
+    for root, _dirs, files in os.walk(ws_dir):
         for f in files:
             if f.endswith(".md"):
                 out.append(os.path.join(root, f))
@@ -40,15 +55,27 @@ def _read(path: str) -> str:
         return ""
 
 
-def _recall_memory_files(query: str) -> list[dict]:
+def _recall_memory_files(query: str, workspace_id: str = "PERSONAL") -> list[dict]:
     q = query.lower()
     out = []
-    um = _read(USER_MEMORY)
-    if q in um.lower():
-        out.append({"source": "user_memory", "path": USER_MEMORY})
-    for path in _list_memory_files():
+    # user memory العام (لا يُبحث في QREC_LOCKED)
+    if workspace_id != "QREC_LOCKED":
+        um = _read(USER_MEMORY)
+        if q in um.lower():
+            out.append({"source": "user_memory", "path": USER_MEMORY, "workspace_id": workspace_id})
+    # ملفات الذاكرة الخاصة بالمساحة
+    for path in _list_memory_files(workspace_id):
         if q in _read(path).lower():
-            out.append({"source": "memory_file", "path": path})
+            out.append({"source": "memory_file", "path": path, "workspace_id": workspace_id})
+    # memory store (index + metadata + دليل مصدر) الخاص بالمساحة
+    for it in memory_store.retrieve(workspace_id, q):
+        out.append({
+            "source": "memory_store",
+            "memory_id": it["memory_id"], "workspace_id": it["workspace_id"],
+            "type": it.get("type"), "source_provenance": it.get("source"),
+            "verification": it.get("verification"), "created_at": it.get("created_at"),
+            "snippet": (it.get("content") or "")[:200],
+        })
     return out
 
 
@@ -133,6 +160,7 @@ def recall(query: str, identity: dict, limit: int = 5) -> dict:
     if not q:
         return {"found": False, "reason": "empty_query", "sources": [], "evidence": []}
     user_id = identity.get("user_id", "") or ""
+    workspace_id = identity.get("workspace_id", "PERSONAL")
     evidence, sources = [], []
 
     if _is_recall_query(q):
@@ -141,10 +169,10 @@ def recall(query: str, identity: dict, limit: int = 5) -> dict:
         if recent and not any("error" in e for e in recent):
             sources.append("conversation_log_recent")
     else:
-        mf = _recall_memory_files(q)
+        mf = _recall_memory_files(q, workspace_id)
         evidence += mf
         if mf:
-            sources.append("memory_file")
+            sources.append("memory_file" if not any("memory_store" == e.get("source") for e in mf) else "memory_store")
         cl = _recall_conversation_log(q, user_id, limit)
         evidence += cl
         if cl and not any("error" in e for e in cl):
