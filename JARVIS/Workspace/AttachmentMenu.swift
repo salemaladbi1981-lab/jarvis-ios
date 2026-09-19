@@ -37,7 +37,7 @@ struct AttachmentMenu: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 10)
-            .background(Color(.secondarySystemBackground))
+            .background(JarvisColor.surface)
             .cornerRadius(10)
         }
     }

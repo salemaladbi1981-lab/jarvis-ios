@@ -44,7 +44,7 @@ struct ConversationListView: View {
             }
             .navigationTitle("المحادثات")
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .primaryAction) {
                     Button { Task { await vm.newConversation() } } label: {
                         Image(systemName: "square.and.pencil")
                     }
