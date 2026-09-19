@@ -75,16 +75,17 @@ def main():
     shot('real_tasks', '-tab', 'tasks')
     shot('real_deliveries', '-tab', 'deliveries')
 
-    sh(f'xcrun simctl terminate "{device}" com.salemai.jarvis')
-    time.sleep(2)
-    sh(f'xcrun simctl openurl "{device}" "jarvis://conversation/{conv}"')
+    # deep links — warm app first so openurl routes without the first-time "Open in JARVIS?" prompt
+    sh(f'xcrun simctl launch "{device}" com.salemai.jarvis -- -baseURL http://127.0.0.1:8000 -sessionToken {token} -tab home')
     time.sleep(6)
+    sh(f'xcrun simctl openurl "{device}" "jarvis://conversation/{conv}"')
+    time.sleep(4)
     sh(f'xcrun simctl io "{device}" screenshot deep_conversation.png')
     sh(f'xcrun simctl openurl "{device}" "jarvis://task/{task}"')
-    time.sleep(5)
+    time.sleep(4)
     sh(f'xcrun simctl io "{device}" screenshot deep_task.png')
     sh(f'xcrun simctl openurl "{device}" "jarvis://delivery/{delivery}"')
-    time.sleep(5)
+    time.sleep(4)
     sh(f'xcrun simctl io "{device}" screenshot deep_delivery.png')
 
     print('SCREENSHOTS:')
