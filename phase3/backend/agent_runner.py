@@ -5,7 +5,7 @@
 """
 from __future__ import annotations
 import json, time, uuid, hashlib, urllib.request
-import config, identity, agent_profiles, agent_state, agent_audit
+import config, identity, agent_profiles, agent_state, agent_audit, tool_guard
 
 # التقييد الحالي: request-level enforcement (يمنع tool/capability عند الطلب قبل Hermes).
 # ليس hermes-tool enforcement (Hermes يحتفظ بأدواته الداخلية الكاملة عند التنفيذ).
@@ -13,7 +13,8 @@ ENFORCEMENT_TYPE = "request-level"
 
 
 def enforce(agent_id: str, tools=None, capabilities=None) -> dict:
-    """Enforcement حقيقي: أي tool/capability غير مسموح يُمنع."""
+    """Enforcement عند حدود التنفيذ: أي tool/capability غير مسموح يُمنع،
+    والأفعال غير القابلة للعكس (sensitive) تتطلب موافقة ملزمة (tool_guard)."""
     prof = agent_profiles.get_profile(agent_id)
     if not prof:
         return {"allowed": False, "blocked_tools": [], "blocked_capabilities": [], "error": "unknown_agent"}
@@ -21,10 +22,13 @@ def enforce(agent_id: str, tools=None, capabilities=None) -> dict:
     capabilities = capabilities or []
     blocked_tools = [t for t in tools if t not in prof["allowed_tools"]]
     blocked_caps = [c for c in capabilities if c not in prof["allowed_capabilities"]]
+    # أفعال غير قابلة للعكس → معطّلة تقنيًا بلا موافقة ملزمة (هذا المسار لا يحمل approval)
+    sensitive = [t for t in tools if tool_guard.is_sensitive(t)]
     return {
-        "allowed": not (blocked_tools or blocked_caps),
+        "allowed": not (blocked_tools or blocked_caps or sensitive),
         "blocked_tools": blocked_tools,
         "blocked_capabilities": blocked_caps,
+        "sensitive_blocked": sensitive,
     }
 
 
