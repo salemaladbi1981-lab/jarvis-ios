@@ -192,7 +192,7 @@ test_resources_phase = add("PBXResourcesBuildPhase", files=[], buildActionMask=2
 test_frameworks_phase = add("PBXFrameworksBuildPhase", files=[], buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)
 
 app_settings = {
-    "CODE_SIGN_STYLE": "Automatic", "CURRENT_PROJECT_VERSION": "1",
+    "CODE_SIGN_STYLE": "Automatic", "CURRENT_PROJECT_VERSION": "4",
     "GENERATE_INFOPLIST_FILE": "NO", "INFOPLIST_FILE": "JARVIS/Info.plist",
     "IPHONEOS_DEPLOYMENT_TARGET": "17.0", "MARKETING_VERSION": "0.1.0",
     "PRODUCT_BUNDLE_IDENTIFIER": "com.salemai.jarvis", "PRODUCT_NAME": "$(TARGET_NAME)",
