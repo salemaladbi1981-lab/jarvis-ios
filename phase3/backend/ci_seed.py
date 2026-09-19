@@ -12,6 +12,23 @@ PNG_1PX = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
 )
 
+
+def _make_image() -> bytes:
+    """صورة حقيقية (تدرّج لوني) لتوليد thumbnail واضح — fallback لـ1px إن غاب PIL."""
+    try:
+        from PIL import Image, ImageDraw
+        import io
+        img = Image.new("RGB", (360, 220), (14, 16, 24))
+        dr = ImageDraw.Draw(img)
+        for i in range(0, 360, 6):
+            dr.rectangle([i, 0, i + 3, 220], fill=(24, 40 + (i * 80 // 360), 120))
+        dr.ellipse([120, 50, 240, 170], outline=(212, 162, 78), width=4)
+        buf = io.BytesIO()
+        img.save(buf, "PNG")
+        return buf.getvalue()
+    except Exception:
+        return PNG_1PX
+
 def seed():
     storage.ensure_dirs()
     uid = auth.PRIMARY_USER_ID
@@ -43,12 +60,20 @@ def seed():
         return {"ok": True, "answer": "تقرير الأداء جاهز ✅ (نسخة CI حقيقية عبر pipeline الـworker)"}
     worker.process_task(tid, run_fn=_fake_run)
 
-    # 5) ملف صورة (attachment) عبر الـupload API الفعلي
-    up = files_api.init_upload(uid, "chart.png", "image/png", len(PNG_1PX), "", cid, workspace_id=ws)
-    files_api.upload_part(up["upload_id"], 0, PNG_1PX, "", uid)
+    # 5) ملف صورة (attachment) عبر الـupload API الفعلي + مشتق thumbnail
+    img_bytes = _make_image()
+    up = files_api.init_upload(uid, "chart.png", "image/png", len(img_bytes), "", cid, workspace_id=ws)
+    files_api.upload_part(up["upload_id"], 0, img_bytes, "", uid)
     done = files_api.complete_upload(up["upload_id"], uid)
     fid = done["file_id"]
     ms.add(cid, "user", "هذا الرسم البياني للأداء", user_id=uid, workspace_id=ws, attachment_refs=[fid])
+
+    # 5b) مستند → مشتق preview metadata
+    doc_bytes = "JARVIS P7 document preview metadata — CI seed".encode("utf-8")
+    up2 = files_api.init_upload(uid, "brief.txt", "text/plain", len(doc_bytes), "", cid, workspace_id=ws)
+    files_api.upload_part(up2["upload_id"], 0, doc_bytes, "", uid)
+    done2 = files_api.complete_upload(up2["upload_id"], uid)
+    doc_fid = done2["file_id"]
 
     # 6) موافقة معلّقة (Inbox → action required)
     astore = approval.ApprovalStore()
@@ -64,6 +89,7 @@ def seed():
         "task_id": tid,
         "delivery_id": did,
         "file_id": fid,
+        "document_file_id": doc_fid,
         "approval_id": aid,
         "user_id": uid,
         "workspace_id": ws,

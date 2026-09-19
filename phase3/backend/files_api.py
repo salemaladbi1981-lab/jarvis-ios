@@ -3,6 +3,7 @@ from __future__ import annotations
 import os, json, time
 from pathlib import Path
 import storage
+import derivatives
 
 ALLOWED_IMAGE = {"png","jpg","jpeg","gif","webp","heic"}
 ALLOWED_VIDEO = {"mp4","mov","m4v","webm"}
@@ -120,8 +121,7 @@ def complete_upload(upload_id: str, user_id: str = None) -> dict:
         return {"ok": False, "error": "checksum_mismatch", "expected": meta["checksum"], "actual": actual}
 
     # media kind → preview/thumbnail/proxy placeholders (بدون تقليل الأصل)
-    ext_l = ext.lstrip(".")
-    media_kind = "image" if ext_l in storage.__dict__.get("ALLOWED_IMAGE", ALLOWED_IMAGE) else                  ("video" if ext_l in ALLOWED_VIDEO else "file")
+    media_kind = derivatives.kind_for(meta["filename"])
 
     file_rec = {
         "file_id": meta["file_id"], "user_id": meta["user_id"],
@@ -142,6 +142,12 @@ def complete_upload(upload_id: str, user_id: str = None) -> dict:
     files = storage.load_files()
     files[meta["file_id"]] = file_rec
     storage.save_files(files)
+
+    # مشتقّات الوسائط (thumbnail/poster/waveform/preview) — deterministic + cached + fail-safe
+    try:
+        derivatives.generate_all(file_rec)
+    except Exception:
+        pass  # لا تكسر التخزين الأصلي إن فشل توليد المشتق
 
     meta["status"] = "complete"
     _save_meta(upload_id, meta)

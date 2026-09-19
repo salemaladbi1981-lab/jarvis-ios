@@ -30,7 +30,7 @@ def main():
         found = glob.glob('build/**/JARVIS.app', recursive=True)
         app = found[0] if found else ''
 
-    sh('python3 -m pip install --quiet --disable-pip-version-check fastapi uvicorn pydantic websockets')
+    sh('python3 -m pip install --quiet --disable-pip-version-check fastapi uvicorn pydantic websockets Pillow')
     backend_env(tmp)
 
     os.chdir('phase3/backend')
@@ -83,6 +83,9 @@ def main():
     # notifications proof — permission flow + scheduling (deep-link in userInfo)
     shot('notif_permission', '-requestNotifications', '-showNotifications')
     shot('notif_scheduled', '-scheduleNotification', f'jarvis://delivery/{delivery}', '-showNotifications')
+
+    # media derivatives proof — conversation with the image attachment (thumbnail via derivative)
+    shot('media_preview', '-deepLink', f'jarvis://conversation/{conv}')
 
     # URL-scheme proof (warm openurl → system routes to JARVIS; prompt is iOS security, not app code)
     sh(f'xcrun simctl launch "{device}" com.salemai.jarvis -- -baseURL http://127.0.0.1:8000 -sessionToken {token} -tab home')

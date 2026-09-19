@@ -135,6 +135,11 @@ enum InboxKind: String {
     }
 }
 
+struct DerivativeItem: Codable, Hashable {
+    let status: String?
+    let ref: String?
+}
+
 struct FileItem: Codable, Identifiable {
     var id: String { fileId }
     let fileId: String
@@ -143,7 +148,14 @@ struct FileItem: Codable, Identifiable {
     let size: Int?
     let mediaKind: String?
     let status: String?
+    let derivatives: [String: DerivativeItem]?
 
     var isImage: Bool { mediaKind == "image" }
-    var isDocument: Bool { (mimeType ?? "").contains("pdf") || (mimeType ?? "").contains("document") }
+    var isVideo: Bool { mediaKind == "video" }
+    var isAudio: Bool { mediaKind == "audio" }
+    var isDocument: Bool { mediaKind == "document" || (mimeType ?? "").contains("pdf") || (mimeType ?? "").contains("document") }
+
+    /// هل يوجد مشتق thumbnail (image/video poster/audio waveform) جاهز؟
+    var hasThumbnail: Bool { derivatives?["thumbnail"]?.status == "GENERATED" }
+    var hasPreview: Bool { derivatives?["preview"]?.status == "GENERATED" }
 }

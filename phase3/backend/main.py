@@ -13,6 +13,8 @@ from orchestrator import Orchestrator
 import realtime
 import capabilities
 import files_api
+import storage
+import derivatives
 import tasks as tasks_mod
 import deliveries
 import auth
@@ -216,6 +218,27 @@ def get_file(file_id: str, user_id: str = Depends(get_user_id), workspace_id: st
     if not f:
         raise HTTPException(status_code=404, detail="not_found")
     return f
+
+@app.get("/files/{file_id}/derivative/{kind}")
+def get_file_derivative(file_id: str, kind: str, user_id: str = Depends(get_user_id), workspace_id: str = Depends(get_workspace)):
+    # ownership + workspace isolation (نفس فحص الأصل) — بلا path traversal
+    f = files_api.get_file(file_id, user_id, workspace_id)
+    if not f:
+        raise HTTPException(status_code=404, detail="not_found")
+    if kind not in ("thumbnail", "preview", "proxy", "transcript", "scene_index"):
+        raise HTTPException(status_code=404, detail="not_found")
+    d = (f.get("derivatives") or {}).get(kind) or {}
+    ref = d.get("ref")
+    if d.get("status") != "GENERATED" or not ref:
+        raise HTTPException(status_code=404, detail="not_generated")
+    # ref يجب أن يكون داخل FILES_DIR (يمنع أي قراءة ملف عشوائية)
+    files_root = os.path.abspath(storage.FILES_DIR)
+    if not os.path.abspath(ref).startswith(files_root + os.sep):
+        raise HTTPException(status_code=404, detail="not_found")
+    if not os.path.exists(ref):
+        raise HTTPException(status_code=404, detail="not_found")
+    media = "application/json" if ref.endswith(".json") else ("image/jpeg" if ref.endswith((".jpg", ".jpeg")) else ("image/png" if ref.endswith(".png") else "application/octet-stream"))
+    return FileResponse(ref, media_type=media)
 
 @app.get("/files/{file_id}/download")
 def download_file(file_id: str, user_id: str = Depends(get_user_id), workspace_id: str = Depends(get_workspace)):

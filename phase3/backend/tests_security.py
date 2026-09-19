@@ -39,11 +39,12 @@ check("A_can_access_own_file", files_api.get_file(file_id, A) is not None, "")
 check("A_can_access_own_task", tasks.get_task(task_id, A) is not None, "")
 check("A_can_access_own_delivery", deliveries.get_delivery(delivery_id, A) is not None, "")
 
-# === derivatives صادقة ===
+# === derivatives صادقة (P7: مولّدة للأنواع المدعومة + الأصل محفوظ) ===
 f = files_api.get_file(file_id, A)
 ds = f["derivatives"]
-check("derivatives_status_honest", all(v["status"] == "NOT_GENERATED" and v["ref"] is None for v in ds.values()),
-      f"statuses={[v['status'] for v in ds.values()]}")
+check("document_preview_generated", ds["preview"]["status"] == "GENERATED" and ds["preview"]["ref"] is not None,
+      f"preview={ds['preview']}")
+check("original_preserved", os.path.exists(f.get("storage_ref", "")), f.get("storage_ref", ""))
 
 passed = sum(1 for _, c, _ in results if c)
 print(f"\n=== {passed}/{len(results)} PASS ===")
