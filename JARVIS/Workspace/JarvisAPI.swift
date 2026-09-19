@@ -34,3 +34,15 @@ struct JarvisAPI {
         return (tmp, name)
     }
 }
+
+    /// قائمة مُفهرسة (GET /tasks, /conversations, /deliveries) → [T].
+    func getArray<T: Decodable>(_ path: String) async throws -> [T] {
+        var req = URLRequest(url: baseURL.appendingPathComponent(path))
+        req.setValue(sessionToken, forHTTPHeaderField: "X-Jarvis-Session")
+        let (d, resp) = try await URLSession.shared.data(for: req)
+        if let r = resp as? HTTPURLResponse, !(200..<300).contains(r.statusCode) {
+            throw NSError(domain: "JarvisAPI", code: r.statusCode,
+                          userInfo: [NSLocalizedDescriptionKey: "HTTP \(r.statusCode)"])
+        }
+        return try JarvisJSON.decoder().decode([T].self, from: d)
+    }

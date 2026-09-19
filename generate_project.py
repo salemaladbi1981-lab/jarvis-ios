@@ -35,6 +35,7 @@ APP_SOURCES = [
     "JARVIS/Memory/MemoryRetrieval.swift", "JARVIS/Memory/MemorySeed.swift",
     "JARVIS/Integrations/AppleEventKitWriter.swift",
     "JARVIS/App/AppDelegate.swift", "JARVIS/App/BackgroundSessionHandler.swift",
+    "JARVIS/App/RootView.swift", "JARVIS/App/DeepLinkHandler.swift",
     "JARVIS/Auth/EnrollmentManager.swift", "JARVIS/Auth/JarvisConfig.swift",
     "JARVIS/Auth/KeychainStore.swift", "JARVIS/Auth/PairingView.swift",
     "JARVIS/Camera/CameraCaptureView.swift", "JARVIS/Camera/CameraVideoView.swift",
@@ -43,6 +44,7 @@ APP_SOURCES = [
     "JARVIS/Workspace/AttachmentPreviewBar.swift", "JARVIS/Workspace/AudioRecorderView.swift",
     "JARVIS/Workspace/DeliveriesView.swift", "JARVIS/Workspace/DocumentScanner.swift",
     "JARVIS/Workspace/InboxView.swift", "JARVIS/Workspace/JarvisAPI.swift",
+    "JARVIS/Workspace/WorkspaceModels.swift", "JARVIS/Workspace/TasksView.swift",
     "JARVIS/Agents/AgentRouter.swift",
 ]
 APP_RESOURCES = [

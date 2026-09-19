@@ -233,16 +233,25 @@ def create_task(req: TaskReq, user_id: str = Depends(get_user_id), workspace_id:
     worker.enqueue(t["task_id"])
     return t
 
+def _with_job_state(t):
+    if isinstance(t, dict):
+        j = worker.job_state_for(t.get("task_id"))
+        if j:
+            t["job_state"] = j["state"]
+            t["attempts"] = j.get("attempts")
+            t["last_error"] = j.get("last_error")
+    return t
+
 @app.get("/tasks")
 def list_tasks(user_id: str = Depends(get_user_id), workspace_id: str = Depends(get_workspace)):
-    return tasks_mod.list_tasks(user_id, workspace_id)
+    return [_with_job_state(t) for t in tasks_mod.list_tasks(user_id, workspace_id)]
 
 @app.get("/tasks/{task_id}")
 def get_task(task_id: str, user_id: str = Depends(get_user_id), workspace_id: str = Depends(get_workspace)):
     t = tasks_mod.get_task(task_id, user_id, workspace_id)
     if not t:
         raise HTTPException(status_code=404, detail="not_found")
-    return t
+    return _with_job_state(t)
 
 @app.get("/deliveries")
 def list_deliveries(user_id: str = Depends(get_user_id), workspace_id: str = Depends(get_workspace)):

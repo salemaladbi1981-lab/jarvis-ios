@@ -32,6 +32,11 @@ _RETRYABLE = ("timeout", "hermes_key_missing", "rate_limited", "connection", "ne
 def new_worker_id() -> str:
     return f"wkr-{uuid.uuid4().hex[:8]}"
 
+def job_state_for(task_id):
+    """job state لمهمة (أو None). تستخدمه الـendpoints لدمج حالة التنفيذ في الـtask."""
+    return JobStore().get(task_id)
+
+
 def enqueue(task_id, max_attempts=MAX_ATTEMPTS):
     """module-level wrapper — يُستدعى من tg_inbound + main.py."""
     return JobStore().enqueue(task_id, max_attempts)

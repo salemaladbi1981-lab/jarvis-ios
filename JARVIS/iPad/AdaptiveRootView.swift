@@ -26,7 +26,7 @@ struct AdaptiveRootView: View {
             if isIpad && (isLandscape || forceLandscape) {
                 iPadLandscapeView()
             } else {
-                HomeView()
+                RootView()
             }
         }
         .onAppear {
