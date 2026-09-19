@@ -38,7 +38,9 @@ jobs:
           for f in tests_derivatives.py tests_owner_negative.py tests_workspace_http.py tests_security.py \
                    tests_chat.py tests_inbox.py tests_conversation.py tests_worker.py tests_tg_handoff.py \
                    tests_auth.py tests_workspace.py tests_memory_isolation.py tests_tool_guard.py \
-                   tests_approval_audit.py tests_config_language.py tests_enrollment.py; do
+                   tests_approval_audit.py tests_config_language.py tests_enrollment.py \
+                   tests_capabilities.py tests_phaseD.py tests_upload_auth.py tests_voice_stability.py \
+                   tests_instagram.py tests_maps.py; do
             echo "== $f =="; python3 "$f" || exit 1
           done
 
