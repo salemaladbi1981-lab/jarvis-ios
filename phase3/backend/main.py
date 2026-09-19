@@ -3,7 +3,7 @@ import uuid, json, os
 from urllib.parse import parse_qs
 from fastapi import FastAPI, WebSocket, HTTPException, Request, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, StreamingResponse
 from pydantic import BaseModel
 
 import config, audit
@@ -21,6 +21,7 @@ import kill_switch
 import conversation, messages
 import tg_inbound, deeplink
 import worker
+import chat
 import ms_oauth
 import telegram_auth
 import youtube_provider
@@ -517,6 +518,19 @@ def messages_add(conversation_id: str, req: MessageReq, session: dict = Depends(
 
 class DeeplinkReq(BaseModel):
     uri: str
+
+class ChatReq(BaseModel):
+    text: str
+    attachments: list = []
+
+@app.post("/conversations/{conversation_id}/chat")
+def chat_stream(conversation_id: str, req: ChatReq, session: dict = Depends(get_session)):
+    """Chat streaming (SSE) — نفس المحادثة، citations/tool_calls مثبّتة."""
+    ident = {"user_id": session["user_id"], "workspace_id": session["workspace_id"]}
+    def gen():
+        for evt in chat.stream_chat(conversation_id, req.text, ident, attachments=req.attachments):
+            yield chat._sse_frame(evt["event"], evt["data"])
+    return StreamingResponse(gen(), media_type="text/event-stream")
 
 @app.post("/tg/webhook")
 def tg_webhook(update: dict, x_telegram_bot_api_secret_token: str = Header(default="")):
