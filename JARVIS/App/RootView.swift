@@ -16,21 +16,20 @@ struct RootView: View {
     }
 
     var body: some View {
+        let api = enrollment.api ?? JarvisAPI(baseURL: JarvisConfig.baseURL, sessionToken: "")
         TabView(selection: $selectedTab) {
             HomeView()
                 .tabItem { Label("الرئيسية", systemImage: "house.fill") }
                 .tag("home")
-            if let api = enrollment.api {
-                ConversationListView(api: api)
-                    .tabItem { Label("الدردشة", systemImage: "bubble.left.and.bubble.right.fill") }
-                    .tag("chat")
-                TasksView(api: api)
-                    .tabItem { Label("المهام", systemImage: "checklist") }
-                    .tag("tasks")
-                DeliveriesView(api: api)
-                    .tabItem { Label("التسليمات", systemImage: "doc.fill") }
-                    .tag("deliveries")
-            }
+            ConversationListView(api: api)
+                .tabItem { Label("الدردشة", systemImage: "bubble.left.and.bubble.right.fill") }
+                .tag("chat")
+            TasksView(api: api)
+                .tabItem { Label("المهام", systemImage: "checklist") }
+                .tag("tasks")
+            DeliveriesView(api: api)
+                .tabItem { Label("التسليمات", systemImage: "doc.fill") }
+                .tag("deliveries")
         }
         .tint(JarvisColor.highlight_blue)
         .onOpenURL { router.handle($0) }
