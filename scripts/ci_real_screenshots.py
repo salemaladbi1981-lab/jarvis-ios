@@ -80,16 +80,16 @@ def main():
     shot('deep_task', '-deepLink', f'jarvis://task/{task}')
     shot('deep_delivery', '-deepLink', f'jarvis://delivery/{delivery}')
 
+    # notifications proof — permission flow + scheduling (deep-link in userInfo)
+    shot('notif_permission', '-requestNotifications', '-showNotifications')
+    shot('notif_scheduled', '-scheduleNotification', f'jarvis://delivery/{delivery}', '-showNotifications')
+
     # URL-scheme proof (warm openurl → system routes to JARVIS; prompt is iOS security, not app code)
     sh(f'xcrun simctl launch "{device}" com.salemai.jarvis -- -baseURL http://127.0.0.1:8000 -sessionToken {token} -tab home')
     time.sleep(6)
     sh(f'xcrun simctl openurl "{device}" "jarvis://conversation/{conv}"')
     time.sleep(3)
     sh(f'xcrun simctl io "{device}" screenshot deep_scheme.png')
-
-    # notifications proof — permission flow + scheduling (deep-link in userInfo)
-    shot('notif_permission', '-requestNotifications', '-showNotifications')
-    shot('notif_scheduled', '-scheduleNotification', f'jarvis://delivery/{delivery}', '-showNotifications')
 
     print('SCREENSHOTS:')
     for p in sorted(glob.glob('*.png')):

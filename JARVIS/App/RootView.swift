@@ -46,15 +46,15 @@ struct RootView: View {
                 NotificationManager.shared.pendingDeepLink = nil
             }
             let args = ProcessInfo.processInfo.arguments
-            if args.contains("-requestNotifications") {
-                Task { await NotificationManager.shared.requestAuthorization() }
-            }
-            if let i = args.firstIndex(of: "-scheduleNotification"), i + 1 < args.count,
-               let u = URL(string: args[i + 1]), let tg = DeepLinkTarget.parse(u) {
-                NotificationManager.shared.schedule(tg, title: "إشعار اختبار", body: "افتح العنصر من الإشعار")
-            }
-            if args.contains("-showNotifications") {
-                Task {
+            Task {
+                if args.contains("-requestNotifications") {
+                    _ = await NotificationManager.shared.requestAuthorization()
+                }
+                if let i = args.firstIndex(of: "-scheduleNotification"), i + 1 < args.count,
+                   let u = URL(string: args[i + 1]), let tg = DeepLinkTarget.parse(u) {
+                    NotificationManager.shared.schedule(tg, title: "إشعار اختبار", body: "افتح العنصر من الإشعار")
+                }
+                if args.contains("-showNotifications") {
                     await NotificationManager.shared.refreshStatus()
                     notifDebug = "notif status=\(NotificationManager.shared.authorizationStatus.rawValue) pending=\(NotificationManager.shared.pendingCount)"
                 }
