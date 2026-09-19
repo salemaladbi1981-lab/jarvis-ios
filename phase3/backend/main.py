@@ -17,6 +17,7 @@ import tasks as tasks_mod
 import deliveries
 import auth
 import workspace
+import kill_switch
 import ms_oauth
 import telegram_auth
 import youtube_provider
@@ -212,6 +213,8 @@ def delete_file(file_id: str, user_id: str = Depends(get_user_id), workspace_id:
 
 @app.post("/tasks")
 def create_task(req: TaskReq, user_id: str = Depends(get_user_id), workspace_id: str = Depends(get_workspace)):
+    if kill_switch.engaged():
+        raise HTTPException(status_code=503, detail="kill_switch_engaged")
     return tasks_mod.create_task(user_id, req.session_id, req.conversation_id, req.prompt,
                                  req.attachment_ids, req.selected_agent, req.selected_capability, workspace_id)
 
