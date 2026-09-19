@@ -61,7 +61,7 @@ struct ExecutionState: Codable {
     let error: String?
 }
 
-struct TaskItem: Codable, Identifiable {
+struct JarvisTask: Codable, Identifiable {
     var id: String { taskId }
     let taskId: String
     let conversationId: String?

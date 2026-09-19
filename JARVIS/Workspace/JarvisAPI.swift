@@ -33,7 +33,6 @@ struct JarvisAPI {
         let name = (resp as? HTTPURLResponse)?.suggestedFilename ?? "file"
         return (tmp, name)
     }
-}
 
     /// قائمة مُفهرسة (GET /tasks, /conversations, /deliveries) → [T].
     func getArray<T: Decodable>(_ path: String) async throws -> [T] {
@@ -46,3 +45,4 @@ struct JarvisAPI {
         }
         return try JarvisJSON.decoder().decode([T].self, from: d)
     }
+}

@@ -45,7 +45,7 @@ final class EnrollmentManager: ObservableObject {
             wire(token)
             return true
         } catch {
-            error = "فشل الاتصال"
+            self.error = "فشل الاتصال"
             return false
         }
     }

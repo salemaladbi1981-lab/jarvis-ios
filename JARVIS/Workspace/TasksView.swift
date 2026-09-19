@@ -32,7 +32,7 @@ struct TasksView: View {
 }
 
 private struct TaskCard: View {
-    let task: TaskItem
+    let task: JarvisTask
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(task.prompt ?? "بدون عنوان")
@@ -82,7 +82,7 @@ private struct TaskCard: View {
 
 @MainActor
 final class TasksViewModel: ObservableObject {
-    @Published var items: [TaskItem] = []
+    @Published var items: [JarvisTask] = []
     @Published var loading = false
     private let api: JarvisAPI
     init(api: JarvisAPI) { self.api = api }
