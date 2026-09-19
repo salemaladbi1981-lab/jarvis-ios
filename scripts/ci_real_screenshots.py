@@ -75,18 +75,17 @@ def main():
     shot('real_tasks', '-tab', 'tasks')
     shot('real_deliveries', '-tab', 'deliveries')
 
-    # deep links — warm app first so openurl routes without the first-time "Open in JARVIS?" prompt
+    # deep links — cold-start via -deepLink launch arg (opens the specific item; bypasses iOS 17.4 "Open in JARVIS?" prompt)
+    shot('deep_conversation', '-deepLink', f'jarvis://conversation/{conv}')
+    shot('deep_task', '-deepLink', f'jarvis://task/{task}')
+    shot('deep_delivery', '-deepLink', f'jarvis://delivery/{delivery}')
+
+    # URL-scheme proof (warm openurl → system routes to JARVIS; prompt is iOS security, not app code)
     sh(f'xcrun simctl launch "{device}" com.salemai.jarvis -- -baseURL http://127.0.0.1:8000 -sessionToken {token} -tab home')
     time.sleep(6)
     sh(f'xcrun simctl openurl "{device}" "jarvis://conversation/{conv}"')
-    time.sleep(4)
-    sh(f'xcrun simctl io "{device}" screenshot deep_conversation.png')
-    sh(f'xcrun simctl openurl "{device}" "jarvis://task/{task}"')
-    time.sleep(4)
-    sh(f'xcrun simctl io "{device}" screenshot deep_task.png')
-    sh(f'xcrun simctl openurl "{device}" "jarvis://delivery/{delivery}"')
-    time.sleep(4)
-    sh(f'xcrun simctl io "{device}" screenshot deep_delivery.png')
+    time.sleep(3)
+    sh(f'xcrun simctl io "{device}" screenshot deep_scheme.png')
 
     print('SCREENSHOTS:')
     for p in sorted(glob.glob('*.png')):

@@ -5,6 +5,7 @@ struct RootView: View {
     @EnvironmentObject private var enrollment: EnrollmentManager
     @StateObject private var router = DeepLinkRouter()
     @State private var selectedTab: String
+    @State private var deepLink: DeepLinkTarget?
 
     init() {
         let args = ProcessInfo.processInfo.arguments
@@ -13,10 +14,39 @@ struct RootView: View {
         } else {
             _selectedTab = State(initialValue: "home")
         }
+        var dl: DeepLinkTarget?
+        if let i = args.firstIndex(of: "-deepLink"), i + 1 < args.count, let u = URL(string: args[i + 1]) {
+            dl = DeepLinkTarget.parse(u)
+        }
+        _deepLink = State(initialValue: dl)
     }
 
     var body: some View {
         let api = enrollment.api ?? JarvisAPI(baseURL: JarvisConfig.baseURL, sessionToken: JarvisConfig.injectedSessionToken ?? "")
+        if let dl = deepLink {
+            NavigationStack {
+                deepLinkView(dl, api: api)
+                    .toolbar {
+                        ToolbarItem(placement: .primaryAction) {
+                            Button("إغلاق") { deepLink = nil }
+                        }
+                    }
+            }
+        } else {
+            tabs(api)
+        }
+    }
+
+    @ViewBuilder
+    private func deepLinkView(_ t: DeepLinkTarget, api: JarvisAPI) -> some View {
+        switch t {
+        case .conversation(let id): ConversationView(api: api, conversationId: id)
+        case .task(let id): TaskDetailView(api: api, taskId: id)
+        case .delivery(let id): DeliveryDetailView(api: api, deliveryId: id)
+        }
+    }
+
+    private func tabs(_ api: JarvisAPI) -> some View {
         TabView(selection: $selectedTab) {
             HomeEntryView(api: api)
                 .tabItem { Label("الرئيسية", systemImage: "house.fill") }
@@ -48,7 +78,7 @@ struct RootView: View {
         }
         .onOpenURL { router.handle($0) }
         .onChange(of: router.target) { t in
-            if let t = t { select(t) }
+            if let t = t { deepLink = t; select(t) }
         }
     }
 
