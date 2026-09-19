@@ -18,6 +18,7 @@ import deliveries
 import auth
 import workspace
 import kill_switch
+import conversation, messages
 import ms_oauth
 import telegram_auth
 import youtube_provider
@@ -57,6 +58,15 @@ def get_workspace(x_jarvis_session: str = Header(default=""), x_jarvis_workspace
     if ws is None:
         raise HTTPException(status_code=403, detail="workspace_denied")
     return ws
+
+
+def get_session(x_jarvis_session: str = Header(default="")):
+    """session كامل {user_id, workspace_id, conversation_id} + الـtoken للربط."""
+    s = auth.resolve_session(x_jarvis_session)
+    if not s:
+        raise HTTPException(status_code=401, detail="unauthorized")
+    s["_token"] = x_jarvis_session
+    return s
 
 
 class BootstrapReq(BaseModel):
@@ -437,6 +447,68 @@ def create_session(req: SessionReq):
     sid = uuid.uuid4().hex
     audit.log("session_created", session_id=sid, client=req.client)
     return {"session_id": sid, "ttl": config.SESSION_TTL_SECONDS}
+
+
+class ConversationReq(BaseModel):
+    source: str = "app"
+    conversation_id: str = ""
+    session_id: str = ""
+    title: str = ""
+
+class MessageReq(BaseModel):
+    role: str = "user"
+    content: str = ""
+    client_msg_id: str = ""
+    citations: list = []
+    tool_calls: list = []
+    attachment_refs: list = []
+    task_refs: list = []
+    delivery_refs: list = []
+    execution_state: dict = None
+
+@app.post("/conversations")
+def conversations_get_or_create(req: ConversationReq, session: dict = Depends(get_session)):
+    """متابعة محادثة قائمة (لا توليد جديد) أو إنشاء جديدة — source-agnostic."""
+    conv, created = conversation.ConversationStore().get_or_create(
+        session["user_id"], session["workspace_id"],
+        source=req.source, conversation_id=req.conversation_id or session.get("conversation_id"),
+        session_id=req.session_id, title=req.title)
+    # ربط session بالمحادثة لاستعادتها بعد reconnect/restart
+    if session.get("_token"):
+        auth.set_session_conversation(session["_token"], conv["conversation_id"])
+    audit.log("conversation", session_id=session["_token"], conversation_id=conv["conversation_id"],
+              event="created" if created else "resumed")
+    return {"ok": True, "created": created, "conversation": conv}
+
+@app.get("/conversations")
+def conversations_list(session: dict = Depends(get_session)):
+    return conversation.ConversationStore().list(session["user_id"], session["workspace_id"])
+
+@app.get("/conversations/{conversation_id}")
+def conversations_get(conversation_id: str, session: dict = Depends(get_session)):
+    conv = conversation.ConversationStore().get(conversation_id, session["user_id"], session["workspace_id"])
+    if not conv:
+        raise HTTPException(status_code=404, detail="not_found")
+    msgs = messages.MessageStore().list(conversation_id)
+    return {"conversation": conv, "messages": msgs}
+
+@app.post("/conversations/{conversation_id}/messages")
+def messages_add(conversation_id: str, req: MessageReq, session: dict = Depends(get_session)):
+    conv = conversation.ConversationStore().get(conversation_id, session["user_id"], session["workspace_id"])
+    if not conv:
+        raise HTTPException(status_code=404, detail="not_found")
+    r = messages.MessageStore().add(
+        conversation_id, req.role, req.content,
+        user_id=session["user_id"], workspace_id=session["workspace_id"],
+        citations=req.citations, tool_calls=req.tool_calls,
+        attachment_refs=req.attachment_refs, task_refs=req.task_refs,
+        delivery_refs=req.delivery_refs, execution_state=req.execution_state,
+        client_msg_id=req.client_msg_id or None)
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["error"])
+    conversation.ConversationStore().add_ref(conversation_id, "message_ids", r["message"]["message_id"])
+    conversation.ConversationStore().touch(conversation_id)
+    return {"ok": True, "duplicate": r.get("duplicate", False), "message": r["message"]}
 
 @app.post("/orchestrate")
 def orchestrate(req: OrchestrateReq):

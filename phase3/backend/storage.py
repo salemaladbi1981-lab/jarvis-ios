@@ -11,6 +11,9 @@ TASKS_INDEX = os.path.join(ROOT, "tasks_index.json")
 DELIVERIES_INDEX = os.path.join(ROOT, "deliveries_index.json")
 
 PART_SIZE = 4 * 1024 * 1024  # 4 MB
+CONVERSATIONS_INDEX = os.path.join(ROOT, "conversations_index.json")
+MESSAGES_INDEX = os.path.join(ROOT, "messages_index.json")
+
 
 
 def ensure_dirs():
@@ -72,3 +75,15 @@ def load_deliveries() -> dict:
 
 def save_deliveries(data: dict) -> None:
     _save_index(DELIVERIES_INDEX, data)
+def load_conversations() -> dict:
+    return _load_index(CONVERSATIONS_INDEX)
+
+def save_conversations(data: dict) -> None:
+    _save_index(CONVERSATIONS_INDEX, data)
+
+def load_messages() -> dict:
+    return _load_index(MESSAGES_INDEX)
+
+def save_messages(data: dict) -> None:
+    _save_index(MESSAGES_INDEX, data)
+

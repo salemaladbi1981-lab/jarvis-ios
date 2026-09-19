@@ -27,11 +27,15 @@ def _save(d: dict) -> None:
 
 
 def create_session(user_id: str, session_id: str | None = None,
-                    workspace_id: str = workspace.DEFAULT_WORKSPACE) -> str:
-    """يصدر session token server-side (لا يثق بالعميل). يحمل مساحة العمل."""
+                    workspace_id: str = workspace.DEFAULT_WORKSPACE,
+                    conversation_id: str | None = None) -> str:
+    """يصدر session token server-side (لا يثق بالعميل). يحمل مساحة العمل + المحادثة الحالية."""
     d = _load()
     sid = session_id or uuid.uuid4().hex[:24]
-    d[sid] = {"user_id": user_id, "workspace_id": workspace_id, "created_at": time.time()}
+    rec = {"user_id": user_id, "workspace_id": workspace_id, "created_at": time.time()}
+    if conversation_id:
+        rec["conversation_id"] = conversation_id
+    d[sid] = rec
     _save(d)
     return sid
 
@@ -47,14 +51,27 @@ def resolve_user(session_token: str | None) -> str | None:
 
 
 def resolve_session(session_token: str | None) -> dict | None:
-    """يستخرج {user_id, workspace_id} من session موثّق. None إذا لا session صالح."""
+    """يستخرج {user_id, workspace_id, conversation_id} من session موثّق. None إذا لا session صالح."""
     if not session_token:
         return None
     s = _load().get(session_token)
     if not s:
         return None
     return {"user_id": s.get("user_id"),
-            "workspace_id": s.get("workspace_id", workspace.DEFAULT_WORKSPACE)}
+            "workspace_id": s.get("workspace_id", workspace.DEFAULT_WORKSPACE),
+            "conversation_id": s.get("conversation_id")}
+
+
+def set_session_conversation(session_token: str, conversation_id: str) -> bool:
+    """يربط session بمحادثة — يُستعاد بعد reconnect/restart."""
+    d = _load()
+    s = d.get(session_token)
+    if not s:
+        return False
+    s["conversation_id"] = conversation_id
+    d[session_token] = s
+    _save(d)
+    return True
 
 
 def revoke_session(session_token: str) -> None:
