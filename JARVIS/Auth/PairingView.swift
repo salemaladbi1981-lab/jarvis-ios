@@ -15,7 +15,9 @@ struct PairingView: View {
             SecureField("رمز الاقتران", text: $code)
                 .textFieldStyle(.roundedBorder)
                 .multilineTextAlignment(.center)
+                #if os(iOS)
                 .autocapitalization(.none)
+                #endif
                 .padding(.horizontal, 40)
             if let e = enrollment.error {
                 Text(e).font(.caption).foregroundColor(.red)

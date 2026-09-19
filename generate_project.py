@@ -172,6 +172,7 @@ IOS_ONLY_SOURCES = [
     "JARVIS/Camera/CameraCaptureView.swift",
     "JARVIS/Camera/CameraVideoView.swift",
     "JARVIS/Workspace/DocumentScanner.swift",
+    "JARVIS/Workspace/AudioRecorderView.swift",
 ]
 mac_src_bf = {p_: bf for p_, bf in app_src_bf.items() if p_ not in IOS_ONLY_SOURCES}
 mac_sources_phase = add("PBXSourcesBuildPhase", files=sorted(mac_src_bf.values()), buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)

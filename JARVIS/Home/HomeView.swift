@@ -148,16 +148,20 @@ struct HomeView: View {
                 onRecordAudio: { showAttachments = false; showAudioRecorder = true }
             )
         }
+        #if os(iOS)
         .fullScreenCover(isPresented: $showCameraPhoto) {
             CameraCaptureView { data, mime in
                 pendingAttachments.append(PendingAttachment(kind: "photo", data: data, url: nil, filename: "photo-\(UUID().uuidString).jpg"))
             }
         }
+        #endif
+        #if os(iOS)
         .fullScreenCover(isPresented: $showCameraVideo) {
             CameraVideoView { url in
                 pendingAttachments.append(PendingAttachment(kind: "video", data: nil, url: url, filename: url.lastPathComponent))
             }
         }
+        #endif
         .photosPicker(isPresented: $showPhotoPicker, selection: $photoItem, matching: .images)
         .onChange(of: photoItem) { _, item in
             guard let item else { return }
@@ -182,6 +186,7 @@ struct HomeView: View {
                 pendingAttachments.append(PendingAttachment(kind: "file", data: data, url: url, filename: url.lastPathComponent))
             }
         }
+        #if os(iOS)
         .fullScreenCover(isPresented: $showScanner) {
             DocumentScanner { urls in
                 for url in urls {
@@ -195,6 +200,7 @@ struct HomeView: View {
                 pendingAttachments.append(PendingAttachment(kind: "audio", data: nil, url: url, filename: url.lastPathComponent))
             }
         }
+        #endif
     }
 
     /// إرسال: نص فقط → محادثة صوتية؛ مع مرفقات → رفع ثم task.

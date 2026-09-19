@@ -55,6 +55,8 @@ final class EnrollmentManager: ObservableObject {
         let um = UploadManager(baseURL: baseURL, sessionToken: token)
         uploadManager = um
         api = JarvisAPI(baseURL: baseURL, sessionToken: token)
+        #if os(iOS)
         BackgroundSessionBridge.shared = um   // <== الربط الفعلي هنا
+        #endif
     }
 }
