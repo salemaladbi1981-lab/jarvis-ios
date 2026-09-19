@@ -56,7 +56,9 @@ struct TaskDetailView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .navigationTitle("المهمة")
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+        #endif
         .task { await vm.load(taskId) }
     }
 
@@ -140,7 +142,9 @@ struct DeliveryDetailView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .navigationTitle("التسليم")
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+        #endif
         .task { await vm.load(deliveryId) }
     }
 }

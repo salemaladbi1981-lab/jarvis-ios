@@ -35,6 +35,7 @@ struct AttachmentView: View {
 
     @ViewBuilder
     private var imageBody: some View {
+        #if os(iOS)
         if let data = imageData, let ui = UIImage(data: data) {
             Image(uiImage: ui)
                 .resizable()
@@ -44,6 +45,19 @@ struct AttachmentView: View {
         } else {
             ProgressView().padding(12)
         }
+        #elseif os(macOS)
+        if let data = imageData, let ns = NSImage(data: data) {
+            Image(nsImage: ns)
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: 260, maxHeight: 220)
+                .cornerRadius(10)
+        } else {
+            ProgressView().padding(12)
+        }
+        #else
+        ProgressView().padding(12)
+        #endif
     }
 
     private func fileCard(_ f: FileItem) -> some View {

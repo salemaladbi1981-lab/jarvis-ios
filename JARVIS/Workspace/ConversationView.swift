@@ -54,7 +54,9 @@ struct ConversationView: View {
                 Task { await vm.send(t) }
             }
         }
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+        #endif
         .task { await vm.load(conversationId) }
     }
 }
