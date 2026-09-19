@@ -2,28 +2,13 @@
 import os
 from pathlib import Path
 
-def _load_env_file(path, override=False):
-    """يحمّل .env يدويًا (بدون python-dotenv) — احتياط لبيئات الاختبار/الـ CI."""
-    try:
-        for line in Path(path).read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            k, v = line.split("=", 1)
-            k = k.strip()
-            if override or k not in os.environ:
-                os.environ[k] = v.strip()
-    except Exception:
-        pass
-
 try:
     from dotenv import load_dotenv
     # أولاً .env المحلي للـ backend، ثم الـ .env العام للسيرفر (لا يتجاوز الموجود)
     load_dotenv(Path(__file__).parent / ".env", override=False)
     load_dotenv("/opt/data/.env", override=False)
 except ImportError:
-    _load_env_file(Path(__file__).parent / ".env")
-    _load_env_file("/opt/data/.env")
+    pass
 
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
@@ -31,8 +16,6 @@ DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY", "")
 API_SERVER_KEY = os.environ.get("API_SERVER_KEY", "")
 JARVIS_HERMES_API_URL = os.environ.get("JARVIS_HERMES_API_URL", "http://127.0.0.1:8642/v1/chat/completions")
-# profile مقيّد للتفويض (اختياري) — إن ضُبط، يوجّه الاستدعاء إلى /p/<profile>/v1/chat/completions
-JARVIS_HERMES_PROFILE = os.environ.get("JARVIS_HERMES_PROFILE", "")
 JARVIS_BOOTSTRAP_KEY = os.environ.get("JARVIS_BOOTSTRAP_KEY", "")
 
 # Realtime provider preference

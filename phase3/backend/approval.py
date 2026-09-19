@@ -5,6 +5,8 @@ REGISTRY_PATH = os.environ.get("JARVIS_REGISTRY_PATH", "AGENT-REGISTRY.json")
 APPROVAL_PATH = os.environ.get("JARVIS_APPROVAL_PATH", "/opt/data/logs/jarvis-approvals.json")
 
 class ApprovalEvaluator:
+    DESTRUCTIVE_PATTERNS = ["unlock", "open", "disable", "delete", "format", "commit", "config", "install", "remove", "gate", "alarm"]
+
     def __init__(self):
         self.registry = self._load()
 
@@ -19,8 +21,13 @@ class ApprovalEvaluator:
         for a in self.registry.get("agents", []):
             if a["id"] == agent_id:
                 policy = a.get("approval_policy", {})
-                return action in policy.get("required_actions", [])
-        return True  # unknown agent/action → deny-by-default
+                if action in policy.get("required_actions", []):
+                    return True
+                # مستعاد من live: فعل تخريبي غير مُدرج → deny-by-default
+                if any(ptn in action for ptn in self.DESTRUCTIVE_PATTERNS):
+                    return True
+                return False
+        return True  # unknown agent → deny-by-default
 
 
 class ApprovalStore:

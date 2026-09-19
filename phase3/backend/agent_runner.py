@@ -76,10 +76,10 @@ def run_agent(agent_id: str, task: str, ident_dict: dict,
     ]}).encode("utf-8")
     headers = {"Content-Type": "application/json", "Authorization": "Bearer " + key, **ident.to_headers()}
     api_url = config.JARVIS_HERMES_API_URL
-    prof = getattr(config, "JARVIS_HERMES_PROFILE", "") or ""
-    if prof:
+    profile_name = getattr(config, "JARVIS_HERMES_PROFILE", "") or ""
+    if profile_name:
         # Restricted Hermes profile: /v1/chat/completions → /p/<profile>/v1/chat/completions
-        api_url = api_url.replace("/v1/chat/completions", f"/p/{prof}/v1/chat/completions")
+        api_url = api_url.replace("/v1/chat/completions", f"/p/{profile_name}/v1/chat/completions")
     req = urllib.request.Request(api_url, data=body, headers=headers)
 
     try:
