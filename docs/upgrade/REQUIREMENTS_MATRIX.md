@@ -12,11 +12,11 @@
 - implementation_files: `phase3/backend/realtime.py`, `JARVIS/Voice/RealtimeVoiceSession.swift`, `VoiceAudioEngine.swift`, `SessionEventParser.swift`
 - dependency: OpenAI Realtime (voice `verse`)
 - backend_test: `tests_voice_stability.py` 16/16 PASS
-- live_deploy_fingerprint: NOT_DEPLOYED
+- live_deploy_fingerprint: LIVE_DEPLOYED (backend realtime/maps/config)
 - app_build: BUILD_PENDING
 - device_test: DEVICE_PENDING
 - acceptance: PENDING
-- last_tested_at: 2026-09-19 (source-level)
+- last_tested_at: 2026-09-19 (source-level + live deploy)
 - blocker: لا Mac/Xcode/iPhone على هذا السيرفر
 
 ## STABILITY — الموقع والملاحة
@@ -26,11 +26,11 @@
 - implementation_files: `Providers/LocationManager.swift`, `JARVIS/Home/HeaderView.swift`, `JARVIS/Info.plist`, `phase3/backend/maps_provider.py`, `JARVIS/App/JarvisMapsIntent.swift`
 - dependency: CoreLocation, CLGeocoder
 - backend_test: `tests_maps.py` 17/17 PASS
-- live_deploy_fingerprint: NOT_DEPLOYED
+- live_deploy_fingerprint: LIVE_DEPLOYED (backend realtime/maps/config)
 - app_build: BUILD_PENDING
 - device_test: DEVICE_PENDING
 - acceptance: PENDING
-- last_tested_at: 2026-09-19 (source-level)
+- last_tested_at: 2026-09-19 (source-level + live deploy)
 - blocker: لا Mac/Xcode/iPhone هنا
 
 ## STABILITY — اللغة واللكنة
@@ -40,7 +40,7 @@
 - implementation_files: `phase3/backend/config.py`
 - dependency: لا (override `JARVIS_REALTIME_INSTRUCTIONS` غير مضبوط — مؤكّد)
 - backend_test: `tests_config_language.py` 6/6 PASS
-- live_deploy_fingerprint: NOT_DEPLOYED
+- live_deploy_fingerprint: LIVE_DEPLOYED (config)
 - app_build: n/a (backend only)
 - device_test: DEVICE_PENDING
 - acceptance: PENDING
