@@ -27,7 +27,9 @@ def main():
 
     os.chdir('phase3/backend')
     seed_r = sh('python3 ci_seed.py')
-    print(seed_r.stdout[-500:])
+    print('seed stdout:', seed_r.stdout[-500:])
+    if seed_r.stderr:
+        print('seed stderr:', seed_r.stderr[-1500:])
     seed_path = os.environ['CI_SEED_OUT']
     seed = json.load(open(seed_path))
     token = seed['session_token']
