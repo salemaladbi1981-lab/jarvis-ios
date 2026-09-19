@@ -43,6 +43,7 @@ jobs:
           shot() {
             local name="$1"; shift
             xcrun simctl terminate "$DEVICE" com.salemai.jarvis 2>/dev/null || true
+            sleep 2
             xcrun simctl launch "$DEVICE" com.salemai.jarvis "$@"
             sleep 6
             xcrun simctl io "$DEVICE" screenshot "$name.png"
