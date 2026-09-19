@@ -32,10 +32,10 @@ struct InboxView: View {
                         }
                     }
                     .listStyle(.plain)
-                    .navigationDestination(for: InboxItem.self) { item in
-                        destination(for: item)
-                    }
                 }
+            }
+            .navigationDestination(for: InboxItem.self) { item in
+                destination(for: item)
             }
             .navigationTitle("الوارد")
         }

@@ -161,4 +161,4 @@ final class HomeEntryViewModel: ObservableObject {
     }
 }
 
-struct ConvID: Identifiable { let id: String }
+struct ConvID: Identifiable, Hashable { let id: String }

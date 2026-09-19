@@ -90,7 +90,7 @@ struct DeliveryItem: Codable, Identifiable {
     let createdAt: Double?
 }
 
-struct InboxItem: Codable, Identifiable {
+struct InboxItem: Codable, Identifiable, Hashable {
     var id: String { "\(type)-\(approvalId ?? taskId ?? deliveryId ?? "x")" }
     let type: String
     let title: String?
