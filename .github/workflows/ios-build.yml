@@ -34,9 +34,13 @@ jobs:
         run: |
           python3 -m pip install --quiet fastapi 'httpx<0.28' pydantic Pillow
           cd phase3/backend
-          # tests_memory.py يعتمد على ملف ذاكرة legacy في /opt/data (live-only) — يُستثنى هنا؛
-          # عزل الذاكرة مُغطّى بـ tests_memory_isolation.py (portable).
-          for f in tests_*.py; do [ "$f" = "tests_memory.py" ] && continue; echo "== $f =="; python3 "$f" || exit 1; done
+          # قائمة صريحة بالاختبارات المحمولة (بلا live-only: Hermes key / ذاكرة legacy / بريد/تليجرام live)
+          for f in tests_derivatives.py tests_owner_negative.py tests_workspace_http.py tests_security.py \
+                   tests_chat.py tests_inbox.py tests_conversation.py tests_worker.py tests_tg_handoff.py \
+                   tests_auth.py tests_workspace.py tests_memory_isolation.py tests_tool_guard.py \
+                   tests_approval_audit.py tests_config_language.py tests_enrollment.py; do
+            echo "== $f =="; python3 "$f" || exit 1
+          done
 
   ios:
     runs-on: macos-14
