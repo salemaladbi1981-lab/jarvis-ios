@@ -1,39 +1,48 @@
-# Hermes Native Tool Enforcement — فحص المصدر الفعلي
+# Hermes Native Tool Enforcement — فحص المصدر الفعلي (مثبّت بالبصمة)
 
-التاريخ: 2026-09-19. المصدر المفحوص: `/opt/hermes/gateway/platforms/api_server.py` (الـ runtime الفعلي على المنفذ 8642 الذي يستدعيه `agent_runner` عبر `JARVIS_HERMES_API_URL`).
+التاريخ: 2026-09-19.
 
-## النتيجة القاطعة
+## النسخة المفحوصة (مثبّتة)
 
-**Hermes `/v1/chat/completions` لا يدعم per-request tool allowlist.** الفجوة حقيقية ومثبتة من المصدر، وليست افتراضًا.
-
-## الدليل (سطر → ماذا يثبت)
-
-| السطر | الدليل |
+| البند | القيمة |
 |---|---|
-| `2247` | المسار `POST /v1/chat/completions` → `_handle_chat_completions` |
-| `7247-7276` | توقيع `_run_agent(...)` — **لا يوجد معامل `tools`/`tool_choice`/`allowed_tools`/`toolset`**. يقبل فقط: user_message, history, ephemeral_system_prompt, session_id, model/provider/route overrides. |
-| `5310-5311` | `"tools", "tool_choice"` تظهر **فقط** في `_make_request_fingerprint` (مفتاح idempotency للـ dedup) — **لا تُستخرج ولا تُنفَّذ** في handler. |
-| (لا يوجد `body.get("tools")`) | الـ handler لا يقرأ حقل `tools` من الطلب أصلًا. |
-| `4098-4138` | `toolsets` (`/v1/toolsets`) = تصنيف **platform-level** ثابت في config، وليس per-request. |
+| Hermes version | **0.21.0** (`pyproject.toml` سطر 5) |
+| pyproject.toml SHA256 | `c70c8b52f6cc08a4e65f0fc1713c26814fd4f19811bc7e01de645009b2a76600` |
+| api_server.py SHA256 | `6aec6687d47c81b3567e930882a499c5c5c041ecbe40e1d08f93038212401962` |
+| api_server.py size/mtime | 362034 bytes / 2026-08-31 19:30:18 UTC |
+| git commit | غير متاح (ليس git checkout — لا يوجد `.git` تحت `/opt/hermes`) |
+| المسار | `/opt/hermes/gateway/platforms/api_server.py` |
 
-## ما هو متاح فعلًا (بدل allowlist)
+## مسار التنفيذ الذي تتبعته (chat-completions)
 
-1. **`ephemeral_system_prompt`** — تعليمة نظام تُطبَّق فوق الـ core، وليس تقييد أدوات. هذا ما يستخدمه `agent_runner` حاليًا (`[Allowed tools]`). **Prompt-level لا enforcement تقني.**
-2. **`toolsets`** — مجموعات أدوات على مستوى المنصة (ثابتة في config)، لا تُختار لكل طلب.
-3. **Per-profile multiplexing** (`/p/<profile>/v1/chat/completions`) — يسمح بملف شخصي منفصل بأدوات معزولة، لكن:
-   - الـ gateway الحالي **single-profile** (السطر 70-88: أي `/p/<other>/` يُرفض fail-closed).
-   - تفعيله يتطلب: تمكين multiplexing + `multiplex_profile_allowlist` + إنشاء profile مقيّد = **تغيير نشر على مستوى الـ gateway**، ليس تعديل مصدر JARVIS.
+1. **تسجيل المسار** — سطر `2247`: `("POST", "/v1/chat/completions", self._handle_chat_completions)`.
+2. **الـ handler** — سطر `5046`: `_handle_chat_completions` يقرأ `messages` + `system_prompt` + رؤوس الجلسة (`X-Hermes-Session-Id`/`-Key`).
+3. **الاستدعاء** — سطر `5290`-`5299`: `_compute_completion()` → `self._run_agent(user_message=…, ephemeral_system_prompt=…, session_id=…, **agent_overrides, route=…)` — **بلا أي معامل tools**.
+4. **توقيع `_run_agent`** — سطر `7247`-`7276`: لا يوجد `tools` / `tool_choice` / `allowed_tools` / `toolset`. (تأكيد عددي: 0 تطابق لهذه الأسماء في التوقيع.)
+5. **`tools`/`tool_choice`** — سطر `5310`-`5311`: يظهران **فقط** في `_make_request_fingerprint` (مفتاح idempotency للـ dedup)، لا تُقرأ من الطلب ولا تُنفَّذ.
+
+## نتيجة NOT_SUPPORTED — نطاقها الدقيق
+
+**غير مدعوم في هذه النسخة (0.21.0) على هذا الـ gateway (single-profile):**
+- ❌ **per-request tool allowlist عبر `POST /v1/chat/completions`** (قائمة أدوات مسموحة لكل طلب) — لا يوجد معامل ولا قراءة لحقل `tools` ولا فرض.
+- ❌ `tool_choice` / `allowed_tools` — لا يُفرض.
+- ❌ تعطيل أدوات غير مصرّح بها per-request.
+- ❌ interception/gateway قبل تنفيذ الأداة عبر هذا المسار.
+
+**مفصول عنه — آليات تقييد أخرى موجودة في المصدر (وليست بديلًا عن allowlist لكل طلب):**
+
+| الآلية | الحالة |
+|---|---|
+| `toolsets` (`/v1/toolsets`) | platform-level (ثابتة في config، سطر 4098-4138) — **ليست per-request** |
+| Per-profile multiplexing (`/p/<profile>/v1/chat/completions`) | مدعوم في المصدر، لكن هذا الـ gateway **single-profile** (سطر 70-88: أي `/p/<other>/` يُرفض fail-closed) — يتطلب تمكين multiplexing + `multiplex_profile_allowlist` |
+| `ephemeral_system_prompt` | prompt-level فقط (تعليمة فوق الـ core) — **ليس enforcement تقنيًا** |
 
 ## الحالة الصادقة
 
-- `HERMES_NATIVE_TOOL_ENFORCEMENT` = **NOT_SUPPORTED** (مثبت من المصدر).
-- الإنفاذ الحالي = `request-level` (بوابة `enforce()` في agent_runner) + `prompt-level` (ephemeral_system_prompt) + `tool_guard` (عند حدود تنفيذ أدوات JARVIS الحساسة).
+- `HERMES_NATIVE_TOOL_ENFORCEMENT` = **NOT_SUPPORTED** (نطاق: allowlist لكل طلب عبر chat-completions في 0.21.0).
+- الإنفاذ الحالي = `request-level` (بوابة `enforce()` في agent_runner) + `prompt-level` (ephemeral_system_prompt) + `tool_guard` (حدود تنفيذ أدوات JARVIS الحساسة).
+- **لا نعتمد prompt-level بديلًا عن المنع أثناء التنفيذ** — قرار سالم معتمد.
 
-## خيارات الإغلاق (للقرار، لا للتنفيذ الآن)
+## الإغلاق المعتمد (الخيار 1): Restricted Hermes profile
 
-1. **Restricted Hermes profile** (يفرض عزلًا حقيقيًا): إنشاء profile باسم `jarvis-agent` بأدوات دنيا (بلا terminal/email/web غير مصرح)، وتمكين multiplexing + allowlist، ثم يوجّه `agent_runner` إلى `/p/jarvis-agent/v1/chat/completions`. — **تغيير نشر** على الـ gateway (root-owned)، يحتاج موافقة سالم.
-2. **تعطيل الأفعال الحساسة للمسار** (كما في tool_guard): مسار `jarvis_agent` لا يملك email_send/telegram_send أصلًا، والحساس معطّل تقنيًا بلا موافقة.
-3. **قبول prompt-level + request-level** مع الإعلان الصادق (الوضع الحالي).
-
-## القرار المطلوب من سالم
-لا يمكن "إغلاق" الفجوة من مصدر JARVIS وحده — هي حدود الـ runtime. الخيار 1 (restricted profile) هو الإغلاق التقني الحقيقي، ويحتاج تعديل نشر الـ gateway + موافقته.
+التفاصيل التنفيذية في `docs/upgrade/RESTRICTED_PROFILE_PLAN.md`. يبقى UPG-2 مفتوحًا حتى اكتمال النشر + اختبارات الإنفاذ.

@@ -16,6 +16,8 @@ DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY", "")
 API_SERVER_KEY = os.environ.get("API_SERVER_KEY", "")
 JARVIS_HERMES_API_URL = os.environ.get("JARVIS_HERMES_API_URL", "http://127.0.0.1:8642/v1/chat/completions")
+# profile مقيّد للتفويض (اختياري) — إن ضُبط، يوجّه الاستدعاء إلى /p/<profile>/v1/chat/completions
+JARVIS_HERMES_PROFILE = os.environ.get("JARVIS_HERMES_PROFILE", "")
 JARVIS_BOOTSTRAP_KEY = os.environ.get("JARVIS_BOOTSTRAP_KEY", "")
 
 # Realtime provider preference
