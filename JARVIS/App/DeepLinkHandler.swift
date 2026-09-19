@@ -8,12 +8,14 @@ enum DeepLinkTarget: Equatable {
 
     static func parse(_ url: URL) -> DeepLinkTarget? {
         guard url.scheme?.lowercased() == "jarvis" else { return nil }
-        let parts = url.pathComponents.filter { $0 != "/" }
-        guard parts.count == 2, !parts[1].isEmpty else { return nil }
-        switch parts[0].lowercased() {
-        case "conversation": return .conversation(parts[1])
-        case "task": return .task(parts[1])
-        case "delivery": return .delivery(parts[1])
+        // jarvis://conversation/{id} → host = type, path = id
+        let host = url.host?.lowercased()
+        let id = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard !id.isEmpty else { return nil }
+        switch host {
+        case "conversation": return .conversation(id)
+        case "task": return .task(id)
+        case "delivery": return .delivery(id)
         default: return nil
         }
     }
