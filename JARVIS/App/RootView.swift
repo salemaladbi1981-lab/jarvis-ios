@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// الجذر iOS — تبويبات (الرئيسية / المهام / التسليمات) + deep-link + launch args للـscreenshots.
+/// الجذر iOS — تبويبات (الرئيسية / الدردشة / المهام / التسليمات) + deep-link + launch args للـscreenshots.
 struct RootView: View {
     @EnvironmentObject private var enrollment: EnrollmentManager
     @StateObject private var router = DeepLinkRouter()
@@ -21,6 +21,9 @@ struct RootView: View {
                 .tabItem { Label("الرئيسية", systemImage: "house.fill") }
                 .tag("home")
             if let api = enrollment.api {
+                ConversationListView(api: api)
+                    .tabItem { Label("الدردشة", systemImage: "bubble.left.and.bubble.right.fill") }
+                    .tag("chat")
                 TasksView(api: api)
                     .tabItem { Label("المهام", systemImage: "checklist") }
                     .tag("tasks")
@@ -38,7 +41,8 @@ struct RootView: View {
 
     private func select(_ t: DeepLinkTarget) {
         switch t {
-        case .task, .conversation: selectedTab = "tasks"
+        case .conversation: selectedTab = "chat"
+        case .task: selectedTab = "tasks"
         case .delivery: selectedTab = "deliveries"
         }
     }
