@@ -16,6 +16,7 @@ import files_api
 import tasks as tasks_mod
 import deliveries
 import auth
+import workspace
 import ms_oauth
 import telegram_auth
 import youtube_provider
@@ -44,6 +45,17 @@ def get_user_id(x_jarvis_session: str = Header(default="")):
     if not uid:
         raise HTTPException(status_code=401, detail="unauthorized")
     return uid
+
+
+def get_workspace(x_jarvis_session: str = Header(default=""), x_jarvis_workspace: str = Header(default="")):
+    """مساحة العمل server-side من session موثّق + المساحة المصرحة. لا قيمة افتراضية تمنح وصولًا."""
+    session = auth.resolve_session(x_jarvis_session)
+    if not session:
+        raise HTTPException(status_code=401, detail="unauthorized")
+    ws = workspace.authorize(session["workspace_id"], x_jarvis_workspace or None)
+    if ws is None:
+        raise HTTPException(status_code=403, detail="workspace_denied")
+    return ws
 
 
 class BootstrapReq(BaseModel):
@@ -159,9 +171,9 @@ class DeliveryReq(BaseModel):
     content: str = None
 
 @app.post("/files/upload/init")
-def upload_init(req: UploadInitReq, user_id: str = Depends(get_user_id)):
+def upload_init(req: UploadInitReq, user_id: str = Depends(get_user_id), workspace_id: str = Depends(get_workspace)):
     return files_api.init_upload(user_id, req.filename, req.mime_type, req.size,
-                                 req.checksum, req.conversation_id, req.session_id)
+                                 req.checksum, req.conversation_id, req.session_id, workspace_id)
 
 @app.post("/files/upload/part")
 async def upload_part(upload_id: str, part_number: int, checksum: str = "", request: Request = None, user_id: str = Depends(get_user_id)):
@@ -177,57 +189,57 @@ def upload_complete(req: UploadCompleteReq, user_id: str = Depends(get_user_id))
     return files_api.complete_upload(req.upload_id, user_id)
 
 @app.get("/files")
-def list_files(user_id: str = Depends(get_user_id)):
-    return files_api.list_files(user_id)
+def list_files(user_id: str = Depends(get_user_id), workspace_id: str = Depends(get_workspace)):
+    return files_api.list_files(user_id, workspace_id)
 
 @app.get("/files/{file_id}")
-def get_file(file_id: str, user_id: str = Depends(get_user_id)):
-    f = files_api.get_file(file_id, user_id)
+def get_file(file_id: str, user_id: str = Depends(get_user_id), workspace_id: str = Depends(get_workspace)):
+    f = files_api.get_file(file_id, user_id, workspace_id)
     if not f:
         raise HTTPException(status_code=404, detail="not_found")
     return f
 
 @app.get("/files/{file_id}/download")
-def download_file(file_id: str, user_id: str = Depends(get_user_id)):
-    f = files_api.get_file(file_id, user_id)
+def download_file(file_id: str, user_id: str = Depends(get_user_id), workspace_id: str = Depends(get_workspace)):
+    f = files_api.get_file(file_id, user_id, workspace_id)
     if not f or not os.path.exists(f.get("storage_ref", "")):
         raise HTTPException(status_code=404, detail="not_found")
     return FileResponse(f["storage_ref"], filename=f["filename"])
 
 @app.delete("/files/{file_id}")
-def delete_file(file_id: str, user_id: str = Depends(get_user_id)):
-    return files_api.delete_file(file_id, user_id)
+def delete_file(file_id: str, user_id: str = Depends(get_user_id), workspace_id: str = Depends(get_workspace)):
+    return files_api.delete_file(file_id, user_id, workspace_id)
 
 @app.post("/tasks")
-def create_task(req: TaskReq, user_id: str = Depends(get_user_id)):
+def create_task(req: TaskReq, user_id: str = Depends(get_user_id), workspace_id: str = Depends(get_workspace)):
     return tasks_mod.create_task(user_id, req.session_id, req.conversation_id, req.prompt,
-                                 req.attachment_ids, req.selected_agent, req.selected_capability)
+                                 req.attachment_ids, req.selected_agent, req.selected_capability, workspace_id)
 
 @app.get("/tasks")
-def list_tasks(user_id: str = Depends(get_user_id)):
-    return tasks_mod.list_tasks(user_id)
+def list_tasks(user_id: str = Depends(get_user_id), workspace_id: str = Depends(get_workspace)):
+    return tasks_mod.list_tasks(user_id, workspace_id)
 
 @app.get("/tasks/{task_id}")
-def get_task(task_id: str, user_id: str = Depends(get_user_id)):
-    t = tasks_mod.get_task(task_id, user_id)
+def get_task(task_id: str, user_id: str = Depends(get_user_id), workspace_id: str = Depends(get_workspace)):
+    t = tasks_mod.get_task(task_id, user_id, workspace_id)
     if not t:
         raise HTTPException(status_code=404, detail="not_found")
     return t
 
 @app.get("/deliveries")
-def list_deliveries(user_id: str = Depends(get_user_id)):
-    return deliveries.list_deliveries(user_id)
+def list_deliveries(user_id: str = Depends(get_user_id), workspace_id: str = Depends(get_workspace)):
+    return deliveries.list_deliveries(user_id, workspace_id)
 
 @app.get("/deliveries/{delivery_id}")
-def get_delivery(delivery_id: str, user_id: str = Depends(get_user_id)):
-    d = deliveries.get_delivery(delivery_id, user_id)
+def get_delivery(delivery_id: str, user_id: str = Depends(get_user_id), workspace_id: str = Depends(get_workspace)):
+    d = deliveries.get_delivery(delivery_id, user_id, workspace_id)
     if not d:
         raise HTTPException(status_code=404, detail="not_found")
     return d
 
 @app.get("/deliveries/{delivery_id}/download")
-def download_delivery(delivery_id: str, user_id: str = Depends(get_user_id)):
-    d = deliveries.get_delivery(delivery_id, user_id)
+def download_delivery(delivery_id: str, user_id: str = Depends(get_user_id), workspace_id: str = Depends(get_workspace)):
+    d = deliveries.get_delivery(delivery_id, user_id, workspace_id)
     if not d or not os.path.exists(d.get("storage_ref", "")):
         raise HTTPException(status_code=404, detail="not_found")
     return FileResponse(d["storage_ref"], filename=d["filename"])

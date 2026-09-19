@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 import json, os, time, uuid, secrets
+import workspace
 
 SESSION_PATH = os.environ.get("JARVIS_SESSIONS", "/opt/data/logs/jarvis-sessions.json")
 
@@ -25,11 +26,12 @@ def _save(d: dict) -> None:
     os.replace(tmp, SESSION_PATH)
 
 
-def create_session(user_id: str, session_id: str | None = None) -> str:
-    """يصدر session token server-side (لا يثق بالعميل)."""
+def create_session(user_id: str, session_id: str | None = None,
+                    workspace_id: str = workspace.DEFAULT_WORKSPACE) -> str:
+    """يصدر session token server-side (لا يثق بالعميل). يحمل مساحة العمل."""
     d = _load()
     sid = session_id or uuid.uuid4().hex[:24]
-    d[sid] = {"user_id": user_id, "created_at": time.time()}
+    d[sid] = {"user_id": user_id, "workspace_id": workspace_id, "created_at": time.time()}
     _save(d)
     return sid
 
@@ -42,6 +44,17 @@ def resolve_user(session_token: str | None) -> str | None:
     if not s:
         return None
     return s.get("user_id")
+
+
+def resolve_session(session_token: str | None) -> dict | None:
+    """يستخرج {user_id, workspace_id} من session موثّق. None إذا لا session صالح."""
+    if not session_token:
+        return None
+    s = _load().get(session_token)
+    if not s:
+        return None
+    return {"user_id": s.get("user_id"),
+            "workspace_id": s.get("workspace_id", workspace.DEFAULT_WORKSPACE)}
 
 
 def revoke_session(session_token: str) -> None:

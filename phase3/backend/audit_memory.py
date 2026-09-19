@@ -15,6 +15,7 @@ def log(event: str, identity: dict, query: str | None = None, query_type: str | 
         "ts": time.time(),
         "event": event,
         "user_id": _s(identity.get("user_id")),
+        "workspace_id": _s(identity.get("workspace_id")),
         "session_id": _s(identity.get("session_id")),
         "conversation_id": _s(identity.get("conversation_id")),
         "memory_namespace": _s(identity.get("memory_namespace")),

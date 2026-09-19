@@ -44,14 +44,16 @@ def _authorize_upload(upload_id: str, user_id: str) -> dict:
     return {"authorized": True, "reason": "", "meta": meta}
 
 
-def init_upload(user_id, filename, mime_type, size, checksum, conversation_id, session_id="") -> dict:
+def init_upload(user_id, filename, mime_type, size, checksum, conversation_id, session_id="",
+                 workspace_id="PERSONAL") -> dict:
     storage.ensure_dirs()
     upload_id = storage.new_id()
     file_id = storage.new_id()
     total_parts = max(1, (size + storage.PART_SIZE - 1) // storage.PART_SIZE)
     meta = {
         "upload_id": upload_id, "file_id": file_id,
-        "user_id": user_id, "session_id": session_id, "conversation_id": conversation_id,
+        "user_id": user_id, "workspace_id": workspace_id,
+        "session_id": session_id, "conversation_id": conversation_id,
         "filename": filename, "mime_type": mime_type, "size": size, "checksum": checksum,
         "total_parts": total_parts, "part_size": storage.PART_SIZE, "uploaded_parts": [],
         "created_at": time.time(), "status": "uploading",
@@ -123,6 +125,7 @@ def complete_upload(upload_id: str, user_id: str = None) -> dict:
 
     file_rec = {
         "file_id": meta["file_id"], "user_id": meta["user_id"],
+        "workspace_id": meta.get("workspace_id", "PERSONAL"),
         "session_id": meta["session_id"], "conversation_id": meta["conversation_id"],
         "task_id": None, "filename": meta["filename"], "mime_type": meta["mime_type"],
         "size": meta["size"], "checksum": actual, "media_kind": media_kind,
@@ -145,30 +148,36 @@ def complete_upload(upload_id: str, user_id: str = None) -> dict:
     return {"ok": True, "file_id": meta["file_id"], "file": file_rec}
 
 
-def list_files(user_id=None) -> list:
+def list_files(user_id=None, workspace_id=None) -> list:
     files = storage.load_files()
     out = list(files.values())
     if user_id:
         out = [f for f in out if f.get("user_id") == user_id]
+    if workspace_id is not None:
+        out = [f for f in out if f.get("workspace_id") == workspace_id]
     return out
 
 
-def get_file(file_id: str, user_id: str = None) -> dict | None:
-    """ownership: يُرجع الملف فقط لصاحبه (user_id مطلوب للقراءة من عميل)."""
+def get_file(file_id: str, user_id: str = None, workspace_id: str = None) -> dict | None:
+    """ownership + workspace isolation: يُرجع الملف فقط لصاحبه في مساحته."""
     rec = storage.load_files().get(file_id)
     if not rec:
         return None
     if user_id and rec.get("user_id") != user_id:
         return None
+    if workspace_id is not None and rec.get("workspace_id") != workspace_id:
+        return None
     return rec
 
 
-def delete_file(file_id: str, user_id=None) -> dict:
+def delete_file(file_id: str, user_id=None, workspace_id=None) -> dict:
     files = storage.load_files()
     rec = files.get(file_id)
     if not rec:
         return {"ok": False, "error": "not_found"}
     if user_id and rec.get("user_id") != user_id:
+        return {"ok": False, "error": "forbidden"}
+    if workspace_id is not None and rec.get("workspace_id") != workspace_id:
         return {"ok": False, "error": "forbidden"}
     if rec.get("storage_ref") and os.path.exists(rec["storage_ref"]):
         os.remove(rec["storage_ref"])
