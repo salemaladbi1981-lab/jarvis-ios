@@ -78,6 +78,20 @@ class ApprovalStore:
         self._save()
         return {"ok": True, "status": p["status"]}
 
+    def list_pending(self, workspace_id=None) -> list:
+        """قائمة الموافقات المعلّقة (غير مستهلكة، غير منتهية) لـInbox."""
+        now = time.time()
+        out = []
+        for aid, p in self._pending.items():
+            if p.get("status") == "pending" and not p.get("used") and now <= p.get("expires", 0):
+                if workspace_id is None or p.get("workspace_id") == workspace_id:
+                    out.append({"approval_id": aid, "agent": p.get("agent"),
+                                "action": p.get("action"), "params": p.get("params"),
+                                "workspace_id": p.get("workspace_id"), "task_id": p.get("task_id"),
+                                "expires": p.get("expires"), "status": p.get("status")})
+        out.sort(key=lambda x: x.get("expires", 0))
+        return out
+
     def is_approved(self, approval_id, agent_id, action, params, workspace_id) -> bool:
         """يتحقق أن موافقة صالحة (غير مستهلكة، غير منتهية، مطابقة) تغطي الفعل الحالي."""
         p = self._pending.get(approval_id)

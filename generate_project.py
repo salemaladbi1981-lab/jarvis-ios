@@ -18,6 +18,9 @@ APP_SOURCES = [
     "JARVIS/Workspace/ChatViewModel.swift",
     "JARVIS/Workspace/ConversationView.swift",
     "JARVIS/Workspace/ConversationListView.swift",
+    "JARVIS/Workspace/InboxView.swift",
+    "JARVIS/Workspace/DetailViews.swift",
+    "JARVIS/Workspace/HomeEntryView.swift",
     "JARVIS/Home/VoiceInputBar.swift", "JARVIS/Home/BottomNavBar.swift",
     "JARVIS/Core/JarvisCoreView.swift", "JARVIS/Core/JarvisOrbitView.swift", "JARVIS/Core/WaveformView.swift",
     "JARVIS/Core/MotionTokens.swift", "JARVIS/Core/AgentOrbitModel.swift", "JARVIS/Core/LaunchTiming.swift", "JARVIS/Core/VisualLevelModel.swift",
@@ -48,7 +51,7 @@ APP_SOURCES = [
     "JARVIS/Workspace/WorkspaceComposerView.swift", "JARVIS/Workspace/AttachmentMenu.swift",
     "JARVIS/Workspace/AttachmentPreviewBar.swift", "JARVIS/Workspace/AudioRecorderView.swift",
     "JARVIS/Workspace/DeliveriesView.swift", "JARVIS/Workspace/DocumentScanner.swift",
-    "JARVIS/Workspace/InboxView.swift", "JARVIS/Workspace/JarvisAPI.swift",
+    "JARVIS/Workspace/JarvisAPI.swift",
     "JARVIS/Agents/AgentRouter.swift",
 ]
 APP_RESOURCES = [

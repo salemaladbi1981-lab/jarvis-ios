@@ -89,3 +89,48 @@ struct DeliveryItem: Codable, Identifiable {
     let status: String?
     let createdAt: Double?
 }
+
+struct InboxItem: Codable, Identifiable {
+    var id: String { "\(type)-\(approvalId ?? taskId ?? deliveryId ?? "x")" }
+    let type: String
+    let title: String?
+    let approvalId: String?
+    let taskId: String?
+    let conversationId: String?
+    let deliveryId: String?
+    let ts: Double?
+
+    var kind: InboxKind {
+        switch type {
+        case "approval": return .approval
+        case "task_failed": return .failed
+        case "task_completed": return .completed
+        case "delivery": return .delivery
+        default: return .action
+        }
+    }
+}
+
+enum InboxKind: String {
+    case approval, failed, completed, delivery, action
+
+    var label: String {
+        switch self {
+        case .approval: return "يتطلب موافقة"
+        case .failed: return "فشلت"
+        case .completed: return "اكتملت"
+        case .delivery: return "تسليم جاهز"
+        case .action: return "إجراء مطلوب"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .approval: return "checkmark.shield"
+        case .failed: return "exclamationmark.triangle"
+        case .completed: return "checkmark.circle"
+        case .delivery: return "doc.fill"
+        case .action: return "bell"
+        }
+    }
+}

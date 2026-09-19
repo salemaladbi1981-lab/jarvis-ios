@@ -271,6 +271,39 @@ def download_delivery(delivery_id: str, user_id: str = Depends(get_user_id), wor
         raise HTTPException(status_code=404, detail="not_found")
     return FileResponse(d["storage_ref"], filename=d["filename"])
 
+@app.get("/inbox")
+def get_inbox(user_id: str = Depends(get_user_id), workspace_id: str = Depends(get_workspace)):
+    """Inbox موحّد: موافقات معلّقة + مهام فاشلة/مكتملة + تسليمات جاهزة."""
+    items = []
+    # 1) موافقات معلّقة → action required
+    for a in approval_store.list_pending(workspace_id):
+        items.append({"type": "approval", "title": (a.get("action") or "إجراء") + " — " + (a.get("agent") or ""),
+                      "approval_id": a["approval_id"], "task_id": a.get("task_id"),
+                      "conversation_id": None, "delivery_id": None, "ts": a.get("expires")})
+    # 2) مهام (job_state من الـworker)
+    for t in tasks_mod.list_tasks(user_id, workspace_id):
+        js = worker.job_state_for(t.get("task_id"))
+        state = js["state"] if js else t.get("status")
+        if state == "FAILED":
+            items.append({"type": "task_failed", "title": t.get("prompt") or "مهمة",
+                          "approval_id": None, "task_id": t["task_id"],
+                          "conversation_id": t.get("conversation_id"), "delivery_id": None,
+                          "ts": t.get("completed_at") or t.get("created_at")})
+        elif state == "SUCCEEDED":
+            items.append({"type": "task_completed", "title": t.get("prompt") or "مهمة",
+                          "approval_id": None, "task_id": t["task_id"],
+                          "conversation_id": t.get("conversation_id"), "delivery_id": None,
+                          "ts": t.get("completed_at") or t.get("created_at")})
+    # 3) تسليمات جاهزة
+    for d in deliveries.list_deliveries(user_id, workspace_id):
+        if d.get("status") == "ready":
+            items.append({"type": "delivery", "title": d.get("filename") or "تسليم",
+                          "approval_id": None, "task_id": d.get("task_id"),
+                          "conversation_id": None, "delivery_id": d.get("delivery_id"),
+                          "ts": d.get("created_at")})
+    items.sort(key=lambda x: x.get("ts") or 0, reverse=True)
+    return items
+
 
 @app.get("/ms/oauth/callback")
 def ms_oauth_callback(code: str = "", state: str = "", error: str = ""):

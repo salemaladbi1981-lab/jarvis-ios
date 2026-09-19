@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// الجذر iOS — تبويبات (الرئيسية / الدردشة / المهام / التسليمات) + deep-link + launch args للـscreenshots.
+/// الجذر iOS — تبويبات (الرئيسية/الدردشة/الوارد/المهام/التسليمات) + deep-link + launch args للـscreenshots.
 struct RootView: View {
     @EnvironmentObject private var enrollment: EnrollmentManager
     @StateObject private var router = DeepLinkRouter()
@@ -18,12 +18,15 @@ struct RootView: View {
     var body: some View {
         let api = enrollment.api ?? JarvisAPI(baseURL: JarvisConfig.baseURL, sessionToken: "")
         TabView(selection: $selectedTab) {
-            HomeView()
+            HomeEntryView(api: api)
                 .tabItem { Label("الرئيسية", systemImage: "house.fill") }
                 .tag("home")
             ConversationListView(api: api)
                 .tabItem { Label("الدردشة", systemImage: "bubble.left.and.bubble.right.fill") }
                 .tag("chat")
+            InboxView(api: api)
+                .tabItem { Label("الوارد", systemImage: "tray.fill") }
+                .tag("inbox")
             TasksView(api: api)
                 .tabItem { Label("المهام", systemImage: "checklist") }
                 .tag("tasks")
