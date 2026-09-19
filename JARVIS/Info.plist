@@ -60,6 +60,17 @@
     <string>يحتاج جارفس حفظ المخرجات في مكتبة الصور.</string>
     <key>NSLocationWhenInUseUsageDescription</key>
     <string>يحتاج جارفس موقعك الحالي لعرض مدينتك وحساب المسافة ووقت الوصول عند طلبك.</string>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>com.salemai.jarvis</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>jarvis</string>
+            </array>
+        </dict>
+    </array>
     <key>NSAppTransportSecurity</key>
     <dict>
         <key>NSAllowsLocalNetworking</key>

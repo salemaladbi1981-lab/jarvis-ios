@@ -6,8 +6,11 @@ struct JARVISApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var enrollment = EnrollmentManager(baseURL: JarvisConfig.baseURL)
 
-    /// -demo: يعرض الواجهة الرئيسية بلا enrollment (لـscreenshots الـCI — الواجهات الحقيقية + API حقيقي).
-    private var isDemo: Bool { ProcessInfo.processInfo.arguments.contains("-demo") }
+    /// -demo / -sessionToken: يعرض الواجهة الرئيسية بلا enrollment (لـscreenshots الـCI).
+    private var isDemo: Bool {
+        ProcessInfo.processInfo.arguments.contains("-demo")
+        || ProcessInfo.processInfo.arguments.contains("-sessionToken")
+    }
 
     var body: some Scene {
         WindowGroup {

@@ -50,15 +50,23 @@ struct AttachmentThumb: View {
 
     @ViewBuilder
     private var thumbnail: some View {
+        #if os(iOS)
         if let data = att.data, let img = UIImage(data: data) {
             Image(uiImage: img).resizable().scaledToFill()
         } else {
-            ZStack {
-                JarvisColor.bg_1.opacity(0.6)
-                Image(systemName: icon)
-                    .font(.system(size: 26))
-                    .foregroundColor(JarvisColor.text_muted)
-            }
+            fallbackThumbnail
+        }
+        #else
+        fallbackThumbnail
+        #endif
+    }
+
+    private var fallbackThumbnail: some View {
+        ZStack {
+            JarvisColor.bg_1.opacity(0.6)
+            Image(systemName: icon)
+                .font(.system(size: 26))
+                .foregroundColor(JarvisColor.text_muted)
         }
     }
 

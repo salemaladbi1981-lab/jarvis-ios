@@ -72,12 +72,14 @@ final class DeliveriesViewModel: ObservableObject {
     func open(_ d: Delivery) async {
         do {
             let (tmp, name) = try await api.download("/deliveries/\(d.id)/download")
-            // فتح/مشاركة عبر ActivityViewController
+            // فتح/مشاركة عبر ActivityViewController (iOS فقط)
+            #if os(iOS)
             await MainActor.run {
                 let vc = UIActivityViewController(activityItems: [tmp], applicationActivities: nil)
                 UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }
                     .first?.rootViewController?.present(vc, animated: true)
             }
+            #endif
         } catch { /* log */ }
     }
 }
