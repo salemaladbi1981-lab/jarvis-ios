@@ -19,6 +19,12 @@ jobs:
           python3 phase3/backend/tests_youtube.py
           for f in Tools/*_test.py; do python3 "$f" || exit 1; done
 
+      - name: Run full backend suite (derivatives + isolation + security + workspace)
+        run: |
+          python3 -m pip install --quiet fastapi 'httpx<0.28' pydantic Pillow
+          cd phase3/backend
+          for f in tests_*.py; do echo "== $f =="; python3 "$f" || exit 1; done
+
   ios:
     runs-on: macos-14
     steps:

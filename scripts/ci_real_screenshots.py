@@ -44,7 +44,8 @@ def main():
     conv = seed['conversation_id']
     task = seed['task_id']
     delivery = seed['delivery_id']
-    print(f'seeded token={token} conv={conv} task={task} delivery={delivery}')
+    file_id = seed.get('file_id', '')
+    print(f'seeded token={token} conv={conv} task={task} delivery={delivery} file={file_id}')
 
     backend = subprocess.Popen(['python3', '-m', 'uvicorn', 'main:app', '--host', '127.0.0.1', '--port', '8000'],
                                stdout=open(os.path.join(tmp, 'backend.log'), 'w'), stderr=subprocess.STDOUT)
@@ -80,12 +81,13 @@ def main():
     shot('deep_task', '-deepLink', f'jarvis://task/{task}')
     shot('deep_delivery', '-deepLink', f'jarvis://delivery/{delivery}')
 
+    # media derivatives proof — image thumbnail via the derivative endpoint (before the notif dialog blocks)
+    if file_id:
+        shot('media_preview', '-showMedia', file_id)
+
     # notifications proof — permission flow + scheduling (deep-link in userInfo)
     shot('notif_permission', '-requestNotifications', '-showNotifications')
     shot('notif_scheduled', '-scheduleNotification', f'jarvis://delivery/{delivery}', '-showNotifications')
-
-    # media derivatives proof — conversation with the image attachment (thumbnail via derivative)
-    shot('media_preview', '-deepLink', f'jarvis://conversation/{conv}')
 
     # URL-scheme proof (warm openurl → system routes to JARVIS; prompt is iOS security, not app code)
     sh(f'xcrun simctl launch "{device}" com.salemai.jarvis -- -baseURL http://127.0.0.1:8000 -sessionToken {token} -tab home')

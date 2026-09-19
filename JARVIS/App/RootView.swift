@@ -6,6 +6,7 @@ struct RootView: View {
     @StateObject private var router = DeepLinkRouter()
     @State private var selectedTab: String
     @State private var deepLink: DeepLinkTarget?
+    @State private var showMediaFileId: String?
     @State private var notifDebug = ""
 
     init() {
@@ -20,12 +21,25 @@ struct RootView: View {
             dl = DeepLinkTarget.parse(u)
         }
         _deepLink = State(initialValue: dl)
+        var mediaId: String?
+        if let i = args.firstIndex(of: "-showMedia"), i + 1 < args.count {
+            mediaId = args[i + 1]
+        }
+        _showMediaFileId = State(initialValue: mediaId)
     }
 
     var body: some View {
         let api = enrollment.api ?? JarvisAPI(baseURL: JarvisConfig.baseURL, sessionToken: JarvisConfig.injectedSessionToken ?? "")
         Group {
-            if let dl = deepLink {
+            if let fid = showMediaFileId {
+                NavigationStack {
+                    ScrollView {
+                        AttachmentView(fileId: fid, api: api)
+                            .padding(20)
+                    }
+                    .navigationTitle("معاينة الوسيط")
+                }
+            } else if let dl = deepLink {
                 NavigationStack {
                     deepLinkView(dl, api: api)
                         .toolbar {
