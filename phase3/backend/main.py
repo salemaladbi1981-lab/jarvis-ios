@@ -53,7 +53,11 @@ def get_user_id(x_jarvis_session: str = Header(default="")):
 
 
 def get_workspace(x_jarvis_session: str = Header(default=""), x_jarvis_workspace: str = Header(default="")):
-    """مساحة العمل server-side من session موثّق + المساحة المصرحة. لا قيمة افتراضية تمنح وصولًا."""
+    """مساحة العمل server-side من session موثّق + المساحة المصرحة.
+
+    غياب X-Jarvis-Workspace لا يمنع الوصول — يقع على مساحة الـsession الموثقة
+    (server-side) كافتراضي، ولا يوسّع الصلاحيات (QREC_LOCKED تبقى مقفلة).
+    """
     session = auth.resolve_session(x_jarvis_session)
     if not session:
         raise HTTPException(status_code=401, detail="unauthorized")

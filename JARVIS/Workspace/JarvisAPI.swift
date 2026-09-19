@@ -4,10 +4,12 @@ import Foundation
 struct JarvisAPI {
     let baseURL: URL
     let sessionToken: String
+    var workspace: String = "PERSONAL"
 
     func get(_ path: String) async throws -> [[String: Any]] {
         var req = URLRequest(url: baseURL.appendingPathComponent(path))
         req.setValue(sessionToken, forHTTPHeaderField: "X-Jarvis-Session")
+        req.setValue(workspace, forHTTPHeaderField: "X-Jarvis-Workspace")
         let (d, _) = try await URLSession.shared.data(for: req)
         return (try JSONSerialization.jsonObject(with: d) as? [[String: Any]]) ?? []
     }
@@ -16,6 +18,7 @@ struct JarvisAPI {
         var req = URLRequest(url: baseURL.appendingPathComponent(path))
         req.httpMethod = "POST"
         req.setValue(sessionToken, forHTTPHeaderField: "X-Jarvis-Session")
+        req.setValue(workspace, forHTTPHeaderField: "X-Jarvis-Workspace")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
         let (d, resp) = try await URLSession.shared.data(for: req)
@@ -29,6 +32,7 @@ struct JarvisAPI {
     func download(_ path: String) async throws -> (URL, String) {
         var req = URLRequest(url: baseURL.appendingPathComponent(path))
         req.setValue(sessionToken, forHTTPHeaderField: "X-Jarvis-Session")
+        req.setValue(workspace, forHTTPHeaderField: "X-Jarvis-Workspace")
         let (tmp, resp) = try await URLSession.shared.download(for: req)
         let name = (resp as? HTTPURLResponse)?.suggestedFilename ?? "file"
         return (tmp, name)
@@ -38,6 +42,7 @@ struct JarvisAPI {
     func getArray<T: Decodable>(_ path: String) async throws -> [T] {
         var req = URLRequest(url: baseURL.appendingPathComponent(path))
         req.setValue(sessionToken, forHTTPHeaderField: "X-Jarvis-Session")
+        req.setValue(workspace, forHTTPHeaderField: "X-Jarvis-Workspace")
         let (d, resp) = try await URLSession.shared.data(for: req)
         if let r = resp as? HTTPURLResponse, !(200..<300).contains(r.statusCode) {
             throw NSError(domain: "JarvisAPI", code: r.statusCode,
@@ -50,6 +55,7 @@ struct JarvisAPI {
     func getObject<T: Decodable>(_ path: String) async throws -> T {
         var req = URLRequest(url: baseURL.appendingPathComponent(path))
         req.setValue(sessionToken, forHTTPHeaderField: "X-Jarvis-Session")
+        req.setValue(workspace, forHTTPHeaderField: "X-Jarvis-Workspace")
         let (d, resp) = try await URLSession.shared.data(for: req)
         if let r = resp as? HTTPURLResponse, !(200..<300).contains(r.statusCode) {
             throw NSError(domain: "JarvisAPI", code: r.statusCode,
@@ -62,6 +68,7 @@ struct JarvisAPI {
     func fetchData(_ path: String) async throws -> Data {
         var req = URLRequest(url: baseURL.appendingPathComponent(path))
         req.setValue(sessionToken, forHTTPHeaderField: "X-Jarvis-Session")
+        req.setValue(workspace, forHTTPHeaderField: "X-Jarvis-Workspace")
         let (d, resp) = try await URLSession.shared.data(for: req)
         if let r = resp as? HTTPURLResponse, !(200..<300).contains(r.statusCode) {
             throw NSError(domain: "JarvisAPI", code: r.statusCode,
@@ -75,6 +82,7 @@ struct JarvisAPI {
         var req = URLRequest(url: baseURL.appendingPathComponent(path))
         req.httpMethod = "POST"
         req.setValue(sessionToken, forHTTPHeaderField: "X-Jarvis-Session")
+        req.setValue(workspace, forHTTPHeaderField: "X-Jarvis-Workspace")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
         let (d, resp) = try await URLSession.shared.data(for: req)
