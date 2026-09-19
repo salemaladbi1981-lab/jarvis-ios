@@ -20,6 +20,17 @@ def _get(url, params=None, timeout=15):
         return json.loads(r.read().decode("utf-8"))
 
 
+def build_navigate_url(lat, lon, mode="driving"):
+    """يبني رابط Google Maps للتنقل الفعلي (turn-by-turn).
+
+    - origin غير محدد → تطبيق الخرائط يستخدم موقع الجهاز تلقائيًا (لا نطلب نقطة بداية).
+    - dir_action=navigate → فتح ملاحة فورية، لا مجرد خريطة.
+    """
+    travel = "driving" if mode == "driving" else ("walking" if mode == "walking" else "bicycling")
+    return (f"https://www.google.com/maps/dir/?api=1"
+            f"&destination={lat},{lon}&travelmode={travel}&dir_action=navigate")
+
+
 class MapsProvider:
     provider_name = "maps"
 
@@ -68,11 +79,10 @@ class MapsProvider:
         return r
 
     def navigate(self, destination, mode="driving"):
-        """Google Maps navigation URL (يفتح تطبيق الخرائط على iPhone)."""
+        """Google Maps navigation URL (يفتح تطبيق الخرائط على iPhone).
+        origin غير محدد → الخرائط تستخدم موقع الجهاز؛ dir_action=navigate → ملاحة فعلية."""
         g = self._geocode(destination)
-        travel = "driving" if mode == "driving" else ("walking" if mode == "walking" else "bicycling")
-        maps_url = (f"https://www.google.com/maps/dir/?api=1"
-                    f"&destination={g['lat']},{g['lon']}&travelmode={travel}")
+        maps_url = build_navigate_url(g["lat"], g["lon"], mode)
         return {
             "destination": destination,
             "lat": g["lat"],

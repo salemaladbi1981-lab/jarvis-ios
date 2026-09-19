@@ -29,6 +29,7 @@ APP_SOURCES = [
     "JARVIS/Agents/AgentRegistry.swift", "JARVIS/Agents/AgentStore.swift",
     "JARVIS/DesignSystem/JarvisTokens.swift", "JARVIS/DesignSystem/JarvisIconResolver.swift",
     "JARVIS/Providers/ApprovalPolicyEvaluator.swift",
+    "JARVIS/Providers/LocationManager.swift",
     "JARVIS/Mocks/MockProviders.swift", "JARVIS/Mocks/MockData.swift",
     "JARVIS/Memory/MemoryItem.swift", "JARVIS/Memory/MemoryStore.swift",
     "JARVIS/Memory/MemoryRetrieval.swift", "JARVIS/Memory/MemorySeed.swift",

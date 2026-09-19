@@ -58,5 +58,7 @@
     <string>يحتاج جارفس الوصول إلى مكتبة الصور لاختيار المرفقات.</string>
     <key>NSPhotoLibraryAddUsageDescription</key>
     <string>يحتاج جارفس حفظ المخرجات في مكتبة الصور.</string>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>يحتاج جارفس موقعك الحالي لعرض مدينتك وحساب المسافة ووقت الوصول عند طلبك.</string>
 </dict>
 </plist>

@@ -57,5 +57,13 @@ check("realtime.py imports MAPS_TOOLS", "MAPS_TOOLS" in rt)
 check("realtime.py routes maps_* calls", 'name.startswith("maps_")' in rt)
 check("realtime.py sends navigation_handoff", "navigation_handoff" in rt)
 
+# H) navigate URL: dir_action=navigate + origin غير محدد (موقع الجهاز تلقائيًا)
+from maps_provider import build_navigate_url
+u = build_navigate_url(25.28, 51.53, "driving")
+check("navigate url has dir_action=navigate", "dir_action=navigate" in u)
+check("navigate url leaves origin unset (device location)", "origin=" not in u)
+check("navigate url carries destination", "destination=25.28,51.53" in u)
+check("navigate url has travelmode", "travelmode=driving" in u)
+
 print(f"\n== RESULT: {PASS} PASS / {FAIL} FAIL ==")
 sys.exit(0 if FAIL == 0 else 1)

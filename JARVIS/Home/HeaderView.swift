@@ -4,6 +4,8 @@ import Combine
 /// Header: Doha + Arabic date/time on the LEFT, JARVIS wordmark on the RIGHT
 /// (matches MOBILE IMAGE A — header composition is not mirrored by RTL).
 struct HeaderView: View {
+    @StateObject private var location = LocationManager()
+
     var body: some View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 2) {
@@ -11,7 +13,7 @@ struct HeaderView: View {
                     Image(systemName: JarvisIconResolver.symbol(for: "util.location"))
                         .font(.system(size: 11))
                         .foregroundColor(JarvisColor.primary_blue)
-                    Text("الدوحة")
+                    Text(location.displayCity)
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(JarvisColor.text_primary)
                 }
@@ -24,6 +26,7 @@ struct HeaderView: View {
                 .foregroundColor(JarvisColor.highlight_blue)
         }
         .environment(\.layoutDirection, .leftToRight)
+        .onAppear { location.requestWhenNeeded() }
     }
 }
 

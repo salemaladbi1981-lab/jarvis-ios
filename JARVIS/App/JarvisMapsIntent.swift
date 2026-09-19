@@ -13,7 +13,7 @@ struct JarvisNavigateIntent: AppIntent {
 
     func perform() async throws -> some IntentResult {
         let query = destination.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? destination
-        let urlString = "https://www.google.com/maps/dir/?api=1&destination=\(query)&travelmode=driving"
+        let urlString = "https://www.google.com/maps/dir/?api=1&destination=\(query)&travelmode=driving&dir_action=navigate"
         if let url = URL(string: urlString) {
             await MainActor.run {
                 UIApplication.shared.open(url)
