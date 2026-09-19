@@ -34,28 +34,39 @@ jobs:
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
 
-      - name: Boot iPad + iOS screenshots
+      - name: Boot iPhone + P5 screenshots (real UI via -demo, real API client)
         run: |
           APP=$(find build -name "JARVIS.app" -type d 2>/dev/null | head -1)
-          DEVICE="iPad Pro (11-inch) (4th generation)"
+          DEVICE="iPhone 15"
           xcrun simctl boot "$DEVICE" 2>/dev/null || true
           xcrun simctl install "$DEVICE" "$APP"
           shot() {
             local name="$1"; shift
             xcrun simctl terminate "$DEVICE" com.salemai.jarvis 2>/dev/null || true
             sleep 2
-            xcrun simctl launch "$DEVICE" com.salemai.jarvis "$@"
+            xcrun simctl launch "$DEVICE" com.salemai.jarvis -- "$@"
             sleep 6
             xcrun simctl io "$DEVICE" screenshot "$name.png"
           }
-          shot portrait_core
-          shot portrait_system -group system
-          shot portrait_content -group content
-          shot portrait_idle
-          shot portrait_approval -state approval
-          shot tab_home -tab home
-          shot tab_tasks -tab tasks
-          shot tab_deliveries -tab deliveries
+          shot args_proof -demo -tab home -showArgs
+          shot home -demo -tab home
+          shot chat -demo -tab chat
+          shot inbox -demo -tab inbox
+          shot tasks -demo -tab tasks
+          shot deliveries -demo -tab deliveries
+          ls -la *.png
+
+      - name: Boot iPad (extra) + screenshots
+        run: |
+          APP=$(find build -name "JARVIS.app" -type d 2>/dev/null | head -1)
+          DEVICE="iPad Pro (11-inch) (4th generation)"
+          xcrun simctl boot "$DEVICE" 2>/dev/null || true
+          xcrun simctl install "$DEVICE" "$APP"
+          xcrun simctl terminate "$DEVICE" com.salemai.jarvis 2>/dev/null || true
+          sleep 2
+          xcrun simctl launch "$DEVICE" com.salemai.jarvis -- -demo -tab home
+          sleep 6
+          xcrun simctl io "$DEVICE" screenshot ipad_home.png
           ls -la *.png
 
       - uses: actions/upload-artifact@v4

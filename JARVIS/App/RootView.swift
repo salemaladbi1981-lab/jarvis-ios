@@ -35,6 +35,17 @@ struct RootView: View {
                 .tag("deliveries")
         }
         .tint(JarvisColor.highlight_blue)
+        .overlay(alignment: .top) {
+            if ProcessInfo.processInfo.arguments.contains("-showArgs") {
+                Text(ProcessInfo.processInfo.arguments.joined(separator: " | "))
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundColor(.white)
+                    .padding(6)
+                    .background(Color.black.opacity(0.75))
+                    .cornerRadius(6)
+                    .padding(.top, 2)
+            }
+        }
         .onOpenURL { router.handle($0) }
         .onChange(of: router.target) { t in
             if let t = t { select(t) }
