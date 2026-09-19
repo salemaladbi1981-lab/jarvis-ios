@@ -158,6 +158,15 @@ products_group = group([app_prod_ref, mac_prod_ref, test_prod_ref, mac_test_prod
 main_group = add("PBXGroup", children=[jarvis_group, tests_group, products_group], sourceTree="<group>")
 
 app_sources_phase = add("PBXSourcesBuildPhase", files=sorted(app_src_bf.values()), buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)
+
+# iOS-only files (UIKit/lifecycle) — تُستبعد من target الـmacOS حتى لا تفشل البناء.
+IOS_ONLY_SOURCES = [
+    "JARVIS/App/AppDelegate.swift",
+    "JARVIS/App/JarvisMapsIntent.swift",
+    "JARVIS/App/BackgroundSessionHandler.swift",
+]
+mac_src_bf = {p_: bf for p_, bf in app_src_bf.items() if p_ not in IOS_ONLY_SOURCES}
+mac_sources_phase = add("PBXSourcesBuildPhase", files=sorted(mac_src_bf.values()), buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)
 app_resources_phase = add("PBXResourcesBuildPhase", files=sorted(app_res_bf.values()), buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)
 app_frameworks_phase = add("PBXFrameworksBuildPhase", files=[], buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)
 test_sources_phase = add("PBXSourcesBuildPhase", files=sorted(list(test_bf.values()) + list(session_guard_bf.values()) + list(memory_bf.values())), buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)
@@ -212,7 +221,7 @@ app_target = add("PBXNativeTarget", buildConfigurationList=app_config_list,
     productReference=app_prod_ref, productType="com.apple.product-type.application")
 
 mac_target = add("PBXNativeTarget", buildConfigurationList=mac_config_list,
-    buildPhases=[app_sources_phase, app_frameworks_phase, app_resources_phase],
+    buildPhases=[mac_sources_phase, app_frameworks_phase, app_resources_phase],
     buildRules=[], dependencies=[], name="JARVIS Mac", productName="JARVIS Mac",
     productReference=mac_prod_ref, productType="com.apple.product-type.application")
 

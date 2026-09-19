@@ -68,7 +68,7 @@ private struct MessageBubble: View {
                     .font(.system(size: 15))
                     .foregroundColor(isUser ? JarvisColor.text_primary : JarvisColor.text_primary)
                     .padding(12)
-                    .background(isUser ? JarvisColor.panel_1 : JarvisColor.panel_2)
+                    .background(isUser ? JarvisColor.bg_1 : JarvisColor.surface)
                     .cornerRadius(12)
                 if !isUser { Spacer(minLength: 48) }
             }
@@ -105,7 +105,7 @@ private struct StreamingBubble: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(JarvisColor.panel_2)
+        .background(JarvisColor.surface)
         .cornerRadius(12)
     }
 }
@@ -128,7 +128,7 @@ private struct TaskHandoffCard: View {
             Spacer()
         }
         .padding(12)
-        .background(JarvisColor.panel_1)
+        .background(JarvisColor.bg_1)
         .cornerRadius(12)
     }
 }
@@ -164,7 +164,7 @@ private struct ErrorBanner: View {
                 .foregroundColor(JarvisColor.highlight_blue)
         }
         .padding(12)
-        .background(JarvisColor.panel_1)
+        .background(JarvisColor.bg_1)
     }
 }
 
@@ -179,7 +179,7 @@ private struct InputBar: View {
                 .font(.system(size: 15))
                 .foregroundColor(JarvisColor.text_primary)
                 .padding(12)
-                .background(JarvisColor.panel_2)
+                .background(JarvisColor.surface)
                 .cornerRadius(12)
             Button(action: onSend) {
                 Image(systemName: "arrow.up.circle.fill")
