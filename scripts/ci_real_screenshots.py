@@ -76,14 +76,14 @@ def main():
     shot('real_tasks', '-tab', 'tasks')
     shot('real_deliveries', '-tab', 'deliveries')
 
+    # media derivatives proof — image thumbnail via the derivative endpoint (before task-poll dialog)
+    if file_id:
+        shot('media_preview', '-showMedia', file_id)
+
     # deep links — cold-start via -deepLink launch arg (opens the specific item; bypasses iOS 17.4 "Open in JARVIS?" prompt)
     shot('deep_conversation', '-deepLink', f'jarvis://conversation/{conv}')
     shot('deep_task', '-deepLink', f'jarvis://task/{task}')
     shot('deep_delivery', '-deepLink', f'jarvis://delivery/{delivery}')
-
-    # media derivatives proof — image thumbnail via the derivative endpoint (before the notif dialog blocks)
-    if file_id:
-        shot('media_preview', '-showMedia', file_id)
 
     # notifications proof — permission flow + scheduling (deep-link in userInfo)
     shot('notif_permission', '-requestNotifications', '-showNotifications')
