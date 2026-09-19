@@ -147,6 +147,7 @@ groups["Auth"] = subgroup("Auth", [p for p in APP_SOURCES if "/Auth/" in p])
 groups["Camera"] = subgroup("Camera", [p for p in APP_SOURCES if "/Camera/" in p])
 groups["Upload"] = subgroup("Upload", [p for p in APP_SOURCES if "/Upload/" in p])
 groups["Workspace"] = subgroup("Workspace", [p for p in APP_SOURCES if "/Workspace/" in p])
+groups["Notifications"] = subgroup("Notifications", [p for p in APP_SOURCES if "/Notifications/" in p])
 
 font_refs = [app_res_refs[p] for p in APP_RESOURCES if "Fonts" in p]
 json_refs = [app_res_refs[p] for p in APP_RESOURCES if "Resources" in p]
@@ -160,7 +161,7 @@ jarvis_group = group(
     [groups["App"], groups["Home"], groups["Core"], groups["Cards"],
      groups["State"], groups["Agents"], groups["DesignSystem"],
      groups["Providers"], groups["Mocks"], groups["iPad"], groups["macOS"], groups["Voice"], groups["Integrations"], groups["Diagnostics"], groups["Memory"],
-     groups["Auth"], groups["Camera"], groups["Upload"], groups["Workspace"],
+     groups["Auth"], groups["Camera"], groups["Upload"], groups["Workspace"], groups["Notifications"],
      assets_group, resources_group, app_res_refs["JARVIS/Assets.xcassets"], plist_ref],
     "JARVIS", "JARVIS"
 )
