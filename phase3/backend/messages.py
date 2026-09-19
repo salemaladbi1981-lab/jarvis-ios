@@ -59,3 +59,11 @@ class MessageStore:
 
     def count(self, conversation_id) -> int:
         return sum(1 for m in self._load().values() if m.get("conversation_id") == conversation_id)
+
+    def find_by_client_msg_id(self, client_msg_id):
+        if not client_msg_id:
+            return None
+        for m in self._load().values():
+            if m.get("client_msg_id") == client_msg_id:
+                return m
+        return None

@@ -35,6 +35,13 @@ JARVIS_HERMES_API_URL = os.environ.get("JARVIS_HERMES_API_URL", "http://127.0.0.
 JARVIS_HERMES_PROFILE = os.environ.get("JARVIS_HERMES_PROFILE", "")
 JARVIS_BOOTSTRAP_KEY = os.environ.get("JARVIS_BOOTSTRAP_KEY", "")
 
+# Telegram inbound (UPG-3 P2) — bot webhook
+JARVIS_TG_BOT_TOKEN = os.environ.get("JARVIS_TG_BOT_TOKEN", "")
+JARVIS_TG_WEBHOOK_SECRET = os.environ.get("JARVIS_TG_WEBHOOK_SECRET", "")
+JARVIS_TG_ALLOWED_USERS = os.environ.get("JARVIS_TG_ALLOWED_USERS", "")  # telegram user_ids مفصولة بفواصل
+JARVIS_TG_RATE_LIMIT = int(os.environ.get("JARVIS_TG_RATE_LIMIT", "20"))  # رسائل/دقيقة لكل مستخدم
+
+
 # Realtime provider preference
 REALTIME_PROVIDER = os.environ.get("JARVIS_REALTIME_PROVIDER", "openai")  # openai | openrouter
 REALTIME_MODEL = os.environ.get("JARVIS_REALTIME_MODEL", "gpt-realtime")

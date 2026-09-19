@@ -19,6 +19,7 @@ import auth
 import workspace
 import kill_switch
 import conversation, messages
+import tg_inbound, deeplink
 import ms_oauth
 import telegram_auth
 import youtube_provider
@@ -509,6 +510,27 @@ def messages_add(conversation_id: str, req: MessageReq, session: dict = Depends(
     conversation.ConversationStore().add_ref(conversation_id, "message_ids", r["message"]["message_id"])
     conversation.ConversationStore().touch(conversation_id)
     return {"ok": True, "duplicate": r.get("duplicate", False), "message": r["message"]}
+
+
+class DeeplinkReq(BaseModel):
+    uri: str
+
+@app.post("/tg/webhook")
+def tg_webhook(update: dict, x_telegram_bot_api_secret_token: str = Header(default="")):
+    """Telegram inbound — سرّ webhook يُتحقق منه، وupdate_id يُخصم ضد replay."""
+    r = tg_inbound.handle_update(x_telegram_bot_api_secret_token, update)
+    if not r["ok"]:
+        code = {"invalid_secret": 401, "unauthorized": 403, "rate_limited": 403}.get(r["error"], 400)
+        raise HTTPException(status_code=code, detail=r["error"])
+    return r
+
+@app.post("/deeplink/resolve")
+def deeplink_resolve(req: DeeplinkReq, session: dict = Depends(get_session)):
+    """يحل deep-link مع التحقق من الملكية server-side (لا وصول لمستخدم آخر)."""
+    target = deeplink.resolve_target(req.uri, session["user_id"], session["workspace_id"])
+    if not target:
+        raise HTTPException(status_code=404, detail="not_found")
+    return {"ok": True, "target": target}
 
 @app.post("/orchestrate")
 def orchestrate(req: OrchestrateReq):
