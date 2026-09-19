@@ -13,6 +13,7 @@ DELIVERIES_INDEX = os.path.join(ROOT, "deliveries_index.json")
 PART_SIZE = 4 * 1024 * 1024  # 4 MB
 CONVERSATIONS_INDEX = os.path.join(ROOT, "conversations_index.json")
 MESSAGES_INDEX = os.path.join(ROOT, "messages_index.json")
+JOBS_INDEX = os.path.join(ROOT, "jobs_index.json")
 
 
 
@@ -86,4 +87,9 @@ def load_messages() -> dict:
 
 def save_messages(data: dict) -> None:
     _save_index(MESSAGES_INDEX, data)
+def load_jobs() -> dict:
+    return _load_index(JOBS_INDEX)
+
+def save_jobs(data: dict) -> None:
+    _save_index(JOBS_INDEX, data)
 

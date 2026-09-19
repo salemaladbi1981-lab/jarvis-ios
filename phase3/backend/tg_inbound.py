@@ -8,6 +8,7 @@ import json, os, time
 import config, audit, conversation, messages, tasks as tasks_mod
 import classifier, tg_mapping, deeplink
 import brain_tools
+import worker
 
 LAST_UPDATE_PATH = os.environ.get("JARVIS_TG_LAST_UPDATE", "/opt/data/logs/jarvis-tg-last-update.json")
 RATE_PATH = os.environ.get("JARVIS_TG_RATE", "/opt/data/logs/jarvis-tg-rate.json")
@@ -101,6 +102,7 @@ def _inline(conv, msg, ident, client_msg_id, cls, send_message, respond):
 def _background(conv, msg, ident, client_msg_id, cls, send_message):
     task = tasks_mod.create_task(ident["user_id"], conv.get("session_id") or "", conv["conversation_id"],
                                  msg["text"], workspace_id=ident["workspace_id"])
+    worker.enqueue(task["task_id"])
     conversation.ConversationStore().add_ref(conv["conversation_id"], "task_ids", task["task_id"])
     messages.MessageStore().add(conv["conversation_id"], "user", msg["text"],
                                 user_id=ident["user_id"], workspace_id=ident["workspace_id"],

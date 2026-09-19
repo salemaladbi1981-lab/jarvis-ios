@@ -6,6 +6,7 @@ import storage
 DELIVERY_TYPES = [
     "video","image","image_set","pdf","docx","pptx","xlsx","zip","audio",
     "subtitle","transcript","script","prompt","caption","markdown","code","json","report","project_package",
+    "text","file",
 ]
 
 
