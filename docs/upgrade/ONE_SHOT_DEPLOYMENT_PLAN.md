@@ -44,7 +44,7 @@
 
 ---
 
-## 3. النتيجة الحرجة: تباعد (divergence) بين source و live
+## 3. النتيجة الحرجة: تباعد (divergence) — **تمت تسويته (RECONCILED)** ✅
 
 **أثبتُّ من runtime أن الـ source ليس superset للـ live، بل تباعدا في اتجاهين مختلفين:**
 
@@ -54,9 +54,9 @@
 | `tools.py` | **2430B** — `risk_class` (medium/high) + `bypass_approval` + `contract()/all_contracts()` | 1597B — `risk` (low/med/high) + `approval_rule` + `schema()` | **نشر source يغيّر نموذج الأدوات** (يفقد risk_class/bypass_approval/contracts) |
 | `brain_tools.py` | 2213B | 3100B | مختلف (الاتجاه المعاكس) |
 
-**الاستنتاج:** عمل UPG-2/Phase في الـ git بُني على **أساس قديم** من orchestrator/tools، بينما الـ live تطوّر **بموازاة** (classify + risk_class + contracts). النشر «نسخ git → live» سيرجّع ميزات الـ live الحالية.
+**الاستنتاج (بعد التسوية):** اكتمل merge واعٍ — tools.py/orchestrator.py اعتمدت live (classify/risk_class/contracts محفوظة)، approval.py/audit.py أعادت سلوك live المفقود فوق UPG-2، وagent_runner أُصلح. التفاصيل في `RECONCILIATION_REPORT.md`.
 
-لذلك **لا يجوز** النشر الأحادي كنسخ مباشر قبل **تسوية التباعد** (reconcile).
+**source الآن superset وظيفي للـ live** — لا سلوك live مفقود.
 
 ---
 
@@ -138,8 +138,15 @@
 
 ## 8. نقطة القرار
 
-### READY TO DEPLOY: **NO**
+### READY TO DEPLOY: **YES**
 
-السبب: **تباعد مثبت بين source و live** (§3) — نشر source الحالي سيرجّع live (يفقد classify/risk_class/contracts). يلزم أولًا تسوية التباعد (§4 مرحلة 0) ثم إعادة تشغيل الاختبارات، وعندها أعيد التقييم إلى YES مع الأمر الدقيق.
+بعد التسوية الناجحة (RECONCILIATION: PASS) + tests_agents 16/16 + regression كامل أخضر، أصبح النشر الأحادي آمنًا.
 
-ما أحتاجه منك: قرار بشأن §4 مرحلة 0 — هل أبدأ التسوية (استيراد live الحالي كأساس + إعادة تطبيق UPG-2/Phase فوقه + تحويل tests_agents إلى أخضر)؟
+الأوامر الدقيقة (للتنفيذ بعد اعتمادك):
+1. `cp -a /opt/data/workspace/jarvis-native/phase3/backend deploy-backup-<ts>/` (نسخة رجوع كاملة)
+2. نشر 30 NEW + 12 CHANGED من `phase3/backend/` إلى live (tools.py + orchestrator.py مطابقان أصلًا — لا يُنشران)
+3. `py_compile` لكل ملف منشور
+4. إعادة تشغيل backend: `kill <uvicorn_pid>` (watchdog يعيد)
+5. تنفيذ مصفوفة القبول §5 (17 بندًا) + إعادة اختبارات Restricted Profile §4–§10
+
+ما يحتاج تدخلك: **لا شيء** (الـ gateway مقيّد أصلًا، الـ backend يملكه hermes). فقط اعتمادك للخطة.
