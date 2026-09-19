@@ -7,9 +7,17 @@ def sh(cmd):
     return r
 
 def backend_env(tmp):
+    # كل مسارات الـbackend إلى RUNNER_TEMP (لا وصول لـ/opt/data)
     os.environ['JARVIS_STORAGE_ROOT'] = os.path.join(tmp, 'jarvis-storage')
     os.environ['JARVIS_SESSIONS'] = os.path.join(tmp, 'jarvis-sessions.json')
     os.environ['JARVIS_APPROVAL_PATH'] = os.path.join(tmp, 'jarvis-approvals.json')
+    os.environ['JARVIS_AUDIT_PATH'] = os.path.join(tmp, 'jarvis-audit.jsonl')
+    os.environ['JARVIS_AGENT_AUDIT'] = os.path.join(tmp, 'jarvis-agent-audit.jsonl')
+    os.environ['JARVIS_AGENT_STATE'] = os.path.join(tmp, 'jarvis-agent-state.json')
+    os.environ['JARVIS_ENROLL'] = os.path.join(tmp, 'jarvis-enroll.json')
+    os.environ['JARVIS_KILL_SWITCH'] = os.path.join(tmp, 'jarvis-kill-switch.json')
+    os.environ['JARVIS_MEMORY_DIR'] = os.path.join(tmp, 'memories')
+    os.environ['JARVIS_MEMORY_ROOT'] = os.path.join(tmp, 'memories')
     os.environ['JARVIS_BOOTSTRAP_KEY'] = 'ci-bootstrap-key'
     os.environ['CI_SEED_OUT'] = os.path.join(tmp, 'jarvis_ci_seed.json')
 
