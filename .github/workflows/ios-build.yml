@@ -20,10 +20,23 @@ jobs:
           for f in Tools/*_test.py; do python3 "$f" || exit 1; done
 
       - name: Run full backend suite (derivatives + isolation + security + workspace)
+        env:
+          JARVIS_STORAGE_ROOT: /tmp/jarvis-ci-storage
+          JARVIS_SESSIONS: /tmp/jarvis-ci-sessions.json
+          JARVIS_APPROVAL_PATH: /tmp/jarvis-ci-approvals.json
+          JARVIS_AUDIT_PATH: /tmp/jarvis-ci-audit.jsonl
+          JARVIS_AGENT_AUDIT: /tmp/jarvis-ci-agent-audit.jsonl
+          JARVIS_AGENT_STATE: /tmp/jarvis-ci-agent-state.json
+          JARVIS_ENROLL: /tmp/jarvis-ci-enroll.json
+          JARVIS_KILL_SWITCH: /tmp/jarvis-ci-kill-switch.json
+          JARVIS_MEMORY_DIR: /tmp/jarvis-ci-memories
+          JARVIS_MEMORY_ROOT: /tmp/jarvis-ci-memories
         run: |
           python3 -m pip install --quiet fastapi 'httpx<0.28' pydantic Pillow
           cd phase3/backend
-          for f in tests_*.py; do echo "== $f =="; python3 "$f" || exit 1; done
+          # tests_memory.py يعتمد على ملف ذاكرة legacy في /opt/data (live-only) — يُستثنى هنا؛
+          # عزل الذاكرة مُغطّى بـ tests_memory_isolation.py (portable).
+          for f in tests_*.py; do [ "$f" = "tests_memory.py" ] && continue; echo "== $f =="; python3 "$f" || exit 1; done
 
   ios:
     runs-on: macos-14
