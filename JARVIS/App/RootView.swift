@@ -6,6 +6,7 @@ struct RootView: View {
     @StateObject private var router = DeepLinkRouter()
     @State private var selectedTab: String
     @State private var deepLink: DeepLinkTarget?
+    @State private var notifDebug = ""
 
     init() {
         let args = ProcessInfo.processInfo.arguments
@@ -23,18 +24,57 @@ struct RootView: View {
 
     var body: some View {
         let api = enrollment.api ?? JarvisAPI(baseURL: JarvisConfig.baseURL, sessionToken: JarvisConfig.injectedSessionToken ?? "")
-        if let dl = deepLink {
-            NavigationStack {
-                deepLinkView(dl, api: api)
-                    .toolbar {
-                        ToolbarItem(placement: .primaryAction) {
-                            Button("إغلاق") { deepLink = nil }
+        Group {
+            if let dl = deepLink {
+                NavigationStack {
+                    deepLinkView(dl, api: api)
+                        .toolbar {
+                            ToolbarItem(placement: .primaryAction) {
+                                Button("إغلاق") { deepLink = nil }
+                            }
                         }
-                    }
+                }
+            } else {
+                tabs(api)
             }
-        } else {
-            tabs(api)
         }
+        #if os(iOS)
+        .onAppear {
+            // ضغطة إشعار عند التطبيق المقتول (cold start) — تُلتقط هنا عند الجاهزية.
+            if let t = NotificationManager.shared.pendingDeepLink {
+                deepLink = t
+                NotificationManager.shared.pendingDeepLink = nil
+            }
+            let args = ProcessInfo.processInfo.arguments
+            if args.contains("-requestNotifications") {
+                Task { await NotificationManager.shared.requestAuthorization() }
+            }
+            if let i = args.firstIndex(of: "-scheduleNotification"), i + 1 < args.count,
+               let u = URL(string: args[i + 1]), let tg = DeepLinkTarget.parse(u) {
+                NotificationManager.shared.schedule(tg, title: "إشعار اختبار", body: "افتح العنصر من الإشعار")
+            }
+            if args.contains("-showNotifications") {
+                Task {
+                    await NotificationManager.shared.refreshStatus()
+                    notifDebug = "notif status=\(NotificationManager.shared.authorizationStatus.rawValue) pending=\(NotificationManager.shared.pendingCount)"
+                }
+            }
+        }
+        .onChange(of: NotificationManager.shared.pendingDeepLink) { t in
+            if let t = t { deepLink = t; select(t) }
+        }
+        .overlay(alignment: .bottom) {
+            if !notifDebug.isEmpty {
+                Text(notifDebug)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.white)
+                    .padding(8)
+                    .background(Color.black.opacity(0.8))
+                    .cornerRadius(8)
+                    .padding(.bottom, 4)
+            }
+        }
+        #endif
     }
 
     @ViewBuilder

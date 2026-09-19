@@ -59,7 +59,11 @@ struct TaskDetailView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
-        .task { await vm.load(taskId) }
+        .task {
+            await vm.load(taskId)
+            vm.startPolling(taskId)
+        }
+        .onDisappear { vm.stopPolling() }
     }
 
     private func stateLabel(_ t: JarvisTask) -> String {
@@ -88,11 +92,42 @@ final class TaskDetailViewModel: ObservableObject {
     @Published var task: JarvisTask?
     @Published var loading = false
     private let api: JarvisAPI
+    private var pollTask: Task<Void, Never>?
     init(api: JarvisAPI) { self.api = api }
+
     func load(_ id: String) async {
         loading = true
         defer { loading = false }
         do { task = try await api.getObject("tasks/\(id)") } catch { task = nil }
+    }
+
+    /// استئناف/مراقبة المهمة: إعادة تحميل دورية أثناء التشغيل + إشعار عند الاكتمال.
+    /// يتوقف تلقائياً عند الوصول لحالة نهائية (لا حلقة مكررة).
+    func startPolling(_ id: String) {
+        stopPolling()
+        pollTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                await self.load(id)
+                let state = (self.task?.jobState ?? self.task?.status ?? "").uppercased()
+                if ["SUCCEEDED", "READY", "FAILED", "CANCELLED"].contains(state) {
+                    #if os(iOS)
+                    if state == "SUCCEEDED" || state == "READY" {
+                        let deliveryId = self.task?.outputs?.first ?? id
+                        NotificationManager.shared.notifyDeliveryReady(deliveryId,
+                                                                       filename: self.task?.prompt ?? "تسليم جارفس")
+                    }
+                    #endif
+                    return
+                }
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+            }
+        }
+    }
+
+    func stopPolling() {
+        pollTask?.cancel()
+        pollTask = nil
     }
 }
 

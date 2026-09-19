@@ -117,6 +117,11 @@ final class ChatViewModel: ObservableObject {
                     status = .backgroundTask
                     statusLabel = "انتقل إلى مهمة خلفية"
                     pendingTaskId = c.taskId
+                    #if os(iOS)
+                    if let tid = c.taskId {
+                        NotificationManager.shared.notifyTaskHandoff(tid)
+                    }
+                    #endif
                 } else {
                     finishAssistant(c)
                 }

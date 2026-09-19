@@ -44,7 +44,8 @@ APP_SOURCES = [
     "JARVIS/Memory/MemoryRetrieval.swift", "JARVIS/Memory/MemorySeed.swift",
     "JARVIS/Integrations/AppleEventKitWriter.swift",
     "JARVIS/App/AppDelegate.swift", "JARVIS/App/BackgroundSessionHandler.swift",
-    "JARVIS/App/RootView.swift", "JARVIS/App/DeepLinkHandler.swift",
+    "JARVIS/App/RootView.swift", "JARVIS/App/DeepLinkHandler.swift", "JARVIS/App/DeepLinkTarget.swift",
+    "JARVIS/Notifications/NotificationManager.swift",
     "JARVIS/Auth/EnrollmentManager.swift", "JARVIS/Auth/JarvisConfig.swift",
     "JARVIS/Auth/KeychainStore.swift", "JARVIS/Auth/PairingView.swift",
     "JARVIS/Camera/CameraCaptureView.swift", "JARVIS/Camera/CameraVideoView.swift",
@@ -69,12 +70,17 @@ TEST_SOURCES = [
     "JARVISTests/AgentRegistryTests.swift",
     "JARVISTests/SessionGuardTests.swift",
     "JARVISTests/MemoryTests.swift",
+    "JARVISTests/DeepLinkRoutingTests.swift",
 ]
 
 # مصادر Foundation المشتركة (تُبنى في app + test targets مباشرة، بلا @testable import)
 SESSION_GUARD_SOURCES = [
     "JARVIS/Voice/SessionEventParser.swift",
     "JARVIS/Voice/SessionGuardState.swift",
+]
+# deep-link target (Foundation خالصة — تُبنى في app + test targets للاختبار بلا @testable import)
+DEEPLINK_SOURCES = [
+    "JARVIS/App/DeepLinkTarget.swift",
 ]
 # مصادر Memory (Foundation خالصة — تُبنى في app + test targets للاختبار بلا @testable import)
 MEMORY_SOURCES = [
@@ -115,6 +121,7 @@ app_res_bf = {p: add("PBXBuildFile", fileRef=app_res_refs[p]) for p in APP_RESOU
 test_bf = {p: add("PBXBuildFile", fileRef=test_refs[p]) for p in TEST_SOURCES}
 session_guard_bf = {p: add("PBXBuildFile", fileRef=app_src_refs[p]) for p in SESSION_GUARD_SOURCES}
 memory_bf = {p: add("PBXBuildFile", fileRef=app_src_refs[p]) for p in MEMORY_SOURCES}
+deepLink_bf = {p: add("PBXBuildFile", fileRef=app_src_refs[p]) for p in DEEPLINK_SOURCES}
 
 def subgroup(name, paths):
     refs = [app_src_refs[p] for p in paths]
@@ -173,12 +180,13 @@ IOS_ONLY_SOURCES = [
     "JARVIS/Camera/CameraVideoView.swift",
     "JARVIS/Workspace/DocumentScanner.swift",
     "JARVIS/Workspace/AudioRecorderView.swift",
+    "JARVIS/Notifications/NotificationManager.swift",
 ]
 mac_src_bf = {p_: bf for p_, bf in app_src_bf.items() if p_ not in IOS_ONLY_SOURCES}
 mac_sources_phase = add("PBXSourcesBuildPhase", files=sorted(mac_src_bf.values()), buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)
 app_resources_phase = add("PBXResourcesBuildPhase", files=sorted(app_res_bf.values()), buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)
 app_frameworks_phase = add("PBXFrameworksBuildPhase", files=[], buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)
-test_sources_phase = add("PBXSourcesBuildPhase", files=sorted(list(test_bf.values()) + list(session_guard_bf.values()) + list(memory_bf.values())), buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)
+test_sources_phase = add("PBXSourcesBuildPhase", files=sorted(list(test_bf.values()) + list(session_guard_bf.values()) + list(memory_bf.values()) + list(deepLink_bf.values())), buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)
 test_resources_phase = add("PBXResourcesBuildPhase", files=[], buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)
 test_frameworks_phase = add("PBXFrameworksBuildPhase", files=[], buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)
 
@@ -253,8 +261,8 @@ mac_test_settings = {
 mac_test_debug = add("XCBuildConfiguration", buildSettings=dict(mac_test_settings), name="Debug")
 mac_test_release = add("XCBuildConfiguration", buildSettings=dict(mac_test_settings), name="Release")
 mac_test_config_list = add("XCConfigurationList", buildConfigurations=[mac_test_debug, mac_test_release], defaultConfigurationIsVisible=0, defaultConfigurationName="Release")
-mac_test_bf = {p: add("PBXBuildFile", fileRef=test_refs[p]) for p in TEST_SOURCES if "SessionGuardTests" in p or "MemoryTests" in p}
-mac_test_sources_phase = add("PBXSourcesBuildPhase", files=sorted(list(mac_test_bf.values()) + list(session_guard_bf.values()) + list(memory_bf.values())), buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)
+mac_test_bf = {p: add("PBXBuildFile", fileRef=test_refs[p]) for p in TEST_SOURCES if "SessionGuardTests" in p or "MemoryTests" in p or "DeepLinkRoutingTests" in p}
+mac_test_sources_phase = add("PBXSourcesBuildPhase", files=sorted(list(mac_test_bf.values()) + list(session_guard_bf.values()) + list(memory_bf.values()) + list(deepLink_bf.values())), buildActionMask=2147483647, runOnlyForDeploymentPostprocessing=0)
 mac_test_target = add("PBXNativeTarget", buildConfigurationList=mac_test_config_list,
     buildPhases=[mac_test_sources_phase, test_frameworks_phase, test_resources_phase],
     buildRules=[], dependencies=[], name="JARVISTestsMac", productName="JARVISTestsMac",

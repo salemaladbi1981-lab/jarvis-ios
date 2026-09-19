@@ -87,6 +87,10 @@ def main():
     time.sleep(3)
     sh(f'xcrun simctl io "{device}" screenshot deep_scheme.png')
 
+    # notifications proof — permission flow + scheduling (deep-link in userInfo)
+    shot('notif_permission', '-requestNotifications', '-showNotifications')
+    shot('notif_scheduled', '-scheduleNotification', f'jarvis://delivery/{delivery}', '-showNotifications')
+
     print('SCREENSHOTS:')
     for p in sorted(glob.glob('*.png')):
         print(' ', p)
