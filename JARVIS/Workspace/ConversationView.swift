@@ -17,7 +17,7 @@ struct ConversationView: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 12) {
                         ForEach(vm.messages) { msg in
-                            MessageBubble(msg: msg)
+                            MessageBubble(msg: msg, api: api)
                         }
                         if vm.status == .working || vm.status == .searching || vm.status == .usingTool || !vm.streamingText.isEmpty {
                             StreamingBubble(text: vm.streamingText,
@@ -59,6 +59,7 @@ struct ConversationView: View {
 
 private struct MessageBubble: View {
     let msg: ChatMessage
+    let api: JarvisAPI
     var body: some View {
         let isUser = msg.role == "user"
         VStack(alignment: isUser ? .trailing : .leading, spacing: 8) {
@@ -74,6 +75,11 @@ private struct MessageBubble: View {
             }
             if let cits = msg.citations, !cits.isEmpty {
                 CitationsView(citations: cits)
+            }
+            if let refs = msg.attachmentRefs, !refs.isEmpty {
+                ForEach(refs, id: \.self) { ref in
+                    AttachmentView(fileId: ref, api: api)
+                }
             }
         }
     }

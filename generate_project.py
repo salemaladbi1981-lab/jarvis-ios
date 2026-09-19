@@ -21,6 +21,7 @@ APP_SOURCES = [
     "JARVIS/Workspace/InboxView.swift",
     "JARVIS/Workspace/DetailViews.swift",
     "JARVIS/Workspace/HomeEntryView.swift",
+    "JARVIS/Workspace/AttachmentView.swift",
     "JARVIS/Home/VoiceInputBar.swift", "JARVIS/Home/BottomNavBar.swift",
     "JARVIS/Core/JarvisCoreView.swift", "JARVIS/Core/JarvisOrbitView.swift", "JARVIS/Core/WaveformView.swift",
     "JARVIS/Core/MotionTokens.swift", "JARVIS/Core/AgentOrbitModel.swift", "JARVIS/Core/LaunchTiming.swift", "JARVIS/Core/VisualLevelModel.swift",

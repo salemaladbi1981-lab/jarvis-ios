@@ -58,6 +58,18 @@ struct JarvisAPI {
         return try JarvisJSON.decoder().decode(T.self, from: d)
     }
 
+    /// بيانات خام (للصور/المرفقات) — GET /files/{id}/download.
+    func fetchData(_ path: String) async throws -> Data {
+        var req = URLRequest(url: baseURL.appendingPathComponent(path))
+        req.setValue(sessionToken, forHTTPHeaderField: "X-Jarvis-Session")
+        let (d, resp) = try await URLSession.shared.data(for: req)
+        if let r = resp as? HTTPURLResponse, !(200..<300).contains(r.statusCode) {
+            throw NSError(domain: "JarvisAPI", code: r.statusCode,
+                          userInfo: [NSLocalizedDescriptionKey: "HTTP \(r.statusCode)"])
+        }
+        return d
+    }
+
     /// POST يُرجع كائنًا (POST /conversations) → U.
     func postObject<U: Decodable>(_ path: String, body: [String: Any]) async throws -> U {
         var req = URLRequest(url: baseURL.appendingPathComponent(path))

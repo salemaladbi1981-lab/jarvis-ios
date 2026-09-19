@@ -16,7 +16,7 @@ struct RootView: View {
     }
 
     var body: some View {
-        let api = enrollment.api ?? JarvisAPI(baseURL: JarvisConfig.baseURL, sessionToken: "")
+        let api = enrollment.api ?? JarvisAPI(baseURL: JarvisConfig.baseURL, sessionToken: JarvisConfig.injectedSessionToken ?? "")
         TabView(selection: $selectedTab) {
             HomeEntryView(api: api)
                 .tabItem { Label("الرئيسية", systemImage: "house.fill") }

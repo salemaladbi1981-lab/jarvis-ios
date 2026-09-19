@@ -134,3 +134,16 @@ enum InboxKind: String {
         }
     }
 }
+
+struct FileItem: Codable, Identifiable {
+    var id: String { fileId }
+    let fileId: String
+    let filename: String?
+    let mimeType: String?
+    let size: Int?
+    let mediaKind: String?
+    let status: String?
+
+    var isImage: Bool { mediaKind == "image" }
+    var isDocument: Bool { (mimeType ?? "").contains("pdf") || (mimeType ?? "").contains("document") }
+}

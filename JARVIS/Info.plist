@@ -60,5 +60,10 @@
     <string>يحتاج جارفس حفظ المخرجات في مكتبة الصور.</string>
     <key>NSLocationWhenInUseUsageDescription</key>
     <string>يحتاج جارفس موقعك الحالي لعرض مدينتك وحساب المسافة ووقت الوصول عند طلبك.</string>
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsLocalNetworking</key>
+        <true/>
+    </dict>
 </dict>
 </plist>
