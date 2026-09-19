@@ -52,6 +52,9 @@ jobs:
           shot portrait_content -group content
           shot portrait_idle
           shot portrait_approval -state approval
+          shot tab_home -tab home
+          shot tab_tasks -tab tasks
+          shot tab_deliveries -tab deliveries
           ls -la *.png
 
       - uses: actions/upload-artifact@v4

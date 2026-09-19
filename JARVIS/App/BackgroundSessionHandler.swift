@@ -1,4 +1,6 @@
+#if os(iOS)
 import UIKit
+#endif
 
 /// ربط background URLSession events في AppDelegate/SceneDelegate.
 /// يُستدعى عند إعادة تشغيل التطبيق لإكمال رفع خلفي.
