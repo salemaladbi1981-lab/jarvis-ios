@@ -4,10 +4,12 @@ import SwiftUI
 struct ConversationView: View {
     @StateObject private var vm: ChatViewModel
     @State private var input: String = ""
+    private let api: JarvisAPI
     let conversationId: String
 
     init(api: JarvisAPI, conversationId: String) {
         _vm = StateObject(wrappedValue: ChatViewModel(api: api))
+        self.api = api
         self.conversationId = conversationId
     }
 
