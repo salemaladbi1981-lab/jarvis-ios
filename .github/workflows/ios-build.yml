@@ -2,7 +2,7 @@ name: iOS + macOS Build + Screenshots
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, chatgpt-overnight-2 ]
   workflow_dispatch:
 
 jobs:
