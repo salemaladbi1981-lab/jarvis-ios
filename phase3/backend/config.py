@@ -1,6 +1,7 @@
 """Secrets live ONLY in backend environment variables — never in clients/git."""
 import os
 from pathlib import Path
+from project_health_metadata import load_configured_health_metadata
 
 def _load_env_file(path, override=False):
     """يحمّل .env يدويًا (بدون python-dotenv) — احتياط لبيئات الاختبار/الـ CI."""
@@ -24,6 +25,11 @@ try:
 except ImportError:
     _load_env_file(Path(__file__).parent / ".env")
     _load_env_file("/opt/data/.env")
+
+# Optional CI -> runtime Project Health handoff. The deployment must explicitly
+# point at the generated project-health.env artifact. The loader is allow-listed
+# and never overrides process/deployment environment values.
+load_configured_health_metadata()
 
 # Project Health truthfulness guard.
 # main.py reads these fields through os.getenv(). Seed only genuinely missing

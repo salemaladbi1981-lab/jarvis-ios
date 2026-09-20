@@ -1,0 +1,74 @@
+"""Safe, opt-in runtime loader for Project Health CI metadata.
+
+The CI workflow emits ``project-health.env``. A deployment may mount/copy that
+artifact and point ``JARVIS_PROJECT_HEALTH_METADATA_PATH`` at it. Only Project
+Health keys are accepted; explicit process environment values always win.
+"""
+import os
+import re
+from pathlib import Path
+
+HEALTH_KEYS = {
+    "JARVIS_BUILD_SHA",
+    "JARVIS_CI_STATUS",
+    "JARVIS_TESTS_STATUS",
+    "JARVIS_CURRENT_PHASE",
+    "JARVIS_CURRENT_MILESTONE",
+    "JARVIS_NEXT_MILESTONE",
+}
+STATUS_KEYS = {"JARVIS_CI_STATUS", "JARVIS_TESTS_STATUS"}
+VALID_STATUSES = {"success", "failure", "unknown"}
+_SHA_RE = re.compile(r"^[0-9a-fA-F]{7,40}$")
+
+
+def _valid_value(key, value):
+    if key in STATUS_KEYS:
+        return value.lower() in VALID_STATUSES
+    if key == "JARVIS_BUILD_SHA":
+        return not value or bool(_SHA_RE.fullmatch(value))
+    return True
+
+
+def load_health_metadata(path, environ=None):
+    """Load allow-listed health metadata without overriding explicit env.
+
+    Missing/unreadable files fail closed and never break backend startup.
+    Unknown keys are ignored so a metadata file cannot inject secrets or other
+    runtime configuration.
+    """
+    env = os.environ if environ is None else environ
+    path = str(path or "").strip()
+    if not path:
+        return False
+
+    try:
+        lines = Path(path).read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError):
+        return False
+
+    staged = {}
+    for raw in lines:
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key, value = key.strip(), value.strip()
+        if key not in HEALTH_KEYS or not _valid_value(key, value):
+            continue
+        staged[key] = value
+
+    if not staged:
+        return False
+
+    for key, value in staged.items():
+        env.setdefault(key, value)
+    return True
+
+
+def load_configured_health_metadata(environ=None):
+    """Load only when a deployment explicitly provides a metadata path."""
+    env = os.environ if environ is None else environ
+    path = (env.get("JARVIS_PROJECT_HEALTH_METADATA_PATH") or "").strip()
+    if not path:
+        return False
+    return load_health_metadata(path, env)
