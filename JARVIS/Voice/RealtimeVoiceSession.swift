@@ -38,11 +38,11 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     func connect(baseURL: URL) async throws {
         eventPublisher.send(.connecting)
         guard var comps = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
-            eventPublisher.send(.error("invalid_url")); return
+            throw URLError(.badURL)
         }
         comps.scheme = comps.scheme == "https" ? "wss" : "ws"
         comps.path = "/realtime"
-        guard let url = comps.url else { eventPublisher.send(.error("invalid_url")); return }
+        guard let url = comps.url else { throw URLError(.badURL) }
         // بدء اتصال جديد → جيل جديد يربط به الـ receiveLoop
         let gen = stateQueue.sync { self.guardState.beginConnection() }
         stateQueue.sync {
@@ -104,6 +104,8 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
             self.isSpeaking = false
         }
         audio.stop()   // يوقف المحرك + يصفّر المستوى + يبطل generation
+        let socket = stateQueue.sync { let socket = self.ws; self.ws = nil; return socket }
+        socket?.cancel(with: .goingAway, reason: nil)
     }
 
     /// Barge-in: إلغاء الرد الجاري + مسح الـ playback (الـ mic يبقى شغّالاً).
@@ -185,7 +187,12 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                         let reason = nserr.userInfo["NSURLErrorWebSocketHandshakeFailureReason"] ?? "?"
                         self.trace("WS handshake failure: code=\(nserr.code) reason=\(reason)")
                     }
-                    self.eventPublisher.send(.disconnected)
+                    self.guardState.onStop()
+                    self.isSpeaking = false
+                    self.ws?.cancel(with: .goingAway, reason: nil)
+                    self.ws = nil
+                    self.audio.stop()
+                    self.eventPublisher.send(.error("connection_lost"))
                 }
             }
         }

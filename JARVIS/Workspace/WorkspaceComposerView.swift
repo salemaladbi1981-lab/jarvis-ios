@@ -4,6 +4,7 @@ import SwiftUI
 struct WorkspaceComposerView: View {
     @Binding var text: String
     let hasAttachments: Bool
+    var disabled: Bool = false
     let onSend: () -> Void
     let onAttach: () -> Void
     let onMic: () -> Void
@@ -17,11 +18,11 @@ struct WorkspaceComposerView: View {
                 .textFieldStyle(.roundedBorder)
                 .multilineTextAlignment(.trailing)
                 .submitLabel(.send)
-                .onSubmit(onSend)
+                .onSubmit { if !disabled { onSend() } }
             Button(action: onSend) {
                 Image(systemName: "arrow.up.circle.fill").font(.title2)
             }
-            .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !hasAttachments)
+            .disabled(disabled || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !hasAttachments)
             Button(action: onMic) {
                 Image(systemName: "mic.fill").font(.title2)
             }

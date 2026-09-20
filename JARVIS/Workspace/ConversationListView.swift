@@ -3,6 +3,7 @@ import SwiftUI
 /// قائمة المحادثات — نقطة دخول Chat + بدء محادثة جديدة.
 struct ConversationListView: View {
     @StateObject private var vm: ConversationListViewModel
+    @State private var path: [String] = []
     private let api: JarvisAPI
 
     init(api: JarvisAPI) {
@@ -11,7 +12,7 @@ struct ConversationListView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             Group {
                 if vm.conversations.isEmpty {
                     VStack(spacing: 12) {
@@ -37,9 +38,18 @@ struct ConversationListView: View {
                         }
                     }
                     .listStyle(.plain)
-                    .navigationDestination(for: String.self) { id in
-                        ConversationView(api: api, conversationId: id)
-                    }
+
+                }
+            }
+            .navigationDestination(for: String.self) { id in
+                ConversationView(api: api, conversationId: id)
+            }
+            .onChange(of: vm.activeConversationId) { _, id in
+                if let id { path.append(id) }
+            }
+            .safeAreaInset(edge: .bottom) {
+                if let error = vm.errorMessage {
+                    Text(error).font(.caption).foregroundColor(JarvisColor.danger).padding()
                 }
             }
             .navigationTitle("المحادثات")
@@ -50,7 +60,9 @@ struct ConversationListView: View {
                     }
                 }
             }
+            .disabled(vm.isCreating)
             .task { await vm.load() }
+            .refreshable { await vm.load() }
         }
     }
 }
@@ -59,18 +71,28 @@ struct ConversationListView: View {
 final class ConversationListViewModel: ObservableObject {
     @Published var conversations: [Conversation] = []
     @Published var activeConversationId: String?
+    @Published var errorMessage: String?
+    @Published private(set) var isCreating = false
     private let api: JarvisAPI
     init(api: JarvisAPI) { self.api = api }
 
     func load() async {
-        do { conversations = try await api.getArray("conversations") } catch {}
+        do {
+            conversations = try await api.getArray("conversations")
+            errorMessage = nil
+        } catch { errorMessage = JarvisAPIError.message(for: error) }
     }
 
     func newConversation() async {
+        guard !isCreating else { return }
+        isCreating = true
+        defer { isCreating = false }
         do {
-            let c: Conversation = try await api.postObject("conversations", body: [:])
+            let envelope: ConversationEnvelope = try await api.postObject("conversations", body: ["create_new": true])
+            let c = envelope.conversation
+            errorMessage = nil
             conversations.insert(c, at: 0)
             activeConversationId = c.id
-        } catch {}
+        } catch { errorMessage = JarvisAPIError.message(for: error) }
     }
 }

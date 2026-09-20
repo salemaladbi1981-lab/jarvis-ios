@@ -28,7 +28,9 @@ check("Core: coreScale يستخدم micP/outP", 'listening * micP' in core and '
 check("Waveform: perceptual level", 'Level.perceptual' in wave)
 
 # 2) UI touch/scroll لا يوقف الصوت
-check("HomeViewModel: stopListening مرة واحدة فقط (في toggleVoice)", vm.count('stopListening') == 1)
+check("HomeViewModel: stopListening for manual stop and terminal error only", vm.count('stopListening') == 2)
+check("Background invalidates pending voice startup", 'voiceStartGeneration += 1' in vm and 'voiceStartTask?.cancel()' in vm)
+check("Permission completion cannot restart background audio", 'guard !Task.isCancelled, generation == voiceStartGeneration' in vm)
 _bg = vm.find('func handleAppBackgrounded')
 check("HomeViewModel: disconnect في background handling (handleAppBackgrounded)",
       _bg >= 0 and 'disconnect(' in vm[_bg:])

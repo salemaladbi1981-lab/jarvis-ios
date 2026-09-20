@@ -1,95 +1,114 @@
 import Foundation
 
-/// عميل API موحّد — كل الطلبات تحمل session token موثّقًا (لا user_id من العميل).
+/// The same authenticated, workspace-scoped transport is used for JSON and chat.
 struct JarvisAPI {
     let baseURL: URL
     let sessionToken: String
     var workspace: String = "PERSONAL"
+    var session: URLSession = .shared
 
-    func get(_ path: String) async throws -> [[String: Any]] {
+    func request(_ path: String, method: String = "GET", body: [String: Any]? = nil) throws -> URLRequest {
+        guard !sessionToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw JarvisAPIError.authentication
+        }
         var req = URLRequest(url: baseURL.appendingPathComponent(path))
+        req.httpMethod = method
+        req.timeoutInterval = 90
         req.setValue(sessionToken, forHTTPHeaderField: "X-Jarvis-Session")
         req.setValue(workspace, forHTTPHeaderField: "X-Jarvis-Workspace")
-        let (d, _) = try await URLSession.shared.data(for: req)
-        return (try JSONSerialization.jsonObject(with: d) as? [[String: Any]]) ?? []
+        if let body {
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        }
+        return req
+    }
+
+    static func validate(_ response: URLResponse) throws {
+        guard let response = response as? HTTPURLResponse else { throw JarvisAPIError.invalidResponse }
+        switch response.statusCode {
+        case 200..<300: return
+        case 401: throw JarvisAPIError.authentication
+        case 403: throw JarvisAPIError.forbidden
+        case 404: throw JarvisAPIError.notFound
+        case 409: throw JarvisAPIError.conflict
+        case 429: throw JarvisAPIError.rateLimited
+        case 500...599: throw JarvisAPIError.server
+        default: throw JarvisAPIError.invalidResponse
+        }
+    }
+
+    private func data(_ path: String, method: String = "GET", body: [String: Any]? = nil) async throws -> Data {
+        let req = try request(path, method: method, body: body)
+        let (data, response) = try await session.data(for: req)
+        try Self.validate(response)
+        return data
+    }
+
+    func get(_ path: String) async throws -> [[String: Any]] {
+        let data = try await data(path)
+        guard let value = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            throw JarvisAPIError.invalidResponse
+        }
+        return value
     }
 
     func post(_ path: String, body: [String: Any]) async throws -> [String: Any] {
-        var req = URLRequest(url: baseURL.appendingPathComponent(path))
-        req.httpMethod = "POST"
-        req.setValue(sessionToken, forHTTPHeaderField: "X-Jarvis-Session")
-        req.setValue(workspace, forHTTPHeaderField: "X-Jarvis-Workspace")
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONSerialization.data(withJSONObject: body)
-        let (d, resp) = try await URLSession.shared.data(for: req)
-        if let r = resp as? HTTPURLResponse, !(200..<300).contains(r.statusCode) {
-            throw NSError(domain: "JarvisAPI", code: r.statusCode,
-                          userInfo: [NSLocalizedDescriptionKey: "HTTP \(r.statusCode)"])
+        let data = try await data(path, method: "POST", body: body)
+        guard let value = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw JarvisAPIError.invalidResponse
         }
-        return (try JSONSerialization.jsonObject(with: d) as? [String: Any]) ?? [:]
+        return value
     }
 
     func download(_ path: String) async throws -> (URL, String) {
-        var req = URLRequest(url: baseURL.appendingPathComponent(path))
-        req.setValue(sessionToken, forHTTPHeaderField: "X-Jarvis-Session")
-        req.setValue(workspace, forHTTPHeaderField: "X-Jarvis-Workspace")
-        let (tmp, resp) = try await URLSession.shared.download(for: req)
-        let name = (resp as? HTTPURLResponse)?.suggestedFilename ?? "file"
-        return (tmp, name)
+        let (url, response) = try await session.download(for: request(path))
+        do { try Self.validate(response) }
+        catch { try? FileManager.default.removeItem(at: url); throw error }
+        return (url, response.suggestedFilename ?? "file")
     }
 
-    /// قائمة مُفهرسة (GET /tasks, /conversations, /deliveries) → [T].
     func getArray<T: Decodable>(_ path: String) async throws -> [T] {
-        var req = URLRequest(url: baseURL.appendingPathComponent(path))
-        req.setValue(sessionToken, forHTTPHeaderField: "X-Jarvis-Session")
-        req.setValue(workspace, forHTTPHeaderField: "X-Jarvis-Workspace")
-        let (d, resp) = try await URLSession.shared.data(for: req)
-        if let r = resp as? HTTPURLResponse, !(200..<300).contains(r.statusCode) {
-            throw NSError(domain: "JarvisAPI", code: r.statusCode,
-                          userInfo: [NSLocalizedDescriptionKey: "HTTP \(r.statusCode)"])
-        }
-        return try JarvisJSON.decoder().decode([T].self, from: d)
+        try await getObject(path)
     }
 
-    /// عنصر واحد (GET /conversations/{id}) → T.
     func getObject<T: Decodable>(_ path: String) async throws -> T {
-        var req = URLRequest(url: baseURL.appendingPathComponent(path))
-        req.setValue(sessionToken, forHTTPHeaderField: "X-Jarvis-Session")
-        req.setValue(workspace, forHTTPHeaderField: "X-Jarvis-Workspace")
-        let (d, resp) = try await URLSession.shared.data(for: req)
-        if let r = resp as? HTTPURLResponse, !(200..<300).contains(r.statusCode) {
-            throw NSError(domain: "JarvisAPI", code: r.statusCode,
-                          userInfo: [NSLocalizedDescriptionKey: "HTTP \(r.statusCode)"])
-        }
-        return try JarvisJSON.decoder().decode(T.self, from: d)
+        try JarvisJSON.decoder().decode(T.self, from: await data(path))
     }
 
-    /// بيانات خام (للصور/المرفقات) — GET /files/{id}/download.
-    func fetchData(_ path: String) async throws -> Data {
-        var req = URLRequest(url: baseURL.appendingPathComponent(path))
-        req.setValue(sessionToken, forHTTPHeaderField: "X-Jarvis-Session")
-        req.setValue(workspace, forHTTPHeaderField: "X-Jarvis-Workspace")
-        let (d, resp) = try await URLSession.shared.data(for: req)
-        if let r = resp as? HTTPURLResponse, !(200..<300).contains(r.statusCode) {
-            throw NSError(domain: "JarvisAPI", code: r.statusCode,
-                          userInfo: [NSLocalizedDescriptionKey: "HTTP \(r.statusCode)"])
+    func fetchData(_ path: String) async throws -> Data { try await data(path) }
+
+    func postObject<T: Decodable>(_ path: String, body: [String: Any]) async throws -> T {
+        try JarvisJSON.decoder().decode(T.self, from: await data(path, method: "POST", body: body))
+    }
+}
+
+enum JarvisAPIError: Error, LocalizedError, Equatable {
+    case authentication, forbidden, notFound, conflict, rateLimited, server, invalidResponse, interrupted
+
+    var errorDescription: String? {
+        switch self {
+        case .authentication: return "انتهت جلسة الاتصال. أعد ربط جارفس من إعدادات الاتصال."
+        case .forbidden: return "لا تملك هذه الجلسة صلاحية الوصول إلى مساحة العمل."
+        case .notFound: return "لم يعد هذا العنصر متاحًا. حدّث القائمة وأعد المحاولة."
+        case .conflict: return "الطلب قيد التنفيذ بالفعل. انتظر ثم حدّث المحادثة."
+        case .rateLimited: return "طلبات كثيرة حاليًا. انتظر قليلًا ثم أعد المحاولة."
+        case .server: return "الخادم غير متاح مؤقتًا. أعد المحاولة بعد قليل."
+        case .invalidResponse: return "تعذّر قراءة استجابة الخادم. حدّث المحادثة أو أعد المحاولة."
+        case .interrupted: return "انقطع الرد قبل اكتماله. أعد الاتصال لاستعادة نتيجة الطلب."
         }
-        return d
     }
 
-    /// POST يُرجع كائنًا (POST /conversations) → U.
-    func postObject<U: Decodable>(_ path: String, body: [String: Any]) async throws -> U {
-        var req = URLRequest(url: baseURL.appendingPathComponent(path))
-        req.httpMethod = "POST"
-        req.setValue(sessionToken, forHTTPHeaderField: "X-Jarvis-Session")
-        req.setValue(workspace, forHTTPHeaderField: "X-Jarvis-Workspace")
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONSerialization.data(withJSONObject: body)
-        let (d, resp) = try await URLSession.shared.data(for: req)
-        if let r = resp as? HTTPURLResponse, !(200..<300).contains(r.statusCode) {
-            throw NSError(domain: "JarvisAPI", code: r.statusCode,
-                          userInfo: [NSLocalizedDescriptionKey: "HTTP \(r.statusCode)"])
+    static func message(for error: Error) -> String {
+        if let error = error as? JarvisAPIError { return error.localizedDescription }
+        if let error = error as? URLError {
+            switch error.code {
+            case .timedOut: return "انتهت مهلة الاتصال. أعد المحاولة لاستعادة نتيجة الطلب."
+            case .notConnectedToInternet, .networkConnectionLost, .cannotFindHost, .cannotConnectToHost:
+                return "لا يوجد اتصال بالخادم. تحقق من الشبكة ثم أعد المحاولة."
+            case .cancelled: return "توقف الاتصال. يمكنك استعادة المحادثة عند العودة."
+            default: return "تعذّر الاتصال الآمن بالخادم. تحقق من الشبكة وأعد المحاولة."
+            }
         }
-        return try JarvisJSON.decoder().decode(U.self, from: d)
+        return JarvisAPIError.invalidResponse.localizedDescription
     }
 }

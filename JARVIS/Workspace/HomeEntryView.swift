@@ -9,6 +9,7 @@ struct HomeEntryView: View {
     @StateObject private var voiceVM = HomeViewModel()
     @EnvironmentObject private var enrollment: EnrollmentManager
     @State private var newConv: ConvID?
+    @State private var showConnection = false
     @State private var composerText = ""
     @State private var showAttachments = false
     @State private var showCameraPhoto = false
@@ -78,6 +79,9 @@ struct HomeEntryView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
 
+                    if let error = vm.loadError {
+                        Text(error).font(.caption).foregroundColor(JarvisColor.text_muted)
+                    }
                     if !vm.conversations.isEmpty {
                         section("المحادثات الأخيرة") {
                             ForEach(vm.conversations.prefix(5)) { c in
@@ -132,6 +136,15 @@ struct HomeEntryView: View {
                 .padding(16)
             }
             .navigationTitle("جارفس")
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { showConnection = true } label: {
+                        Image(systemName: "key.horizontal")
+                    }
+                    .accessibilityLabel("إعدادات الاتصال")
+                }
+            }
+            .refreshable { await vm.load() }
             .navigationDestination(item: $newConv) { c in
                 ConversationView(api: api, conversationId: c.id, initialText: c.initialText)
             }
@@ -158,10 +171,11 @@ struct HomeEntryView: View {
                 WorkspaceComposerView(
                     text: $composerText,
                     hasAttachments: !pendingAttachments.isEmpty,
+                    disabled: isSending || vm.isCreating,
                     onSend: {
                         let t = composerText.trimmingCharacters(in: .whitespacesAndNewlines)
                         guard !t.isEmpty || !pendingAttachments.isEmpty else { return }
-                        composerText = ""
+                        guard !isSending, !vm.isCreating else { return }
                         Task { await sendMessage(text: t) }
                     },
                     onAttach: { showAttachments = true },
@@ -187,6 +201,9 @@ struct HomeEntryView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .background { voiceVM.handleAppBackgrounded() }
+        }
+        .sheet(isPresented: $showConnection) {
+            PairingView().environmentObject(enrollment)
         }
         .sheet(isPresented: $showAttachments) {
             AttachmentMenu(
@@ -325,6 +342,10 @@ struct HomeEntryView: View {
                 // مسار الدردشة النصية الحقيقي — إنشاء محادثة ثم الانتقال لشاشة الدردشة (وليس routeVoiceTranscript)
                 if let c = await vm.newConversation() {
                     newConv = ConvID(id: c.id, initialText: text)
+                    composerText = ""
+                    sendError = nil
+                } else {
+                    sendError = vm.newConversationError
                 }
             }
             return
@@ -357,6 +378,7 @@ struct HomeEntryView: View {
             return
         }
         pendingAttachments = []
+        composerText = ""
         sendError = nil
         retryText = ""
     }
@@ -394,6 +416,8 @@ final class HomeEntryViewModel: ObservableObject {
     @Published var deliveries: [DeliveryItem] = []
     @Published var newConversationId: String?
     @Published var newConversationError: String?
+    @Published var loadError: String?
+    @Published private(set) var isCreating = false
     private let api: JarvisAPI
     init(api: JarvisAPI) { self.api = api }
 
@@ -406,24 +430,27 @@ final class HomeEntryViewModel: ObservableObject {
             conversations = c
             activeTasks = t.filter { ["QUEUED", "RUNNING"].contains(($0.jobState ?? $0.status ?? "").uppercased()) }
             deliveries = d
+            loadError = nil
         } catch {
-            conversations = []; activeTasks = []; deliveries = []
+            loadError = JarvisAPIError.message(for: error)
         }
     }
 
     /// إنشاء محادثة حقيقية عبر الـ backend — لا تبتلع الخطأ.
     @discardableResult
     func newConversation() async -> Conversation? {
+        guard !isCreating else { return nil }
+        isCreating = true
+        defer { isCreating = false }
         do {
-            let env: ConversationEnvelope = try await api.postObject("conversations", body: [:])
+            let env: ConversationEnvelope = try await api.postObject("conversations", body: ["create_new": true])
             let c = env.conversation
             newConversationId = c.id
             newConversationError = nil
             return c
         } catch {
-            let msg = "تعذّر بدء محادثة جديدة: \(error.localizedDescription)"
+            let msg = JarvisAPIError.message(for: error)
             newConversationError = msg
-            print("[JARVIS-HOME] newConversation failed: \(error)")
             return nil
         }
     }

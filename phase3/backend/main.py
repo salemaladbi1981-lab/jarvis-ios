@@ -1,5 +1,6 @@
 """JARVIS trusted control plane — FastAPI."""
 import uuid, json, os
+from typing import Optional
 from urllib.parse import parse_qs
 from fastapi import FastAPI, WebSocket, HTTPException, Request, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
@@ -69,11 +70,16 @@ def get_workspace(x_jarvis_session: str = Header(default=""), x_jarvis_workspace
     return ws
 
 
-def get_session(x_jarvis_session: str = Header(default="")):
+def get_session(x_jarvis_session: str = Header(default=""), x_jarvis_workspace: str = Header(default="")):
     """session كامل {user_id, workspace_id, conversation_id} + الـtoken للربط."""
     s = auth.resolve_session(x_jarvis_session)
     if not s:
         raise HTTPException(status_code=401, detail="unauthorized")
+    requested = x_jarvis_workspace or s["workspace_id"]
+    authorized = workspace.authorize(s["workspace_id"], requested)
+    if authorized is None:
+        raise HTTPException(status_code=403, detail="workspace_denied")
+    s = dict(s, workspace_id=authorized)
     s["_token"] = x_jarvis_session
     return s
 
@@ -525,6 +531,7 @@ def create_session(req: SessionReq):
 
 class ConversationReq(BaseModel):
     source: str = "app"
+    create_new: bool = False
     conversation_id: str = ""
     session_id: str = ""
     title: str = ""
@@ -545,13 +552,13 @@ def conversations_get_or_create(req: ConversationReq, session: dict = Depends(ge
     """متابعة محادثة قائمة (لا توليد جديد) أو إنشاء جديدة — source-agnostic."""
     conv, created = conversation.ConversationStore().get_or_create(
         session["user_id"], session["workspace_id"],
-        source=req.source, conversation_id=req.conversation_id or session.get("conversation_id"),
+        source=req.source, conversation_id=None if req.create_new else (req.conversation_id or session.get("conversation_id")),
         session_id=req.session_id, title=req.title)
     # ربط session بالمحادثة لاستعادتها بعد reconnect/restart
     if session.get("_token"):
         auth.set_session_conversation(session["_token"], conv["conversation_id"])
-    audit.log("conversation", session_id=session["_token"], conversation_id=conv["conversation_id"],
-              event="created" if created else "resumed")
+    audit.log("conversation", user_id=session["user_id"], workspace_id=session["workspace_id"],
+              conversation_id=conv["conversation_id"], action="created" if created else "resumed")
     return {"ok": True, "created": created, "conversation": conv}
 
 @app.get("/conversations")
@@ -591,13 +598,21 @@ class DeeplinkReq(BaseModel):
 class ChatReq(BaseModel):
     text: str
     attachments: list = []
+    client_msg_id: Optional[str] = None
 
 @app.post("/conversations/{conversation_id}/chat")
 def chat_stream(conversation_id: str, req: ChatReq, session: dict = Depends(get_session)):
     """Chat streaming (SSE) — نفس المحادثة، citations/tool_calls مثبّتة."""
+    if not req.text.strip():
+        raise HTTPException(status_code=422, detail="empty_text")
+    if req.client_msg_id is not None and not (1 <= len(req.client_msg_id) <= 128):
+        raise HTTPException(status_code=422, detail="invalid_client_msg_id")
     ident = {"user_id": session["user_id"], "workspace_id": session["workspace_id"]}
+    if not conversation.ConversationStore().get(conversation_id, ident["user_id"], ident["workspace_id"]):
+        raise HTTPException(status_code=404, detail="not_found")
     def gen():
-        for evt in chat.stream_chat(conversation_id, req.text, ident, attachments=req.attachments):
+        for evt in chat.stream_chat(conversation_id, req.text, ident, attachments=req.attachments,
+                                    client_msg_id=req.client_msg_id):
             yield chat._sse_frame(evt["event"], evt["data"])
     return StreamingResponse(gen(), media_type="text/event-stream")
 
