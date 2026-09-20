@@ -7,16 +7,18 @@ Release branch under audit: `chatgpt-write-test`
 
 **BUILD 5 NOT YET RELEASE-READY.**
 
-The stability baseline is green in CI, but the release number remains Build 4 and the final Swift/meeting-foundation head must complete iOS + macOS CI before any Build 5 version bump or distribution action.
+The cumulative stability/agent/meeting baseline through commit `59e8db996c20d9b88fc601afb3652273f48a12cb` is fully green in CI run `#180` (`35490108787`). A later shared meeting-session lifecycle commit (`4e16a55f1a145e25496485c7a68c0c50a8e999b7`) adds only deterministic state-policy plumbing plus regression tests; that newer head must also pass iOS + macOS CI before any Build 5 version bump or distribution action.
 
 ## Verified foundation
 
-- Phase 1 stability gate has a fully green cumulative CI run (`#174`, run `35487993456`) covering backend, iOS build/simulator flows, real-contract screenshots, macOS build, Swift unit tests, macOS launch, and screenshots.
-- Text chat transport now has explicit HTTP/auth/timeout/offline handling, SSE termination detection, send serialization, and retry deduplication.
+- Phase 1 stability gate is green in cumulative CI.
+- CI run `#180` (`35490108787`) passed all three jobs on commit `59e8db996c20d9b88fc601afb3652273f48a12cb`: backend tests, iOS build/simulator flows including real-contract screenshots, and macOS build/Swift tests/screenshots.
+- Text chat transport has explicit HTTP/auth/timeout/offline handling, SSE termination detection, send serialization, and retry deduplication.
 - Enrollment/session transport verifies HTTP response, rejects an empty token, and verifies Keychain persistence before considering enrollment successful.
 - Production launches no longer rely on synthetic provider data merely to appear healthy; demo data is gated behind explicit demo launch behavior.
-- Phase 2 agent activation audit is complete. The repository now distinguishes declared agents from explicitly verified executions and does not claim broad automatic activation.
+- Phase 2 agent activation audit is complete. The repository distinguishes declared agents from explicitly verified executions and does not claim broad automatic activation.
 - Phase 3 meeting foundation contains policy/state/interfaces only. It does not implement microphone recording, stealth capture, or a platform bypass.
+- Shared meeting lifecycle policy prevents a future meeting session from jumping directly from idle/authorization-wait into active, and maps incomplete live-capture authorization to `awaitingAuthorization` rather than pretending the session is ready.
 
 ## Build/version metadata
 
@@ -33,7 +35,7 @@ Do **not** change `CURRENT_PROJECT_VERSION` to 5 until the final release candida
 2. Final head: iOS build PASS.
 3. Final head: iPhone/iPad simulator and real-contract screenshot workflow PASS.
 4. Final head: macOS build PASS.
-5. Final head: Swift unit tests PASS, including meeting consent/authorization policy tests.
+5. Final head: Swift unit tests PASS, including meeting consent/authorization and lifecycle-policy tests.
 6. No production mock-provider regression.
 7. No unresolved auth/session/chat blocker.
 8. Physical-device smoke test for the release-critical iPhone flows.
@@ -63,7 +65,7 @@ The current specialist-agent execution boundary is request-level. Native Hermes 
 ## Release hygiene
 
 - Work remains isolated to `chatgpt-write-test`.
-- The remote comparison to `main` is ahead and not behind at the audit point; no merge was performed.
+- No merge to `main` was performed.
 - No TestFlight publication was performed.
 - No production secret was changed.
 - No WhatsApp/LinkedIn integration was added.
