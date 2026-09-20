@@ -30,3 +30,93 @@ enum DeepLinkTarget: Equatable {
         }
     }
 }
+
+// MARK: - Mac Operator foundation
+
+/// Foundation-only authorization seam for future macOS local actions.
+/// This file deliberately performs no Process/AppleScript/Accessibility execution.
+/// Platform adapters must first pass this policy and then use an explicitly configured executor.
+enum MacOperatorAction: String, Equatable, Hashable {
+    /// Read metadata only for a file/folder explicitly selected by the user.
+    case inspectSelectedItemMetadata
+    /// Reveal a user-selected item in Finder. Visible local side effect.
+    case revealSelectedItemInFinder
+    /// Future Accessibility-framework interaction. Never executed by this foundation.
+    case accessibilityInteraction
+    /// Future Apple Events automation. Never executed by this foundation.
+    case appleEventAutomation
+
+    var requiredPermission: MacOperatorPermission {
+        switch self {
+        case .inspectSelectedItemMetadata, .revealSelectedItemInFinder:
+            return .userSelectedFiles
+        case .accessibilityInteraction:
+            return .accessibility
+        case .appleEventAutomation:
+            return .automation
+        }
+    }
+
+    var requiresOwnerApproval: Bool {
+        switch self {
+        case .inspectSelectedItemMetadata:
+            return false
+        case .revealSelectedItemInFinder, .accessibilityInteraction, .appleEventAutomation:
+            return true
+        }
+    }
+}
+
+enum MacOperatorPermission: String, Equatable, Hashable {
+    case userSelectedFiles
+    case accessibility
+    case automation
+}
+
+struct MacOperatorRequest: Equatable {
+    let action: MacOperatorAction
+    let target: String
+}
+
+enum MacOperatorAuthorizationDecision: Equatable {
+    case allowed
+    case permissionRequired(MacOperatorPermission)
+    case ownerApprovalRequired
+}
+
+/// Fail-closed gate. Permission is checked before owner approval so the UI can request
+/// the official macOS permission first; approval alone can never bypass OS permission.
+struct MacOperatorAuthorizationPolicy {
+    func evaluate(
+        _ request: MacOperatorRequest,
+        grantedPermissions: Set<MacOperatorPermission>,
+        ownerApproved: Bool
+    ) -> MacOperatorAuthorizationDecision {
+        let permission = request.action.requiredPermission
+        guard grantedPermissions.contains(permission) else {
+            return .permissionRequired(permission)
+        }
+        guard !request.action.requiresOwnerApproval || ownerApproved else {
+            return .ownerApprovalRequired
+        }
+        return .allowed
+    }
+}
+
+enum MacOperatorExecutionResult: Equatable {
+    case completed
+    case blocked(String)
+}
+
+/// Safe execution seam for a future macOS adapter. There is intentionally no concrete
+/// privileged executor here; production remains blocked until an authorized adapter is wired.
+protocol MacOperatorExecuting {
+    func execute(_ request: MacOperatorRequest) async -> MacOperatorExecutionResult
+}
+
+/// Production-safe default: having a request and passing policy is not enough to control the Mac.
+struct DisabledMacOperatorExecutor: MacOperatorExecuting {
+    func execute(_ request: MacOperatorRequest) async -> MacOperatorExecutionResult {
+        .blocked("mac_operator_executor_not_configured")
+    }
+}
