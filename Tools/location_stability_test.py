@@ -1,4 +1,4 @@
-"""Location stability (iOS source-level) — Core Location + real city + navigation dir_action."""
+"""Location stability (iOS source-level) — Core Location + real city + structured navigation handoff."""
 import os
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'JARVIS')
 PASS = FAIL = 0
@@ -23,7 +23,14 @@ check("LocationManager exposes unavailable state", 'الموقع غير متاح
 check("LocationManager handles denied/restricted", '.denied' in lm and '.restricted' in lm)
 check("LocationManager has timeout", 'timeout' in lm.lower())
 check("Info.plist NSLocationWhenInUseUsageDescription", 'NSLocationWhenInUseUsageDescription' in plist)
-check("JarvisMapsIntent dir_action=navigate", 'dir_action=navigate' in mi)
+check(
+    "JarvisMapsIntent structured dir_action=navigate",
+    'URLComponents' in mi
+    and 'URLQueryItem' in mi
+    and 'name: "dir_action"' in mi
+    and 'value: "navigate"' in mi,
+)
+check("JarvisMapsIntent leaves location ownership to Maps", 'CLLocationManager' not in mi)
 
 print(f"\n== RESULT: {PASS} PASS / {FAIL} FAIL ==")
 import sys
