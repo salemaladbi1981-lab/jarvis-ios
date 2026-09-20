@@ -52,7 +52,11 @@ struct HomeEntryView: View {
 
                     // نقطة دخول واضحة لبدء محادثة جديدة
                     Button {
-                        Task { await vm.newConversation() }
+                        Task {
+                            if let c = await vm.newConversation() {
+                                newConv = ConvID(id: c.id)
+                            }
+                        }
                     } label: {
                         HStack(spacing: 10) {
                             Image(systemName: "plus.bubble.fill")
