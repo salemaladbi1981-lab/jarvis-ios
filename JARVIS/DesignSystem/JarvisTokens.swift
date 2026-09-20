@@ -1,5 +1,5 @@
-//  JarvisTokens.swift — GENERATED from SharedSpecs/DESIGN-TOKENS.json
-//  Do not edit by hand. Regenerate with Tools/token_pipeline.py
+//  JarvisTokens.swift — GENERATED from JARVIS/Resources/DESIGN-TOKENS.json
+//  Do not edit by hand. Keep generated tokens aligned with the source spec.
 //
 import SwiftUI
 
@@ -26,12 +26,18 @@ public enum JarvisColor {
     static let bg_1 = Color(hex: "#08101A")
     static let surface = Color(hex: "#08101A")
     static let card = Color(red: 0.0314, green: 0.0549, blue: 0.0941).opacity(0.45)
-    static let border = Color(red: 0.5882, green: 0.7843, blue: 1.0000).opacity(0.16)
-    static let primary_blue = Color(hex: "#8EC5FF")
-    static let highlight_blue = Color(hex: "#B8DFFF")
+    static let border = Color(red: 0.8471, green: 0.7059, blue: 0.3608).opacity(0.18)
+
+    // Gold cinematic palette. The legacy blue names intentionally remain as aliases
+    // during migration so production flows can change visually without risky rewiring.
+    static let primary_gold = Color(hex: "#D8B45C")
+    static let highlight_gold = Color(hex: "#F1D48A")
+    static let primary_blue = primary_gold
+    static let highlight_blue = highlight_gold
+
     static let text_primary = Color(hex: "#F5F8FF")
     static let text_secondary = Color(red: 0.9608, green: 0.9725, blue: 1.0000).opacity(0.72)
-    static let text_muted = Color(red: 0.7059, green: 0.8039, blue: 0.9216).opacity(0.58)
+    static let text_muted = Color(red: 0.7765, green: 0.7608, blue: 0.7137).opacity(0.62)
     static let success = Color(hex: "#63D9A0")
     static let warning_demo = Color(hex: "#F0B25F")
     static let danger = Color(hex: "#FF6B6B")
@@ -52,7 +58,7 @@ public enum JarvisTypeScale {
 
 public enum JarvisGlass {
     static let panelFillOpacity: Double = 0.45
-    static let panelBorderOpacity: Double = 0.16
+    static let panelBorderOpacity: Double = 0.18
     static let backdropBlur: CGFloat = 16
 }
 
@@ -75,37 +81,37 @@ public enum JarvisSpacing {
 }
 
 public enum JarvisGlow {
-    static let primaryColor = Color(hex: "#8EC5FF")
+    static let primaryColor = Color(hex: "#D8B45C")
     static let primaryOpacity: Double = 0.28
     static let primaryBlurRadius: Int = 18
     static let primarySpread: Int = 0
     static let primaryLayers: Int = 1
-    static let activeIconColor = Color(hex: "#8EC5FF")
+    static let activeIconColor = Color(hex: "#D8B45C")
     static let activeIconOpacity: Double = 0.35
     static let activeIconBlurRadius: Int = 10
     static let activeIconSpread: Int = 0
     static let activeIconLayers: Int = 1
-    static let coreColor = Color(hex: "#8EC5FF")
+    static let coreColor = Color(hex: "#D8B45C")
     static let coreOpacity: Double = 0.42
     static let coreBlurRadius: Int = 28
     static let coreSpread: Int = 6
     static let coreLayers: Int = 3
     static let agentActiveChipFill = Color(red: 0.0314, green: 0.0549, blue: 0.0941).opacity(0.82)
-    static let agentActiveChipBorder = Color(hex: "#8EC5FF")
-    static let agentActiveNodeColor = Color(hex: "#B8DFFF")
+    static let agentActiveChipBorder = Color(hex: "#D8B45C")
+    static let agentActiveNodeColor = Color(hex: "#F1D48A")
     static let agentActiveNodeOpacity: CGFloat = 1.0
     static let agentActiveGlowBlur: Int = 14
     static let agentActiveScale: Double = 1.04
     static let agentActiveRadialConnectionOpacity: Double = 0.28
     static let agentInactiveChipFill = Color(red: 0.0314, green: 0.0549, blue: 0.0941).opacity(0.45)
-    static let agentInactiveChipBorder = Color(red: 0.5882, green: 0.7843, blue: 1.0000).opacity(0.16)
-    static let agentInactiveNodeColor = Color(red: 0.5882, green: 0.8235, blue: 1.0000).opacity(0.5)
+    static let agentInactiveChipBorder = Color(red: 0.8471, green: 0.7059, blue: 0.3608).opacity(0.18)
+    static let agentInactiveNodeColor = Color(red: 0.8471, green: 0.7686, blue: 0.5804).opacity(0.5)
     static let agentInactiveNodeOpacity: Double = 0.5
     static let agentInactiveGlowBlur: Int = 0
     static let agentInactiveScale: CGFloat = 1.0
     static let agentInactiveRadialConnectionOpacity: CGFloat = 0.0
     static let cardsDefaultShadowOpacity: CGFloat = 0.0
-    static let cardsDefaultBorderOpacity: Double = 0.16
+    static let cardsDefaultBorderOpacity: Double = 0.18
     static let cardsDefaultSurfaceOpacity: Double = 0.45
 }
 
@@ -115,8 +121,8 @@ public enum JarvisIcon {
     static let sm: CGFloat = 18
     static let md: CGFloat = 22
     static let lg: CGFloat = 28
-    static let activeColor = Color(red: 0.7216, green: 0.8745, blue: 1.0000).opacity(0.95)
-    static let inactiveColor = Color(red: 0.7059, green: 0.8039, blue: 0.9216).opacity(0.58)
+    static let activeColor = Color(red: 0.9451, green: 0.8314, blue: 0.5412).opacity(0.95)
+    static let inactiveColor = Color(red: 0.7765, green: 0.7608, blue: 0.7137).opacity(0.62)
 }
 
 public enum JarvisMotion {
@@ -141,7 +147,7 @@ public enum JarvisStateKey {
 
 public enum JarvisStateBehavior {
     static let خامل = "low core motion, low waveform, soft glow"
-    static let استماع = "waveform reacts to input, stronger blue pulse"
+    static let استماع = "waveform reacts to input, stronger gold pulse"
     static let تفكير = "orbital motion increases, waveform reduces"
     static let يتكلم = "waveform follows speech, core pulse tracks energy"
     static let تنفيذ = "active target card/agent indicates execution"
