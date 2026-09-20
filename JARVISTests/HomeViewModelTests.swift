@@ -222,4 +222,82 @@ final class HomeViewModelTests: XCTestCase {
         }
         XCTAssertEqual(coordinator.descriptor.state, .idle)
     }
+
+    func testMeetingCoordinatorStopsActiveLiveSessionWhenConsentIsRevoked() throws {
+        var coordinator = MeetingSessionCoordinator(
+            descriptor: MeetingSessionDescriptor(
+                title: "Live review",
+                inputMode: .authorizedLiveCapture
+            )
+        )
+        _ = try coordinator.prepare(ownerAuthorized: true, participantConsentConfirmed: true)
+        try coordinator.activate(ownerAuthorized: true, participantConsentConfirmed: true)
+        XCTAssertEqual(coordinator.descriptor.state, .active)
+
+        let decision = try coordinator.reconcileAuthorization(
+            ownerAuthorized: true,
+            participantConsentConfirmed: false
+        )
+
+        XCTAssertFalse(decision.allowed)
+        XCTAssertEqual(decision.blockReason, .participantConsentRequired)
+        XCTAssertEqual(coordinator.descriptor.state, .stopped)
+    }
+
+    func testMeetingCoordinatorDowngradesReadyLiveSessionWhenOwnerAuthorizationIsRevoked() throws {
+        var coordinator = MeetingSessionCoordinator(
+            descriptor: MeetingSessionDescriptor(
+                title: "Ready review",
+                inputMode: .authorizedLiveCapture
+            )
+        )
+        _ = try coordinator.prepare(ownerAuthorized: true, participantConsentConfirmed: true)
+        XCTAssertEqual(coordinator.descriptor.state, .ready)
+
+        let decision = try coordinator.reconcileAuthorization(
+            ownerAuthorized: false,
+            participantConsentConfirmed: true
+        )
+
+        XCTAssertFalse(decision.allowed)
+        XCTAssertEqual(decision.blockReason, .ownerAuthorizationRequired)
+        XCTAssertEqual(coordinator.descriptor.state, .awaitingAuthorization)
+    }
+
+    func testMeetingCoordinatorRestoresWaitingLiveSessionToReadyWhenConsentReturns() throws {
+        var coordinator = MeetingSessionCoordinator(
+            descriptor: MeetingSessionDescriptor(
+                title: "Waiting review",
+                inputMode: .authorizedLiveCapture
+            )
+        )
+        _ = try coordinator.prepare(ownerAuthorized: true, participantConsentConfirmed: false)
+        XCTAssertEqual(coordinator.descriptor.state, .awaitingAuthorization)
+
+        let decision = try coordinator.reconcileAuthorization(
+            ownerAuthorized: true,
+            participantConsentConfirmed: true
+        )
+
+        XCTAssertTrue(decision.allowed)
+        XCTAssertEqual(coordinator.descriptor.state, .ready)
+    }
+
+    func testMeetingCoordinatorLeavesNonCaptureSessionStateUntouchedDuringAuthorizationReconcile() throws {
+        var coordinator = MeetingSessionCoordinator(
+            descriptor: MeetingSessionDescriptor(
+                title: "Imported notes",
+                inputMode: .importedTranscript,
+                state: .ready
+            )
+        )
+
+        let decision = try coordinator.reconcileAuthorization(
+            ownerAuthorized: false,
+            participantConsentConfirmed: false
+        )
+
+        XCTAssertTrue(decision.allowed)
+        XCTAssertEqual(coordinator.descriptor.state, .ready)
+    }
 }

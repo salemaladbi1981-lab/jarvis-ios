@@ -237,6 +237,43 @@ public struct MeetingSessionCoordinator {
         try transition(to: .active)
     }
 
+    /// يعيد تقييم موافقات الالتقاط الحي أثناء عمر الجلسة، وليس فقط عند التفعيل.
+    /// إذا سُحبت الموافقة من جلسة live نشطة، يتم إيقافها فورًا إلى stopped.
+    /// وإذا كانت ready قبل البدء، تعود إلى awaitingAuthorization حتى تُستعاد الموافقات.
+    /// هذا لا يطلب صلاحيات ولا يبدأ/يوقف مسجلًا فعليًا؛ هو قيد حالة مشترك للمستهلكين.
+    @discardableResult
+    public mutating func reconcileAuthorization(
+        ownerAuthorized: Bool,
+        participantConsentConfirmed: Bool
+    ) throws -> MeetingCaptureDecision {
+        let decision = MeetingCapturePolicy.evaluate(
+            inputMode: descriptor.inputMode,
+            ownerAuthorized: ownerAuthorized,
+            participantConsentConfirmed: participantConsentConfirmed
+        )
+
+        guard descriptor.inputMode == .authorizedLiveCapture else {
+            return decision
+        }
+
+        if decision.allowed {
+            if descriptor.state == .awaitingAuthorization {
+                try transition(to: .ready)
+            }
+            return decision
+        }
+
+        switch descriptor.state {
+        case .active:
+            try transition(to: .stopped)
+        case .ready:
+            try transition(to: .awaitingAuthorization)
+        case .idle, .awaitingAuthorization, .stopped, .failed:
+            break
+        }
+        return decision
+    }
+
     public mutating func stop() throws {
         try transition(to: .stopped)
     }
