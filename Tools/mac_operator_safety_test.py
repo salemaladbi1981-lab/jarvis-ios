@@ -50,6 +50,21 @@ check(
 )
 
 check(
+    "approval-required execution is actor-serialized and one-shot",
+    "actor MacOperatorExecutionGate" in SOURCE
+    and "consumedApprovalIDs: Set<UUID>" in SOURCE
+    and "guard !consumedApprovalIDs.contains(ownerApproval.id)" in SOURCE
+    and "consumedApprovalIDs.insert(ownerApproval.id)" in SOURCE,
+)
+
+check(
+    "executor seam requires an authorization token rather than a raw request",
+    "struct MacOperatorExecutionAuthorization" in SOURCE
+    and "fileprivate init(request: MacOperatorRequest, approvalGrantID: UUID?)" in SOURCE
+    and "func execute(_ authorization: MacOperatorExecutionAuthorization)" in SOURCE,
+)
+
+check(
     "default executor is fail-closed",
     "struct DisabledMacOperatorExecutor" in SOURCE
     and '.blocked("mac_operator_executor_not_configured")' in SOURCE,

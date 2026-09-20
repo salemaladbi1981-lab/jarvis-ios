@@ -78,12 +78,20 @@ struct MacOperatorRequest: Equatable {
     let target: String
 }
 
-/// Owner approval is bound to the exact action + target and expires quickly.
-/// This prevents a confirmation for one Finder/app target from being reused for
-/// a different local action. It is policy state only; no platform capability is granted here.
+/// Owner approval is bound to the exact action + target, uniquely identified, and expires quickly.
+/// This prevents a confirmation for one Finder/app target from being reused for a different local
+/// action. The unique id also lets the execution gate reject replay of the same approval.
+/// This is policy state only; no platform capability is granted here.
 struct MacOperatorApprovalGrant: Equatable {
+    let id: UUID
     let request: MacOperatorRequest
     let expiresAt: Date
+
+    init(id: UUID = UUID(), request: MacOperatorRequest, expiresAt: Date) {
+        self.id = id
+        self.request = request
+        self.expiresAt = expiresAt
+    }
 
     func authorizes(_ request: MacOperatorRequest, now: Date) -> Bool {
         self.request == request && now < expiresAt
@@ -120,20 +128,82 @@ struct MacOperatorAuthorizationPolicy {
     }
 }
 
+/// Opaque authorization passed to an executor only after policy evaluation succeeds.
+/// The initializer is file-private so production code cannot manufacture an execution token
+/// without going through MacOperatorExecutionGate.
+struct MacOperatorExecutionAuthorization: Equatable {
+    let request: MacOperatorRequest
+    let approvalGrantID: UUID?
+
+    fileprivate init(request: MacOperatorRequest, approvalGrantID: UUID?) {
+        self.request = request
+        self.approvalGrantID = approvalGrantID
+    }
+}
+
+enum MacOperatorExecutionGateResult: Equatable {
+    case authorized(MacOperatorExecutionAuthorization)
+    case blocked(MacOperatorAuthorizationDecision)
+}
+
+/// Actor-backed execution gate. Approval-required actions consume their exact approval once.
+/// Serialization prevents two concurrent execution attempts from replaying the same grant.
+/// Read-only actions that require no owner approval remain reusable after their OS permission passes.
+actor MacOperatorExecutionGate {
+    private let policy = MacOperatorAuthorizationPolicy()
+    private var consumedApprovalIDs: Set<UUID> = []
+
+    func authorize(
+        _ request: MacOperatorRequest,
+        grantedPermissions: Set<MacOperatorPermission>,
+        ownerApproval: MacOperatorApprovalGrant?,
+        now: Date = Date()
+    ) -> MacOperatorExecutionGateResult {
+        let decision = policy.evaluate(
+            request,
+            grantedPermissions: grantedPermissions,
+            ownerApproval: ownerApproval,
+            now: now
+        )
+        guard decision == .allowed else {
+            return .blocked(decision)
+        }
+
+        guard request.action.requiresOwnerApproval else {
+            return .authorized(
+                MacOperatorExecutionAuthorization(request: request, approvalGrantID: nil)
+            )
+        }
+
+        guard let ownerApproval else {
+            return .blocked(.ownerApprovalRequired)
+        }
+        guard !consumedApprovalIDs.contains(ownerApproval.id) else {
+            return .blocked(.ownerApprovalRequired)
+        }
+
+        consumedApprovalIDs.insert(ownerApproval.id)
+        return .authorized(
+            MacOperatorExecutionAuthorization(request: request, approvalGrantID: ownerApproval.id)
+        )
+    }
+}
+
 enum MacOperatorExecutionResult: Equatable {
     case completed
     case blocked(String)
 }
 
-/// Safe execution seam for a future macOS adapter. There is intentionally no concrete
-/// privileged executor here; production remains blocked until an authorized adapter is wired.
+/// Safe execution seam for a future macOS adapter. Executors receive an authorization token,
+/// not a raw request. There is intentionally no concrete privileged executor here; production
+/// remains blocked until an authorized platform adapter is wired and reviewed.
 protocol MacOperatorExecuting {
-    func execute(_ request: MacOperatorRequest) async -> MacOperatorExecutionResult
+    func execute(_ authorization: MacOperatorExecutionAuthorization) async -> MacOperatorExecutionResult
 }
 
-/// Production-safe default: having a request and passing policy is not enough to control the Mac.
+/// Production-safe default: authorization still does not grant any concrete Mac control.
 struct DisabledMacOperatorExecutor: MacOperatorExecuting {
-    func execute(_ request: MacOperatorRequest) async -> MacOperatorExecutionResult {
+    func execute(_ authorization: MacOperatorExecutionAuthorization) async -> MacOperatorExecutionResult {
         .blocked("mac_operator_executor_not_configured")
     }
 }

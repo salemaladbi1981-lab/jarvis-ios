@@ -175,11 +175,93 @@ final class DeepLinkRoutingTests: XCTestCase {
         )
     }
 
-    func testMacOperatorDefaultExecutorIsFailClosed() async {
+    func testMacOperatorExecutionGateConsumesApprovalExactlyOnce() async {
+        let gate = MacOperatorExecutionGate()
+        let request = MacOperatorRequest(action: .revealSelectedItemInFinder, target: "/selected/item")
+        let approval = grant(for: request)
+
+        let first = await gate.authorize(
+            request,
+            grantedPermissions: [.userSelectedFiles],
+            ownerApproval: approval,
+            now: now
+        )
+        guard case .authorized(let authorization) = first else {
+            return XCTFail("expected first authorization to succeed")
+        }
+        XCTAssertEqual(authorization.request, request)
+        XCTAssertEqual(authorization.approvalGrantID, approval.id)
+
+        let replay = await gate.authorize(
+            request,
+            grantedPermissions: [.userSelectedFiles],
+            ownerApproval: approval,
+            now: now
+        )
+        XCTAssertEqual(replay, .blocked(.ownerApprovalRequired))
+    }
+
+    func testMacOperatorExecutionGateRejectsConcurrentApprovalReplay() async {
+        let gate = MacOperatorExecutionGate()
+        let request = MacOperatorRequest(action: .appleEventAutomation, target: "com.apple.Finder")
+        let approval = grant(for: request)
+
+        async let first = gate.authorize(
+            request,
+            grantedPermissions: [.automation],
+            ownerApproval: approval,
+            now: now
+        )
+        async let second = gate.authorize(
+            request,
+            grantedPermissions: [.automation],
+            ownerApproval: approval,
+            now: now
+        )
+        let results = await [first, second]
+
+        XCTAssertEqual(results.filter {
+            if case .authorized = $0 { return true }
+            return false
+        }.count, 1)
+        XCTAssertEqual(results.filter { $0 == .blocked(.ownerApprovalRequired) }.count, 1)
+    }
+
+    func testMacOperatorReadOnlyAuthorizationRemainsReusableAfterPermissionPasses() async {
+        let gate = MacOperatorExecutionGate()
+        let request = MacOperatorRequest(action: .inspectSelectedItemMetadata, target: "/selected/item")
+
+        for _ in 0..<2 {
+            let result = await gate.authorize(
+                request,
+                grantedPermissions: [.userSelectedFiles],
+                ownerApproval: nil,
+                now: now
+            )
+            guard case .authorized(let authorization) = result else {
+                return XCTFail("expected read-only authorization to succeed")
+            }
+            XCTAssertEqual(authorization.request, request)
+            XCTAssertNil(authorization.approvalGrantID)
+        }
+    }
+
+    func testMacOperatorDefaultExecutorIsFailClosedAfterAuthorization() async {
+        let gate = MacOperatorExecutionGate()
         let executor = DisabledMacOperatorExecutor()
         let request = MacOperatorRequest(action: .revealSelectedItemInFinder, target: "/selected/item")
-        let result = await executor.execute(request)
+        let approval = grant(for: request)
+        let gated = await gate.authorize(
+            request,
+            grantedPermissions: [.userSelectedFiles],
+            ownerApproval: approval,
+            now: now
+        )
 
+        guard case .authorized(let authorization) = gated else {
+            return XCTFail("expected authorization token")
+        }
+        let result = await executor.execute(authorization)
         XCTAssertEqual(result, .blocked("mac_operator_executor_not_configured"))
     }
 }
