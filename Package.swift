@@ -13,6 +13,8 @@ let package = Package(
                           "DeliveriesView.swift", "DetailViews.swift", "DocumentScanner.swift", "HomeEntryView.swift",
                           "InboxView.swift", "TasksView.swift", "WorkspaceComposerView.swift"],
                 sources: ["JarvisAPI.swift", "WorkspaceModels.swift", "ChatViewModel.swift"]),
-        .testTarget(name: "JarvisTransportTests", dependencies: ["JarvisTransport"], path: "Tests/Transport")
+        .target(name: "JarvisProviders", path: "JARVIS", exclude: ["Agents", "App", "Assets", "Assets.xcassets", "Auth", "Camera", "Cards", "Core", "DesignSystem", "Diagnostics", "Home", "Info.plist", "Integrations", "Memory", "Notifications", "Providers", "Resources", "Upload", "Voice", "Workspace", "iPad", "macOS", "Mocks/MockData.swift"],
+                sources: ["Mocks/MockProviders.swift", "State/JarvisState.swift"]),
+        .testTarget(name: "JarvisTransportTests", dependencies: ["JarvisTransport", "JarvisProviders"], path: "Tests/Transport")
     ]
 )

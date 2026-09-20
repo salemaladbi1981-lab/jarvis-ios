@@ -16,12 +16,16 @@ struct CalendarToolResult: Equatable {
 struct CalendarTools {
     var provider: AppleEventKitProvider
     var mockProvider: MockEventKitProvider
-    var useMock: Bool
+    private let useMock: Bool
 
     init(useMock: Bool = false) {
         self.provider = AppleEventKitProvider()
         self.mockProvider = MockEventKitProvider()
+        #if DEBUG
         self.useMock = useMock
+        #else
+        self.useMock = false
+        #endif
     }
 
     func today() async -> CalendarToolResult {

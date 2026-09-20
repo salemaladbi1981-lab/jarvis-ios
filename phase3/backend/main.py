@@ -122,10 +122,10 @@ def auth_enroll_code(user_id: str = Depends(get_user_id)):
     code = auth.create_enrollment_code()
     return {"enrollment_code": code, "expires_in": 600}
 
-# --- demo safe tools (read-only) ---
-def read_temperature(params): return {"reading": "22°", "unit": "celsius"}
-def read_light_state(params): return {"device": params.get("device", "all"), "level": "35%"}
-def get_today_events(params): return {"events": [{"time": "09:00", "title": "موعد"}]}
+# Device tools stay unavailable until a real provider is connected.
+def read_temperature(params): return {"ok": False, "error": "not_connected"}
+def read_light_state(params): return {"ok": False, "error": "not_connected"}
+def get_today_events(params): return {"ok": False, "error": "device_calendar_required"}
 
 gateway.register(Tool("read-temperature", "read-temperature", ["core_home"], "read room temperature",
                       {"type": "object", "properties": {}}, {"type": "object"}, "low", "none"), read_temperature)

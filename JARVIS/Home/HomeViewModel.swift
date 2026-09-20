@@ -37,7 +37,6 @@ final class HomeViewModel: ObservableObject {
     private let smartHome: SmartHomeProvider
     private let security: SecurityProvider
     private let media: MediaProvider
-    private let voice: VoiceProvider
     private var approval: ApprovalPolicyEvaluator?
     private(set) var registry: AgentRegistry?
     private let calendarTools = CalendarTools(useMock: false)
@@ -62,15 +61,13 @@ final class HomeViewModel: ObservableObject {
     }
 
     init(
-        smartHome: SmartHomeProvider = MockSmartHomeProvider(),
-        security: SecurityProvider = MockSecurityProvider(),
-        media: MediaProvider = MockMediaProvider(),
-        voice: VoiceProvider = MockVoiceProvider()
+        smartHome: SmartHomeProvider = UnavailableSmartHomeProvider(),
+        security: SecurityProvider = UnavailableSecurityProvider(),
+        media: MediaProvider = UnavailableMediaProvider()
     ) {
         self.smartHome = smartHome
         self.security = security
         self.media = media
-        self.voice = voice
         bindVoice()
     }
 
@@ -197,6 +194,7 @@ final class HomeViewModel: ObservableObject {
     /// Read launch arguments for deterministic screenshots:
     ///   -group core|system|content, -state idle|listening|...|approval
     private func applyLaunchArguments() {
+        #if DEBUG
         let args = ProcessInfo.processInfo.arguments
         if let gi = args.firstIndex(of: "-group"), gi + 1 < args.count {
             activeGroup = args[gi + 1]
@@ -225,6 +223,7 @@ final class HomeViewModel: ObservableObject {
             default: break
             }
         }
+            #endif
     }
 
 
@@ -503,7 +502,8 @@ final class HomeViewModel: ObservableObject {
     // MARK: Status
     var statusText: String {
         switch state {
-        case .idle, .listening: return "أنا أستمع إليك…"
+        case .idle: return "جاهز عندما تحتاجني"
+        case .listening: return "أنا أستمع إليك…"
         case .thinking:  return "أفكّر…"
         case .speaking:  return "جارفس يتحدّث"
         case .executing: return "جارٍ التنفيذ…"
@@ -514,17 +514,10 @@ final class HomeViewModel: ObservableObject {
 
     // MARK: Approval flow (registry-driven)
     func requestAction(agentID: String, action: String) {
-        guard let approval else {
-            state = .approval   // fail-safe without registry
-            pendingApproval = action
-            return
-        }
-        if approval.requiresApproval(agentID: agentID, action: action) {
-            state = .approval
-            pendingApproval = displayName(action)
-        } else {
-            state = .executing   // safe action proceeds (mock)
-        }
+        // Registry policy is not proof that a device integration can execute.
+        pendingApproval = nil
+        state = .idle
+        calendarMessage = "هذه الخدمة غير متصلة. لا يمكن تنفيذ الإجراء حاليًا."
     }
 
     func approve() {

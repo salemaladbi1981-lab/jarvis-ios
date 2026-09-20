@@ -16,9 +16,9 @@ struct MacHomeView: View {
                 macSidebar
                 SmartHomeCard(devices: vm.homeDevices)
                     .onTapGesture { vm.requestAction(agentID: "core_home", action: "read-temperature") }
-                SecurityCard(status: vm.securityStatus ?? SecurityStatus(systemsNormal: true, doorsLocked: true, camerasActive: true))
+                SecurityCard(status: vm.securityStatus)
                     .onTapGesture { vm.requestAction(agentID: "core_home", action: "unlock-door") }
-                MediaCard(track: vm.mediaTrack ?? MediaTrack(title: "Blinding Lights", artist: "The Weeknd", current: "2:06", duration: "3:20"))
+                MediaCard(track: vm.mediaTrack)
                 Spacer()
             }
             .frame(width: 340)

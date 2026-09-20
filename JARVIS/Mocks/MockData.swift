@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 
 /// Concrete mock providers for P2.2 (demo only — all show «تجريبي»).
@@ -16,7 +17,7 @@ struct MockSmartHomeProvider: SmartHomeProvider {
 }
 
 struct MockSecurityProvider: SecurityProvider {
-    func status() async -> SecurityStatus {
+    func status() async -> SecurityStatus? {
         SecurityStatus(systemsNormal: true, doorsLocked: true, camerasActive: true)
     }
     func execute(action: String) async throws -> Bool { true }
@@ -42,7 +43,7 @@ struct MockTaskProvider: TaskProvider {
 }
 
 struct MockMediaProvider: MediaProvider {
-    func nowPlaying() async -> MediaTrack {
+    func nowPlaying() async -> MediaTrack? {
         MediaTrack(title: "Blinding Lights", artist: "The Weeknd", current: "2:06", duration: "3:20")
     }
     func send(command: String) async throws -> Bool { true }
@@ -59,3 +60,5 @@ final class MockVoiceProvider: VoiceProvider {
     func start() async throws { isListening = true }
     func stop() { isListening = false }
 }
+
+#endif
