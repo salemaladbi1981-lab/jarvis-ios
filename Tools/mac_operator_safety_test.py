@@ -50,6 +50,12 @@ check(
 )
 
 check(
+    "approval grant carries a unique replay identity",
+    "let id: UUID" in SOURCE
+    and "init(id: UUID = UUID(), request: MacOperatorRequest, expiresAt: Date)" in SOURCE,
+)
+
+check(
     "approval-required execution is actor-serialized and one-shot",
     "actor MacOperatorExecutionGate" in SOURCE
     and "consumedApprovalIDs: Set<UUID>" in SOURCE
