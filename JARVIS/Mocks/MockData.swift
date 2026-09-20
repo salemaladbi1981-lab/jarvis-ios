@@ -1,7 +1,50 @@
 import Foundation
 
-/// Concrete mock providers for P2.2 (demo only — all show «تجريبي»).
-/// Phase 3 replaces these with live implementations behind the same protocols.
+/// Concrete mock providers for screenshots/demo mode only.
+/// Production defaults use explicit unavailable providers so the UI never presents
+/// fabricated device/security/media state as real user data.
+
+enum ProviderUnavailableError: LocalizedError {
+    case notConnected(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .notConnected(let capability):
+            return "\(capability) غير متصل"
+        }
+    }
+}
+
+// MARK: - Production-safe unavailable providers
+
+struct UnavailableSmartHomeProvider: SmartHomeProvider {
+    func readDevices() async -> [SmartDevice] { [] }
+    func control(device: String, action: String) async throws -> Bool {
+        throw ProviderUnavailableError.notConnected("المنزل الذكي")
+    }
+}
+
+struct UnavailableSecurityProvider: SecurityProvider {
+    func status() async -> SecurityStatus {
+        // HomeViewModel intentionally does not expose this placeholder as live status.
+        SecurityStatus(systemsNormal: false, doorsLocked: false, camerasActive: false)
+    }
+    func execute(action: String) async throws -> Bool {
+        throw ProviderUnavailableError.notConnected("الأمان")
+    }
+}
+
+struct UnavailableMediaProvider: MediaProvider {
+    func nowPlaying() async -> MediaTrack {
+        // HomeViewModel intentionally does not expose this placeholder as live media.
+        MediaTrack(title: "", artist: "", current: "", duration: "")
+    }
+    func send(command: String) async throws -> Bool {
+        throw ProviderUnavailableError.notConnected("الوسائط")
+    }
+}
+
+// MARK: - Demo/screenshot providers
 
 struct MockSmartHomeProvider: SmartHomeProvider {
     func readDevices() async -> [SmartDevice] {
