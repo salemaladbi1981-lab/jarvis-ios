@@ -104,7 +104,11 @@ final class HomeViewModel: ObservableObject {
                     // سجّل أن رداً صوتياً بدأ — حتى لا نمسح الـ agent عند .connected دون رد سابق.
                     self.hasSpokenSinceConnect = true
                 case .disconnected:
+                    // Transport/session is gone: clear local voice state immediately so the next
+                    // mic tap performs a fresh connect instead of trying to stop a dead session.
+                    self.isVoiceActive = false
                     self.isListening = false
+                    self.voiceSession.stopListening()
                     // response.done / session ready → success + deactivate agents
                     self.orbit.items.forEach { self.orbit.deactivate($0.id) }
                     self.successPulse = true
