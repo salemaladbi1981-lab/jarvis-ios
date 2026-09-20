@@ -40,6 +40,10 @@ struct HomeEntryView: View {
                     JarvisHeroView(vm: voiceVM)
                     JarvisMicControl(vm: voiceVM)
 
+                    if let health = vm.projectHealth {
+                        projectHealthCard(health)
+                    }
+
                     // نتيجة أدوات التقويم/التذكيرات (تُعرض هنا بدل الرد الصوتي الثاني — دماغ واحد)
                     if let msg = voiceVM.calendarMessage {
                         Text(msg)
@@ -258,6 +262,74 @@ struct HomeEntryView: View {
         #endif
     }
 
+    private func projectHealthCard(_ health: ProjectHealth) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label("صحة جارفس", systemImage: "waveform.path.ecg")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(JarvisColor.text_primary)
+                Spacer()
+                Text("Phase \(health.phase ?? "—")")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(JarvisColor.highlight_blue)
+            }
+
+            HStack(spacing: 14) {
+                healthMetric(title: "المهام", value: "\(health.tasksActive ?? 0)")
+                healthMetric(title: "المعطلات", value: "\(health.blockers ?? 0)")
+                healthMetric(title: "موافقتك", value: "\(health.ownerActions ?? 0)")
+            }
+
+            Text("الحالي: \(health.currentMilestone ?? "غير محدد")")
+                .font(.system(size: 12))
+                .foregroundColor(JarvisColor.text_secondary)
+
+            Text("التالي: \(health.nextMilestone ?? "غير محدد")")
+                .font(.system(size: 12))
+                .foregroundColor(JarvisColor.text_muted)
+
+            HStack(spacing: 8) {
+                healthPill(health.ciDisplay)
+                healthPill(health.testsDisplay)
+            }
+
+            if health.killSwitch == true {
+                Label("Kill switch مفعّل", systemImage: "exclamationmark.octagon.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(JarvisColor.danger)
+            }
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(JarvisColor.bg_1.opacity(0.62))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(JarvisColor.highlight_blue.opacity(0.16), lineWidth: 1)
+        )
+    }
+
+    private func healthMetric(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(value)
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(JarvisColor.text_primary)
+            Text(title)
+                .font(.system(size: 11))
+                .foregroundColor(JarvisColor.text_muted)
+        }
+    }
+
+    private func healthPill(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 11, weight: .medium))
+            .foregroundColor(JarvisColor.text_secondary)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .background(Capsule().fill(JarvisColor.bg_0.opacity(0.55)))
+    }
+
     private func section(_ title: String, @ViewBuilder content: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
@@ -392,6 +464,7 @@ final class HomeEntryViewModel: ObservableObject {
     @Published var conversations: [Conversation] = []
     @Published var activeTasks: [JarvisTask] = []
     @Published var deliveries: [DeliveryItem] = []
+    @Published var projectHealth: ProjectHealth?
     @Published var newConversationId: String?
     @Published var newConversationError: String?
     private let api: JarvisAPI
@@ -401,13 +474,16 @@ final class HomeEntryViewModel: ObservableObject {
         async let convs: [Conversation] = api.getArray("conversations")
         async let tasks: [JarvisTask] = api.getArray("tasks")
         async let dels: [DeliveryItem] = api.getArray("deliveries")
+        async let health: ProjectHealth = api.getObject("project/health")
         do {
-            let (c, t, d) = try await (convs, tasks, dels)
+            let (c, t, d, h) = try await (convs, tasks, dels, health)
             conversations = c
             activeTasks = t.filter { ["QUEUED", "RUNNING"].contains(($0.jobState ?? $0.status ?? "").uppercased()) }
             deliveries = d
+            projectHealth = h
         } catch {
             conversations = []; activeTasks = []; deliveries = []
+            projectHealth = nil
         }
     }
 
