@@ -1,6 +1,6 @@
 """Project Health CI metadata handoff regression checks."""
 import importlib.util
-import os
+import json
 import sys
 import tempfile
 from pathlib import Path
@@ -8,6 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = ROOT / "Tools" / "project_health_ci_metadata.py"
 WORKFLOW = ROOT / ".github" / "workflows" / "ios-build.yml"
+PLAN = ROOT / "docs" / "PROJECT-HEALTH-PLAN.json"
 PASS = FAIL = 0
 
 
@@ -24,6 +25,7 @@ spec = importlib.util.spec_from_file_location("project_health_ci_metadata", SCRI
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 workflow = WORKFLOW.read_text(encoding="utf-8")
+plan = json.loads(PLAN.read_text(encoding="utf-8"))
 
 base = {
     "GITHUB_SHA": "abc123",
@@ -34,7 +36,7 @@ base = {
     "JARVIS_CURRENT_MILESTONE": "Project Health Monitor",
     "JARVIS_NEXT_MILESTONE": "Siri / App Intents foundation",
 }
-metadata = module.build_metadata(base)
+metadata = module.build_metadata(base, plan_path=PLAN)
 
 check("green CI is reported only from completed job results",
       metadata["build_sha"] == "abc123" and
@@ -42,48 +44,75 @@ check("green CI is reported only from completed job results",
       metadata["tests_status"] == "success" and
       metadata["jobs"] == {"backend_tests": "success", "ios": "success", "mac": "success"})
 
-check("planning metadata comes from repository/deployment inputs",
+check("repository variables remain authoritative for planning metadata",
       metadata["phase"] == "4" and
       metadata["current_milestone"] == "Project Health Monitor" and
       metadata["next_milestone"] == "Siri / App Intents foundation" and
       metadata["evidence"]["milestones"] == "github_repository_variables")
 
+fallback_env = {
+    "GITHUB_SHA": "abc123",
+    "JARVIS_BACKEND_TEST_RESULT": "success",
+    "JARVIS_IOS_RESULT": "success",
+    "JARVIS_MAC_RESULT": "success",
+}
+fallback_meta = module.build_metadata(fallback_env, plan_path=PLAN)
+check("reviewed version-controlled plan fills missing repository variables",
+      fallback_meta["phase"] == plan["phase"] and
+      fallback_meta["current_milestone"] == plan["current_milestone"] and
+      fallback_meta["next_milestone"] == plan["next_milestone"] and
+      fallback_meta["evidence"]["milestones"] == "version_controlled_plan")
+
+partial = dict(fallback_env)
+partial["JARVIS_CURRENT_MILESTONE"] = "Deployment-owned milestone"
+partial_meta = module.build_metadata(partial, plan_path=PLAN)
+check("explicit planning values override the plan without hiding mixed evidence",
+      partial_meta["current_milestone"] == "Deployment-owned milestone" and
+      partial_meta["phase"] == plan["phase"] and
+      partial_meta["next_milestone"] == plan["next_milestone"] and
+      partial_meta["evidence"]["milestones"] == "mixed")
+
 failed_ios = dict(base)
 failed_ios["JARVIS_IOS_RESULT"] = "failure"
-failed_meta = module.build_metadata(failed_ios)
+failed_meta = module.build_metadata(failed_ios, plan_path=PLAN)
 check("iOS failure makes CI red without falsely failing backend/mac tests",
       failed_meta["ci_status"] == "failure" and failed_meta["tests_status"] == "success")
 
 failed_tests = dict(base)
 failed_tests["JARVIS_BACKEND_TEST_RESULT"] = "failure"
-failed_test_meta = module.build_metadata(failed_tests)
+failed_test_meta = module.build_metadata(failed_tests, plan_path=PLAN)
 check("backend test failure makes tests and CI fail",
       failed_test_meta["tests_status"] == "failure" and failed_test_meta["ci_status"] == "failure")
 
-missing = {
-    "JARVIS_BACKEND_TEST_RESULT": "success",
-    "JARVIS_IOS_RESULT": "success",
-    "JARVIS_MAC_RESULT": "success",
-}
-missing_meta = module.build_metadata(missing)
-check("missing SHA and milestone evidence fails closed",
-      missing_meta["build_sha"] == "" and
+with tempfile.TemporaryDirectory() as temp_dir:
+    missing_plan = Path(temp_dir) / "missing-plan.json"
+    missing_meta = module.build_metadata(fallback_env, plan_path=missing_plan)
+    malformed_plan = Path(temp_dir) / "malformed-plan.json"
+    malformed_plan.write_text("{not-json", encoding="utf-8")
+    malformed_meta = module.build_metadata(fallback_env, plan_path=malformed_plan)
+
+check("missing or malformed plan fails closed to unknown planning metadata",
       missing_meta["phase"] == "unknown" and
       missing_meta["current_milestone"] == "unknown" and
       missing_meta["next_milestone"] == "unknown" and
-      missing_meta["evidence"]["build"] == "unknown" and
-      missing_meta["evidence"]["milestones"] == "unknown")
+      missing_meta["evidence"]["milestones"] == "unknown" and
+      malformed_meta["current_milestone"] == "unknown")
+
+check("checked-in plan matches approved priority order",
+      str(plan.get("current_milestone", "")).startswith("Project Health Monitor") and
+      str(plan.get("next_milestone", "")).startswith("Siri / App Intents") and
+      plan.get("source") == "user-approved priority order")
 
 with tempfile.TemporaryDirectory() as temp_dir:
     env_path = Path(temp_dir) / "project-health.env"
-    module._write_env(env_path, metadata)
+    module._write_env(env_path, fallback_meta)
     env_text = env_path.read_text(encoding="utf-8")
-check("env handoff matches keys consumed by project health endpoint",
+check("env handoff carries real plan labels consumed by project health endpoint",
       "JARVIS_BUILD_SHA=abc123" in env_text and
       "JARVIS_CI_STATUS=success" in env_text and
       "JARVIS_TESTS_STATUS=success" in env_text and
-      "JARVIS_CURRENT_MILESTONE=Project Health Monitor" in env_text and
-      "JARVIS_NEXT_MILESTONE=Siri / App Intents foundation" in env_text)
+      f"JARVIS_CURRENT_MILESTONE={plan['current_milestone']}" in env_text and
+      f"JARVIS_NEXT_MILESTONE={plan['next_milestone']}" in env_text)
 
 check("workflow emits metadata only after all verification jobs settle",
       "project-health-metadata:" in workflow and
@@ -91,7 +120,7 @@ check("workflow emits metadata only after all verification jobs settle",
       "if: ${{ always() }}" in workflow and
       "python3 Tools/project_health_ci_metadata.py" in workflow)
 
-check("workflow sources milestone labels from non-secret repository variables",
+check("workflow still permits repository-variable overrides",
       "vars.JARVIS_CURRENT_PHASE" in workflow and
       "vars.JARVIS_CURRENT_MILESTONE" in workflow and
       "vars.JARVIS_NEXT_MILESTONE" in workflow)
