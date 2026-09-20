@@ -189,10 +189,12 @@ async def openai_realtime_proxy(client_ws, session_config: dict, trusted_identit
                     name = d.get("name", "")
                     try:
                         args = json.loads(d.get("arguments", "{}"))
+                        if not isinstance(args, dict):
+                            args = {}
                     except Exception:
                         args = {}
                     _trace("tool", f"call {name} (call_id={call_id[:12]})")
-                    specialist = runtime.agent_for_tool(name)
+                    specialist = runtime.agent_for_tool(name, args)
                     if specialist != active_agent["id"]:
                         await client_ws.send_text(json.dumps(
                             runtime.event_payload("handoff", specialist, tool=name, from_agent=active_agent["id"]),
