@@ -57,6 +57,42 @@ final class DeepLinkRoutingTests: XCTestCase {
         MacOperatorApprovalGrant(request: request, expiresAt: now.addingTimeInterval(ttl))
     }
 
+    func testMacOperatorRejectsMalformedTargetBeforePermissionOrApproval() {
+        let policy = MacOperatorAuthorizationPolicy()
+        let malformedRequests = [
+            MacOperatorRequest(action: .inspectSelectedItemMetadata, target: "relative/item"),
+            MacOperatorRequest(action: .revealSelectedItemInFinder, target: "/selected/../different"),
+            MacOperatorRequest(action: .accessibilityInteraction, target: "frontmost-app\nother"),
+            MacOperatorRequest(action: .appleEventAutomation, target: "com.apple.Finder;rm -rf /"),
+            MacOperatorRequest(action: .appleEventAutomation, target: "com..apple.Finder")
+        ]
+
+        for request in malformedRequests {
+            XCTAssertEqual(
+                policy.evaluate(request, grantedPermissions: [], ownerApproval: grant(for: request), now: now),
+                .invalidTarget,
+                "malformed target should fail closed before permission/approval: \(request.target)"
+            )
+        }
+    }
+
+    func testMacOperatorWellFormedTargetsReachOfficialPermissionGate() {
+        let policy = MacOperatorAuthorizationPolicy()
+        let cases: [(MacOperatorRequest, MacOperatorPermission)] = [
+            (MacOperatorRequest(action: .inspectSelectedItemMetadata, target: "/Users/salem/Documents/item"), .userSelectedFiles),
+            (MacOperatorRequest(action: .accessibilityInteraction, target: "frontmost-app"), .accessibility),
+            (MacOperatorRequest(action: .accessibilityInteraction, target: "com.apple.finder"), .accessibility),
+            (MacOperatorRequest(action: .appleEventAutomation, target: "com.apple.Finder"), .automation)
+        ]
+
+        for (request, permission) in cases {
+            XCTAssertEqual(
+                policy.evaluate(request, grantedPermissions: [], ownerApproval: nil, now: now),
+                .permissionRequired(permission)
+            )
+        }
+    }
+
     func testMacOperatorReadOnlyMetadataRequiresUserSelectedFilePermission() {
         let policy = MacOperatorAuthorizationPolicy()
         let request = MacOperatorRequest(action: .inspectSelectedItemMetadata, target: "/selected/item")
@@ -145,8 +181,8 @@ final class DeepLinkRoutingTests: XCTestCase {
 
     func testMacOperatorApprovalIsBoundToExactAction() {
         let policy = MacOperatorAuthorizationPolicy()
-        let approved = MacOperatorRequest(action: .accessibilityInteraction, target: "frontmost-app")
-        let changedAction = MacOperatorRequest(action: .appleEventAutomation, target: "frontmost-app")
+        let approved = MacOperatorRequest(action: .accessibilityInteraction, target: "com.apple.Finder")
+        let changedAction = MacOperatorRequest(action: .appleEventAutomation, target: "com.apple.Finder")
 
         XCTAssertEqual(
             policy.evaluate(
