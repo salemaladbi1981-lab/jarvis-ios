@@ -48,4 +48,84 @@ final class DeepLinkRoutingTests: XCTestCase {
         let parsed = DeepLinkTarget.parse(URL(string: stored)!)
         XCTAssertEqual(parsed, .delivery("dlv-42"))
     }
+
+    // MARK: Mac Operator foundation
+
+    func testMacOperatorReadOnlyMetadataRequiresUserSelectedFilePermission() {
+        let policy = MacOperatorAuthorizationPolicy()
+        let request = MacOperatorRequest(action: .inspectSelectedItemMetadata, target: "/selected/item")
+
+        XCTAssertEqual(
+            policy.evaluate(request, grantedPermissions: [], ownerApproved: false),
+            .permissionRequired(.userSelectedFiles)
+        )
+        XCTAssertEqual(
+            policy.evaluate(request, grantedPermissions: [.userSelectedFiles], ownerApproved: false),
+            .allowed
+        )
+    }
+
+    func testMacOperatorVisibleFinderActionRequiresOwnerApproval() {
+        let policy = MacOperatorAuthorizationPolicy()
+        let request = MacOperatorRequest(action: .revealSelectedItemInFinder, target: "/selected/item")
+
+        XCTAssertEqual(
+            policy.evaluate(request, grantedPermissions: [.userSelectedFiles], ownerApproved: false),
+            .ownerApprovalRequired
+        )
+        XCTAssertEqual(
+            policy.evaluate(request, grantedPermissions: [.userSelectedFiles], ownerApproved: true),
+            .allowed
+        )
+    }
+
+    func testMacOperatorApprovalCannotBypassAccessibilityPermission() {
+        let policy = MacOperatorAuthorizationPolicy()
+        let request = MacOperatorRequest(action: .accessibilityInteraction, target: "frontmost-app")
+
+        XCTAssertEqual(
+            policy.evaluate(request, grantedPermissions: [], ownerApproved: true),
+            .permissionRequired(.accessibility)
+        )
+    }
+
+    func testMacOperatorAccessibilityNeedsPermissionAndApproval() {
+        let policy = MacOperatorAuthorizationPolicy()
+        let request = MacOperatorRequest(action: .accessibilityInteraction, target: "frontmost-app")
+
+        XCTAssertEqual(
+            policy.evaluate(request, grantedPermissions: [.accessibility], ownerApproved: false),
+            .ownerApprovalRequired
+        )
+        XCTAssertEqual(
+            policy.evaluate(request, grantedPermissions: [.accessibility], ownerApproved: true),
+            .allowed
+        )
+    }
+
+    func testMacOperatorAutomationNeedsOfficialPermissionAndApproval() {
+        let policy = MacOperatorAuthorizationPolicy()
+        let request = MacOperatorRequest(action: .appleEventAutomation, target: "com.apple.Finder")
+
+        XCTAssertEqual(
+            policy.evaluate(request, grantedPermissions: [], ownerApproved: false),
+            .permissionRequired(.automation)
+        )
+        XCTAssertEqual(
+            policy.evaluate(request, grantedPermissions: [.automation], ownerApproved: false),
+            .ownerApprovalRequired
+        )
+        XCTAssertEqual(
+            policy.evaluate(request, grantedPermissions: [.automation], ownerApproved: true),
+            .allowed
+        )
+    }
+
+    func testMacOperatorDefaultExecutorIsFailClosed() async {
+        let executor = DisabledMacOperatorExecutor()
+        let request = MacOperatorRequest(action: .revealSelectedItemInFinder, target: "/selected/item")
+        let result = await executor.execute(request)
+
+        XCTAssertEqual(result, .blocked("mac_operator_executor_not_configured"))
+    }
 }
