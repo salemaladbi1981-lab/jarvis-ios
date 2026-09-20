@@ -14,11 +14,26 @@ struct MacHomeView: View {
             // LEFT zone — nav + cards
             VStack(spacing: JarvisSpacing.md) {
                 macSidebar
-                SmartHomeCard(devices: vm.homeDevices)
-                    .onTapGesture { vm.requestAction(agentID: "core_home", action: "read-temperature") }
-                SecurityCard(status: vm.securityStatus ?? SecurityStatus(systemsNormal: true, doorsLocked: true, camerasActive: true))
-                    .onTapGesture { vm.requestAction(agentID: "core_home", action: "unlock-door") }
-                MediaCard(track: vm.mediaTrack ?? MediaTrack(title: "Blinding Lights", artist: "The Weeknd", current: "2:06", duration: "3:20"))
+                if vm.homeDevices.isEmpty {
+                    unavailableCapabilityCard(title: "المنزل الذكي", icon: "house.slash")
+                } else {
+                    SmartHomeCard(devices: vm.homeDevices)
+                        .onTapGesture { vm.requestAction(agentID: "core_home", action: "read-temperature") }
+                }
+
+                if let status = vm.securityStatus {
+                    SecurityCard(status: status)
+                        .onTapGesture { vm.requestAction(agentID: "core_home", action: "unlock-door") }
+                } else {
+                    unavailableCapabilityCard(title: "الأمان", icon: "shield.slash")
+                }
+
+                if let track = vm.mediaTrack {
+                    MediaCard(track: track)
+                } else {
+                    unavailableCapabilityCard(title: "الوسائط", icon: "music.note.slash")
+                }
+
                 Spacer()
             }
             .frame(width: 340)
@@ -99,6 +114,35 @@ struct MacHomeView: View {
             }
             Spacer()
         }
+    }
+
+    private func unavailableCapabilityCard(title: String, icon: String) -> some View {
+        HStack(spacing: JarvisSpacing.md) {
+            Image(systemName: icon)
+                .font(.system(size: 18, weight: .medium))
+                .foregroundColor(JarvisColor.text_muted)
+                .frame(width: 28)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(JarvisColor.text_secondary)
+                Text("غير متصل")
+                    .font(.system(size: 12))
+                    .foregroundColor(JarvisColor.text_muted)
+            }
+
+            Spacer()
+        }
+        .padding(JarvisSpacing.md)
+        .background(
+            RoundedRectangle(cornerRadius: JarvisRadius.card)
+                .fill(JarvisColor.bg_1.opacity(0.36))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: JarvisRadius.card)
+                .stroke(JarvisColor.text_muted.opacity(0.14), lineWidth: 1)
+        )
     }
 
     private func sideItem(_ id: String) -> (String, String) {
