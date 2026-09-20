@@ -5,12 +5,14 @@ struct ConversationView: View {
     @StateObject private var vm: ChatViewModel
     @State private var input: String = ""
     private let api: JarvisAPI
+    private let initialText: String?
     let conversationId: String
 
-    init(api: JarvisAPI, conversationId: String) {
+    init(api: JarvisAPI, conversationId: String, initialText: String? = nil) {
         _vm = StateObject(wrappedValue: ChatViewModel(api: api))
         self.api = api
         self.conversationId = conversationId
+        self.initialText = initialText
     }
 
     var body: some View {
@@ -57,7 +59,12 @@ struct ConversationView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
-        .task { await vm.load(conversationId) }
+        .task {
+            await vm.load(conversationId)
+            if let t = initialText, !t.isEmpty {
+                await vm.send(t)   // إرسال تلقائي للرسالة القادمة من شريط الإدخال الرئيسي
+            }
+        }
     }
 }
 

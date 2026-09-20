@@ -43,9 +43,9 @@ final class HomeViewModel: ObservableObject {
     private let voiceSession = RealtimeVoiceSession()
     private var cancellables = Set<AnyCancellable>()
     private var isVoiceActive = false
+    private var errorRecoveryTask: Task<Void, Never>?
 
-    // V1.1 Memory + write tools (minimal coupling)
-    private var memory: MemoryStore?
+    // V1.1 write tools (minimal coupling)
     private let eventWriter = AppleEventKitWriter()
     private var pendingWrite: PendingWrite?
 
@@ -106,6 +106,11 @@ final class HomeViewModel: ObservableObject {
                 case .interrupted:
                     // barge-in: transition سريع — يبقى agent إن وُجد
                     break
+                case .error(let code):
+                    // سجّل رمز الخطأ قبل أي تعيين للحالة — لا حالة حمراء عالقة على خطأ عابر.
+                    print("[JARVIS-VOICE] error code: \(code)")
+                    self.state = .alert
+                    self.scheduleErrorRecovery()
                 default: break
                 }
             }
@@ -301,34 +306,19 @@ final class HomeViewModel: ObservableObject {
             requestReminderCreate(title: reminderTitle)
             return
         }
-        // 2) قراءة التذكيرات
+        // 2) قراءة التذكيرات (أداة محلية) — تُعرض على الشاشة فقط، لا sendText (لا رد منافس)
         if t.contains("تذكير") || t.contains("reminder") {
             await runReminders()
-            speakResult()
             return
         }
-        // 3) قراءة التقويم
+        // 3) قراءة التقويم (أداة محلية) — تُعرض على الشاشة فقط، لا sendText
         if t.contains("جدول") || t.contains("موعد") || t.contains("اليوم") || t.contains("بكرة") || t.contains("calendar") {
             await runCalendar(kind: "today")
-            speakResult()
             return
         }
-        // 4) سؤال شخصي يعتمد على الذاكرة
-        if let answer = memoryAnswer(for: t) {
-            speak(answer)
-            return
-        }
-        // 5) محادثة مباشرة — النموذج رد بالفعل من الصوت، لا نعيد إرسال النص
-    }
-
-    private func speakResult() {
-        if let msg = calendarMessage {
-            voiceSession.sendText(msg)
-        }
-    }
-
-    private func speak(_ msg: String) {
-        voiceSession.sendText(msg)
+        // 4) الذاكرة الشخصية — الدماغ الوحيد = backend (memory_tools عبر function calling).
+        //    لا مسار محلي (MemoryStore.seeded) ولا sendText — يمنع الرد المزدوج/القفز.
+        // 5) محادثة مباشرة — النموذج (الدماغ الواحد) رد بالفعل من الصوت.
     }
 
     // MARK: Quick commands (typed routing — no fragile text matching)
@@ -415,14 +405,7 @@ final class HomeViewModel: ObservableObject {
         return reminders.prefix(5).map { "• \($0.title)" }.joined(separator: "\n")
     }
 
-    // MARK: V1.1 — Memory + write confirmation (minimal coupling)
-
-    private func ensureMemory() -> MemoryStore {
-        if let m = memory { return m }
-        let m = MemoryStore.seeded()
-        memory = m
-        return m
-    }
+    // MARK: V1.1 — write confirmation (minimal coupling)
 
     private static func isEmailQuestion(_ t: String) -> Bool {
         ["إيميل", "ايميل", "بريد", "email", "mail", "inbox"].contains { t.contains($0) }
@@ -441,29 +424,17 @@ final class HomeViewModel: ObservableObject {
         return nil
     }
 
-    private func memoryAnswer(for t: String) -> String? {
-        let mem = ensureMemory()
-        let identity = ["من أنا", "وش اسمي", "من سالم", "عرفني"]
-        let project = ["مشروع", "مشاريع", "شغال"]
-        let decision = ["قرار", "قررنا", "نسخة", "مجمّد", "مجمد", "اعتماد"]
-
-        var query = ""
-        var scope = MemoryScope.current
-        if identity.contains(where: { t.contains($0) }) {
-            query = "اسم سالم هوية"
-        } else if project.contains(where: { t.contains($0) }) {
-            query = "مشروع"
-        } else if decision.contains(where: { t.contains($0) }) {
-            query = "قرار نسخة"
-        } else if t.contains("قبل") || t.contains("سابق") || t.contains("تاريخ") || t.contains("قديم") {
-            query = t; scope = .historical
-        } else {
-            return nil
+    /// استرداد من خطأ عابر: بعد فترة قصيرة تعود الحالة إلى الخمول إن لم يأتِ حدث جديد.
+    private func scheduleErrorRecovery() {
+        errorRecoveryTask?.cancel()
+        errorRecoveryTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            guard let self, !Task.isCancelled else { return }
+            if self.state == .alert {
+                self.state = .idle
+                self.calendarMessage = nil
+            }
         }
-
-        let items = MemoryRetrieval.retrieve(from: mem.allItems(), query: query, scope: scope, limit: 3)
-        guard !items.isEmpty else { return nil }
-        return items.map { $0.content }.joined(separator: "\n")
     }
 
     private func requestReminderCreate(title: String) {

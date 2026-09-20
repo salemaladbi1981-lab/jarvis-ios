@@ -43,11 +43,11 @@ check("disable(id) present", 'disable(id' in ms)
 check("remove(id) present", 'remove(id' in ms)
 check("allItems(activeOnly) present", 'allItems' in ms)
 
-# F. Failure mode — فشل الذاكرة لا يمس Live Voice
-check("memory is lazy optional (fail-safe)", 'private var memory: MemoryStore?' in vm)
-check("ensureMemory lazy init", 'ensureMemory' in vm)
-check("memoryAnswer returns String? (nil => no voice action)", 'func memoryAnswer(for' in vm and '-> String?' in vm)
-check("speak only on non-nil answer", 'if let answer = memoryAnswer' in vm)
+# F. Failure mode — الذاكرة الشخصية من الـ backend (دماغ واحد) لا من بذور محلية
+check("no seeded memory in production voice path", 'MemoryStore.seeded()' not in vm)
+check("no local ensureMemory", 'ensureMemory' not in vm)
+check("no local memoryAnswer", 'memoryAnswer' not in vm)
+check("no local sendText dual-response", 'voiceSession.sendText' not in vm)
 
 # G. Seed — بذور مفهرسة بكلمات
 check("seed has identity facts", 'الاسم' in seed or 'اسم' in seed)

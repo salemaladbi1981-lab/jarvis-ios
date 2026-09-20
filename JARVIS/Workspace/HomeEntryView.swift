@@ -39,6 +39,17 @@ struct HomeEntryView: View {
                     JarvisHeroView(vm: voiceVM)
                     JarvisMicControl(vm: voiceVM)
 
+                    // نتيجة أدوات التقويم/التذكيرات (تُعرض هنا بدل الرد الصوتي الثاني — دماغ واحد)
+                    if let msg = voiceVM.calendarMessage {
+                        Text(msg)
+                            .font(.system(size: 14))
+                            .foregroundColor(JarvisColor.text_primary)
+                            .padding(12)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(RoundedRectangle(cornerRadius: 12).fill(JarvisColor.bg_1.opacity(0.45)))
+                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(JarvisColor.primary_blue.opacity(0.16), lineWidth: 1))
+                    }
+
                     // نقطة دخول واضحة لبدء محادثة جديدة
                     Button {
                         Task { await vm.newConversation() }
@@ -53,6 +64,13 @@ struct HomeEntryView: View {
                         .padding(.vertical, 14)
                         .background(JarvisColor.bg_1)
                         .cornerRadius(14)
+                    }
+
+                    if let nce = vm.newConversationError {
+                        Text(nce)
+                            .font(.system(size: 13))
+                            .foregroundColor(JarvisColor.danger)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
 
                     if !vm.conversations.isEmpty {
@@ -110,7 +128,7 @@ struct HomeEntryView: View {
             }
             .navigationTitle("جارفس")
             .navigationDestination(item: $newConv) { c in
-                ConversationView(api: api, conversationId: c.id)
+                ConversationView(api: api, conversationId: c.id, initialText: c.initialText)
             }
         }
         .safeAreaInset(edge: .bottom) {
@@ -268,7 +286,12 @@ struct HomeEntryView: View {
     private func sendMessage(text: String) async {
         retryText = text
         if pendingAttachments.isEmpty {
-            if !text.isEmpty { await voiceVM.routeVoiceTranscript(text) }
+            if !text.isEmpty {
+                // مسار الدردشة النصية الحقيقي — إنشاء محادثة ثم الانتقال لشاشة الدردشة (وليس routeVoiceTranscript)
+                if let c = await vm.newConversation() {
+                    newConv = ConvID(id: c.id, initialText: text)
+                }
+            }
             return
         }
         let atts = pendingAttachments
@@ -335,6 +358,7 @@ final class HomeEntryViewModel: ObservableObject {
     @Published var activeTasks: [JarvisTask] = []
     @Published var deliveries: [DeliveryItem] = []
     @Published var newConversationId: String?
+    @Published var newConversationError: String?
     private let api: JarvisAPI
     init(api: JarvisAPI) { self.api = api }
 
@@ -352,12 +376,25 @@ final class HomeEntryViewModel: ObservableObject {
         }
     }
 
-    func newConversation() async {
+    /// إنشاء محادثة حقيقية عبر الـ backend — لا تبتلع الخطأ.
+    @discardableResult
+    func newConversation() async -> Conversation? {
         do {
             let c: Conversation = try await api.postObject("conversations", body: [:])
             newConversationId = c.id
-        } catch {}
+            newConversationError = nil
+            return c
+        } catch {
+            let msg = "تعذّر بدء محادثة جديدة: \(error.localizedDescription)"
+            newConversationError = msg
+            print("[JARVIS-HOME] newConversation failed: \(error)")
+            return nil
+        }
     }
 }
 
-struct ConvID: Identifiable, Hashable { let id: String }
+struct ConvID: Identifiable, Hashable {
+    let id: String
+    let initialText: String?
+    init(id: String, initialText: String? = nil) { self.id = id; self.initialText = initialText }
+}
