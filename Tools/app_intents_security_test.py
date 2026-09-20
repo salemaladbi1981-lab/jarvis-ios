@@ -34,9 +34,14 @@ check("intent asks the system to open the app instead of starting hidden audio",
 
 check("pending voice launch is short-lived instead of indefinitely sticky",
       'pendingStartVoiceMaxAge: TimeInterval = 30' in intent and
-      'Date().timeIntervalSince1970 - requestedAt' in intent and
+      'let age = now - requestedAt' in intent and
       'age >= 0, age <= pendingStartVoiceMaxAge' in intent and
       'removeObject(forKey: pendingStartVoiceKey)' in intent)
+
+check("pending voice launch is consumed exactly once",
+      'static func consumePendingStartVoice' in intent and
+      'get { consumePendingStartVoice() }' in intent and
+      intent.count('UserDefaults.standard.removeObject(forKey: pendingStartVoiceKey)') >= 2)
 
 check("shortcut phrases expose the intent through AppShortcutsProvider",
       'struct JarvisShortcuts: AppShortcutsProvider' in shortcuts and

@@ -4,23 +4,31 @@ import Foundation
 
 /// جسر بين App Intent وحالة التطبيق. لا توجد خدمة wake-word دائمة في الخلفية؛
 /// النظام يستدعي الـ Intent عبر Siri / Shortcuts ثم يفتح التطبيق رسميًا.
-/// طلب بدء الصوت قصير العمر حتى لا يبدأ الميكروفون لاحقًا بسبب Intent قديم.
+/// طلب بدء الصوت قصير العمر ويُستهلك مرة واحدة حتى لا يبدأ الميكروفون لاحقًا
+/// بسبب Intent قديم أو بسبب تكرار lifecycle handoff بعد فتح التطبيق.
 enum AppBridge {
     static let pendingStartVoiceKey = "jarvis.pendingStartVoice.requestedAt"
     static let pendingStartVoiceMaxAge: TimeInterval = 30
 
-    static var pendingStartVoice: Bool {
-        get {
-            let requestedAt = UserDefaults.standard.double(forKey: pendingStartVoiceKey)
-            guard requestedAt > 0 else { return false }
+    /// يستهلك طلب Siri/Shortcut الذّي لم تنتهِ صلاحيته بشكل one-shot.
+    /// القراءة الناجحة تحذف العلامة قبل إعادة true، لذلك لا يمكن لنفس الطلب
+    /// تشغيل جلسة صوت ثانية إذا أعادت SwiftUI استدعاء handoff أثناء الفتح.
+    static func consumePendingStartVoice(now: TimeInterval = Date().timeIntervalSince1970) -> Bool {
+        let requestedAt = UserDefaults.standard.double(forKey: pendingStartVoiceKey)
+        guard requestedAt > 0 else { return false }
 
-            let age = Date().timeIntervalSince1970 - requestedAt
-            guard age >= 0, age <= pendingStartVoiceMaxAge else {
-                UserDefaults.standard.removeObject(forKey: pendingStartVoiceKey)
-                return false
-            }
-            return true
+        let age = now - requestedAt
+        guard age >= 0, age <= pendingStartVoiceMaxAge else {
+            UserDefaults.standard.removeObject(forKey: pendingStartVoiceKey)
+            return false
         }
+
+        UserDefaults.standard.removeObject(forKey: pendingStartVoiceKey)
+        return true
+    }
+
+    static var pendingStartVoice: Bool {
+        get { consumePendingStartVoice() }
         set {
             if newValue {
                 UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: pendingStartVoiceKey)
