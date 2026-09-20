@@ -1,5 +1,6 @@
-"""Barge-in confirmation regression (source + logic mirror).
-يمنع الضوضاء القصيرة من إلغاء الرد، ويحافظ على المقاطعة الفورية للكلام الحقيقي."""
+"""Manual-interruption regression (source + logic mirror).
+السياسة الإنتاجية: كلام الغرفة/الخلفية (قصير أو مستمر) لا يُلغي رد JARVIS أبداً.
+المقاطعة الوحيدة أثناء الكلام = يدوية (زر المايك → interrupt() → cancel+truncate+flush مرة واحدة)."""
 import os, sys
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'JARVIS')
 PASS = FAIL = 0
@@ -11,50 +12,55 @@ def check(name, cond):
 
 rvs = open(os.path.join(ROOT, 'Voice/RealtimeVoiceSession.swift'), encoding='utf-8').read()
 
-# Source-level: confirmation موجودة
-check("RealtimeVoiceSession: bargeConfirmWindow", 'bargeConfirmWindow' in rvs)
-check("RealtimeVoiceSession: pendingBargeIn", 'pendingBargeIn' in rvs)
-check("RealtimeVoiceSession: scheduleBargeConfirm", 'scheduleBargeConfirm' in rvs)
-check("speech_started لا يستدعي bargeIn فوراً (بل pending+schedule)",
-      'pendingBargeIn = true' in rvs and 'scheduleBargeConfirm()' in rvs)
-check("speech_stopped يلغي pending للضوضاء القصيرة", 'dur < bargeConfirmWindow' in rvs)
+# 1) Source-level: لا مقاطعة تلقائية (بلا نافذة تأكيد قديمة)
+check("RealtimeVoiceSession: لا bargeConfirmWindow", 'bargeConfirmWindow' not in rvs)
+check("RealtimeVoiceSession: لا pendingBargeIn", 'pendingBargeIn' not in rvs)
+check("RealtimeVoiceSession: لا scheduleBargeConfirm", 'scheduleBargeConfirm' not in rvs)
 
-# Logic mirror (نفس state machine)
-WINDOW = 0.15
-class BargeConfirm:
+# 2) Source-level: speech_started أثناء الكلام → ignored (لا bargeIn)
+check("speech_started أثناء الكلام → ignored (manual only)",
+      'speech_started while speaking → ignored' in rvs)
+check("لا bargeIn() داخل معالج speech_started", 'if isSpeaking' in rvs)
+
+# 3) Source-level: المقاطعة اليدوية تُرسل cancel + truncate + flush
+check("interrupt() يرسل response.cancel", 'response.cancel' in rvs)
+check("interrupt() يرسل conversation.item.truncate", 'conversation.item.truncate' in rvs)
+check("interrupt() يرسل audio.flush", 'audio.flush()' in rvs)
+check("bargeIn() يُستدعى من interrupt() فقط", 'func interrupt()' in rvs)
+
+# 4) Logic mirror (نفس state machine): speech_started أثناء الكلام لا يُلغي
+class ManualInterrupt:
     def __init__(self):
-        self.pending = False; self.started = 0.0; self.barged = 0; self.listening = 0
-    def speech_started(self, now, speaking):
+        self.cancels = 0; self.truncates = 0; self.flushes = 0; self.listening = 0
+    def speech_started(self, speaking):
         if speaking:
-            self.pending = True; self.started = now
-        else:
-            self.listening += 1
-    def speech_stopped(self, now):
-        if self.pending and (now - self.started) < WINDOW:
-            self.pending = False   # ضوضاء
-    def check(self, now):
-        if self.pending:
-            self.pending = False; self.barged += 1
+            return  # تجاهل — لا مقاطعة تلقائية
+        self.listening += 1
+    def interrupt(self):
+        # يدوي: cancel+truncate+flush مرة واحدة
+        self.cancels += 1; self.truncates += 1; self.flushes += 1
 
-# A) المستخدم يقول «وقف» (كلام حقيقي مستمر > النافذة)
-a = BargeConfirm(); a.speech_started(0.0, True); a.check(0.15)
-check("A) كلام مستمر > نافذة → barge-in", a.barged == 1)
+# A) كلام خلفية مستمر أثناء الكلام → لا cancel
+a = ManualInterrupt()
+for _ in range(100): a.speech_started(True)   # 100 حدث speech_started مستمر
+check("A) كلام خلفية/غرفة مستمر → لا cancel", a.cancels == 0 and a.truncates == 0 and a.flushes == 0)
 
-# B) نقرة قصيرة (speech_stopped < نافذة)
-b = BargeConfirm(); b.speech_started(0.0, True); b.speech_stopped(0.05); b.check(0.15)
-check("B) نقرة قصيرة → لا barge-in", b.barged == 0)
+# B) ضوضاء قصيرة (نقرة) أثناء الكلام → لا cancel
+b = ManualInterrupt(); b.speech_started(True); b.speech_started(True)
+check("B) ضوضاء قصيرة → لا cancel", b.cancels == 0)
 
-# C) جملة طبيعية (كلام مستمر > نافذة)
-c = BargeConfirm(); c.speech_started(0.0, True); c.check(0.15)
-check("C) جملة طبيعية → barge-in", c.barged == 1)
+# C) speech_started أثناء listening (ليس speaking) → listening فقط، لا cancel
+c = ManualInterrupt(); c.speech_started(False)
+check("C) speech_started أثناء listening → listening فقط", c.listening == 1 and c.cancels == 0)
 
-# D) صمت/ضوضاء (لا speech_started)
-d = BargeConfirm(); d.check(0.15)
-check("D) صمت → لا cancel", d.barged == 0)
+# D) مقاطعة يدوية → cancel+truncate+flush مرة واحدة (لا تكرار)
+d = ManualInterrupt(); d.interrupt()
+check("D) مقاطعة يدوية → cancel+truncate+flush مرة واحدة",
+      d.cancels == 1 and d.truncates == 1 and d.flushes == 1)
 
-# E) نقرة قصيرة أثناء listening (ليس speaking) → يبقى listening فقط، لا barge
-e = BargeConfirm(); e.speech_started(0.0, False)
-check("E) speech_started أثناء listening → لا barge", e.barged == 0 and e.listening == 1)
+# E) مقاطعتان يدويتان متتاليتان → كل منهما حدث واحد (لا تكرار داخلي)
+e = ManualInterrupt(); e.interrupt(); e.interrupt()
+check("E) لا duplicate cancel/truncate/flush", e.cancels == 2 and e.truncates == 2 and e.flushes == 2)
 
 print(f"\n== RESULT: {PASS} PASS / {FAIL} FAIL ==")
 sys.exit(1 if FAIL else 0)

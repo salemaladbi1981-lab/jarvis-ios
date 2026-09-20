@@ -29,10 +29,6 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     private var startAttemptID = 0
     private var pcmAppendCount = 0
     private var bargeStartTime: TimeInterval = 0
-    // Barge-in confirmation: نافذة قصيرة لفلترة الضوضاء/النقرة قبل إلغاء الرد.
-    private var pendingBargeIn = false
-    private var bargeConfirmTask: Task<Void, Never>?
-    private let bargeConfirmWindow: TimeInterval = 0.45
     /// هوية item الصوت الحالي (للـ conversation.item.truncate عند المقاطعة).
     private var currentOutputItemID: String?
     private var currentContentIndex = 0
@@ -113,7 +109,7 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     /// Barge-in: إلغاء الرد الجاري + مسح الـ playback (الـ mic يبقى شغّالاً).
     /// (لا يغيّر الحالة — المتصلون يبطلون الرد عبر onBarge قبل النداء).
     private func bargeIn() {
-        trace("BARGE speech_started → response.cancel + truncate + flush")
+        trace("BARGE manual interrupt → response.cancel + truncate + flush")
         let cancel = #"{"type":"response.cancel"}"#
         ws?.send(.string(cancel)) { _ in }
         // قطع الجزء غير المسموع من item الصوت الحالي (item_id + content_index + مدة الصوت المشغّل فعلاً)
@@ -129,26 +125,10 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
         eventPublisher.send(.interrupted)
     }
 
-    /// Barge-in confirmation: بعد نافذة قصيرة، إن استمرّ الـ speech (pending) → barge-in فعلي.
-    private func scheduleBargeConfirm() {
-        bargeConfirmTask?.cancel()
-        let window = bargeConfirmWindow
-        bargeConfirmTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: UInt64(window * 1_000_000_000))
-            guard let self, !Task.isCancelled else { return }
-            self.stateQueue.async {
-                guard self.pendingBargeIn else { return }
-                self.pendingBargeIn = false
-                if self.isSpeaking {
-                    self.isSpeaking = false
-                    self.guardState.onBarge()   // إبطال الرد الآن (بعد التأكيد، لا عند speech_started)
-                    self.bargeIn()
-                }
-            }
-        }
-    }
-
+    /// المقاطعة اليدوية (زر المايك) — الإلغاء الفوري الوحيد أثناء الكلام.
+    /// كلام الغرفة/الخلفية لا يستدعي هذا أبداً (لا مقاطعة تلقائية من speech_started).
     func interrupt() {
+        bargeStartTime = Date().timeIntervalSinceReferenceDate
         stateQueue.sync {
             self.guardState.onBarge()
             self.isSpeaking = false
@@ -265,28 +245,18 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                     trace("speech_started ignored (الجلسة موقوفة)")
                     break
                 }
-                bargeStartTime = Date().timeIntervalSinceReferenceDate
                 if isSpeaking {
-                    // Barge-in confirmation: لا نلغي فوراً — نافذة قصيرة تفلتر الضوضاء/النقرة.
-                    // كلام حقيقي يستمر > النافذة → يلغي سريعاً (الإحساس الفوري محفوظ).
-                    pendingBargeIn = true
-                    scheduleBargeConfirm()
+                    // لا مقاطعة تلقائية أثناء الكلام — كلام الغرفة/الخلفية لا يُلغي الرد.
+                    // المقاطعة يدوية فقط عبر interrupt() (زر المايك).
+                    trace("speech_started while speaking → ignored (manual interruption only)")
                 } else {
                     audio.flush()
                     eventPublisher.send(.listening)   // انتقال الواجهة إلى Listening
-                    trace("BARGE — flush tail → Listening")
+                    trace("VAD — flush tail → Listening")
                 }
             case "input_audio_buffer.speech_stopped":
                 trace("VAD speech_stopped payload: \(text)")
-                // انتهى "الكلام" قبل نافذة التأكيد → ضوضاء قصيرة، لا barge-in.
-                if pendingBargeIn {
-                    let dur = Date().timeIntervalSinceReferenceDate - bargeStartTime
-                    if dur < bargeConfirmWindow {
-                        pendingBargeIn = false
-                        bargeConfirmTask?.cancel()
-                        trace("BARGE noise ignored (dur=\(String(format: "%.0f", dur * 1000))ms)")
-                    }
-                }
+                // لا مقاطعة تلقائية — الحدث يُسجَّل فقط (الكلام انتهى).
             case "conversation.item.input_audio_transcription.completed":
                 // نص المستخدم فقط — للتوجيه (tool routing). لا نوجّه نص الرد.
                 if let txt = SessionEventParser.transcript(text) {
@@ -306,9 +276,7 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                 }
                 break
             case "response.done":
-                // الرد انتهى — ألغي أي pending barge-in (لا barge spurious بعد نهاية الرد).
-                pendingBargeIn = false
-                bargeConfirmTask?.cancel()
+                // الرد انتهى.
                 // هوية دورة التشغيل من المحرك (وليست هوية الرد الحالي عند وصول الـ callback).
                 let cycle = audio.currentGeneration
                 // قرار الإنهاء حسب وجود صوت للرد (stale/بصوت/بلا صوت).

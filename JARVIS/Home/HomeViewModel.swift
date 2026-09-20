@@ -217,10 +217,17 @@ final class HomeViewModel: ObservableObject {
     // MARK: Live voice (M3.5)
     func toggleVoice() {
         if isVoiceActive {
-            voiceSession.stopListening()
-            isVoiceActive = false
-            isListening = false
-            state = .idle
+            if state == .speaking {
+                // المقاطعة اليدوية أثناء الكلام (زر المايك) — إلغاء الرد فقط.
+                // لا مقاطعة تلقائية من كلام الغرفة/الخلفية. الحالة تنتقل تلقائياً عبر
+                // حدث .interrupted → JarvisStateMapper → .listening (لا حالة وهمية هنا).
+                voiceSession.interrupt()
+            } else {
+                voiceSession.stopListening()
+                isVoiceActive = false
+                isListening = false
+                state = .idle
+            }
         } else if !isVoiceStarting {
             // منع re-entry: لا Task مكرر حتى تكتمل دورة البدء (كان يسبب multiple audio.start())
             isVoiceStarting = true

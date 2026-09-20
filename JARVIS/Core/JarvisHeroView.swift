@@ -111,3 +111,73 @@ private struct ActiveAgentBadge: View {
         .shadow(color: JarvisColor.primary_blue.opacity(0.25), radius: 10, x: 0, y: 0)
     }
 }
+
+
+/// Prominent microphone control (Concept 2) — زر مايك بارز تحت النواة.
+/// يعكس الحالة الحقيقية (state/isListening) ولا يحرّك أي شيء من تلقاء نفسه؛
+/// الضغط يدوي فقط: toggleVoice() → مقاطعة أثناء الكلام، أو بدء/إيقاف الاستماع.
+struct JarvisMicControl: View {
+    @ObservedObject var vm: HomeViewModel
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Button(action: { vm.toggleVoice() }) {
+                ZStack {
+                    Circle()
+                        .fill(coreColor.opacity(0.14))
+                        .frame(width: 96, height: 96)
+                    Circle()
+                        .fill(coreColor.opacity(0.30))
+                        .frame(width: 74, height: 74)
+                    Image(systemName: iconName)
+                        .font(.system(size: 30, weight: .medium))
+                        .foregroundColor(.white)
+                }
+                .shadow(color: coreColor.opacity(isActive ? 0.55 : 0.20), radius: isActive ? 24 : 10, x: 0, y: 0)
+                .overlay(Circle().stroke(coreColor.opacity(isActive ? 0.6 : 0.28), lineWidth: 1.5))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(micLabel)
+
+            Text(micLabel)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(JarvisColor.text_secondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var iconName: String {
+        switch vm.state {
+        case .listening, .speaking: return JarvisIconResolver.symbol(for: "util.waveform")
+        case .thinking: return "ellipsis"
+        case .executing: return "gearshape.2.fill"
+        case .alert: return "exclamationmark.triangle.fill"
+        case .approval: return "hand.raised.fill"
+        default: return JarvisIconResolver.symbol(for: "util.mic")
+        }
+    }
+
+    private var micLabel: String {
+        switch vm.state {
+        case .idle: return "اضغط للتحدث"
+        case .listening: return "أنا أسمعك…"
+        case .thinking: return "أفكر…"
+        case .speaking: return "اضغط للمقاطعة"
+        case .executing: return "أُنفّذ…"
+        case .alert: return "حدث خطأ"
+        case .approval: return "بانتظار موافقتك"
+        }
+    }
+
+    private var coreColor: Color {
+        switch vm.state {
+        case .listening, .speaking, .thinking: return JarvisColor.primary_blue
+        case .executing: return JarvisColor.success
+        case .alert: return JarvisColor.danger
+        case .approval: return JarvisColor.warning_demo
+        default: return JarvisColor.primary_blue
+        }
+    }
+
+    private var isActive: Bool { vm.state != .idle }
+}

@@ -41,6 +41,8 @@ struct HomeView: View {
 
                     JarvisHeroView(vm: vm)
 
+                    JarvisMicControl(vm: vm)
+
                     JarvisTitleGreetingView()
 
                     JarvisWaveformStatusView(vm: vm)

@@ -32,7 +32,7 @@ check("HomeViewModel: stopListening مرة واحدة فقط (في toggleVoice)"
 _bg = vm.find('func handleAppBackgrounded')
 check("HomeViewModel: disconnect في background handling (handleAppBackgrounded)",
       _bg >= 0 and 'disconnect(' in vm[_bg:])
-check("HomeViewModel: لا interrupt في UI handlers", '.interrupt(' not in vm)
+check("HomeViewModel: interrupt() يدوي فقط داخل toggleVoice (مرة واحدة)", vm.count('.interrupt(') == 1)
 check("HomeViewModel: لا flush في UI handlers", 'flush(' not in vm)
 check("VoiceInputBar في iPad/macOS (منفصل عن HomeView بعد refactor)",
       'VoiceInputBar' in ipad and 'VoiceInputBar' in mac)
