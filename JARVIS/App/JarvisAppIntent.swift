@@ -2,7 +2,8 @@
 import AppIntents
 import Foundation
 
-/// جسر بين الـ App Intent وحالة التطبيق — يطلب بدء الصوت عند الفتح من قفل الشاشة.
+/// جسر بين App Intent وحالة التطبيق. لا توجد خدمة wake-word دائمة في الخلفية؛
+/// النظام يستدعي الـ Intent عبر Siri / Shortcuts ثم يفتح التطبيق رسميًا.
 enum AppBridge {
     static let pendingStartVoiceKey = "jarvis.pendingStartVoice"
 
@@ -12,14 +13,18 @@ enum AppBridge {
     }
 }
 
-/// يفتح JARVIS ويبدأ الاستماع — قابل للاستدعاء من شاشة القفل عبر Siri/Shortcuts.
+/// مدخل رسمي عبر App Intents لفتح JARVIS وطلب بدء جلسة الصوت.
+/// لأن تشغيل الميكروفون قد يكشف بيانات حساسة، يتطلب النظام مصادقة المستخدم
+/// قبل تنفيذ الـ Intent عند استدعائه والجهاز مقفل.
 struct JarvisVoiceIntent: AppIntent {
     static var title: LocalizedStringResource = "Start Jarvis"
     static var description = IntentDescription("Open Jarvis and start listening.")
     static var openAppWhenRun: Bool = true
+    static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
     func perform() async throws -> some IntentResult {
-        // علامة معلّقة يلتقطها التطبيق عند فتحه ويبدأ منها الصوت.
+        // لا نبدأ الميكروفون داخل الـ Intent. نسجل طلبًا أحادي الاتجاه؛ التطبيق
+        // يستهلكه بعد الفتح ثم يمر بمسار صلاحية الميكروفون المعتاد.
         AppBridge.pendingStartVoice = true
         return .result()
     }
