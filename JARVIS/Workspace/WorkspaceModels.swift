@@ -207,3 +207,112 @@ struct ProjectHealth: Codable {
         }
     }
 }
+
+// MARK: - Meeting foundation
+
+/// Describes where meeting content comes from. This is policy/state only: it does
+/// not start microphones, screen capture, recording, or any other platform API.
+enum MeetingCaptureMode: String, Codable, Equatable {
+    /// A transcript/file the owner has already imported into JARVIS.
+    case importedTranscript
+    /// A future live adapter that may exist only behind explicit authorization.
+    case liveAuthorized
+}
+
+/// Authorization facts that a future official live-capture adapter must provide.
+/// The visible indicator is deliberately part of the gate so a "silent" JARVIS
+/// mode can mean no spoken interruption, never hidden recording.
+struct MeetingAuthorization: Equatable {
+    let ownerAuthorized: Bool
+    let participantConsent: Bool
+    let visibleCaptureIndicator: Bool
+
+    static let none = MeetingAuthorization(
+        ownerAuthorized: false,
+        participantConsent: false,
+        visibleCaptureIndicator: false
+    )
+}
+
+enum MeetingSessionState: String, Codable, Equatable {
+    case idle
+    case awaitingAuthorization
+    case ready
+    case active
+    case stopped
+}
+
+enum MeetingAuthorizationPolicy {
+    static func canPrepare(mode: MeetingCaptureMode, authorization: MeetingAuthorization) -> Bool {
+        switch mode {
+        case .importedTranscript:
+            return true
+        case .liveAuthorized:
+            return authorization.ownerAuthorized
+                && authorization.participantConsent
+                && authorization.visibleCaptureIndicator
+        }
+    }
+}
+
+/// Shared lifecycle for iOS/macOS and a future Meeting Agent. It is fail-closed:
+/// live sessions cannot become active without re-checking authorization, and an
+/// active live session is stopped if authorization is later revoked.
+struct MeetingSessionLifecycle: Equatable {
+    private(set) var mode: MeetingCaptureMode?
+    private(set) var state: MeetingSessionState = .idle
+    private(set) var authorization: MeetingAuthorization = .none
+
+    var requiresVisibleCaptureIndicator: Bool { mode == .liveAuthorized }
+
+    mutating func prepare(mode: MeetingCaptureMode, authorization: MeetingAuthorization = .none) {
+        self.mode = mode
+        self.authorization = authorization
+        state = MeetingAuthorizationPolicy.canPrepare(mode: mode, authorization: authorization)
+            ? .ready
+            : .awaitingAuthorization
+    }
+
+    @discardableResult
+    mutating func start() -> Bool {
+        guard let mode, state == .ready else { return false }
+        guard MeetingAuthorizationPolicy.canPrepare(mode: mode, authorization: authorization) else {
+            state = .awaitingAuthorization
+            return false
+        }
+        state = .active
+        return true
+    }
+
+    mutating func updateAuthorization(_ authorization: MeetingAuthorization) {
+        self.authorization = authorization
+        guard mode == .liveAuthorized else { return }
+        let allowed = MeetingAuthorizationPolicy.canPrepare(mode: .liveAuthorized, authorization: authorization)
+
+        switch state {
+        case .active where !allowed:
+            state = .stopped
+        case .ready where !allowed:
+            state = .awaitingAuthorization
+        case .awaitingAuthorization where allowed:
+            state = .ready
+        default:
+            break
+        }
+    }
+
+    mutating func stop() {
+        switch state {
+        case .awaitingAuthorization, .ready, .active:
+            state = .stopped
+        case .idle, .stopped:
+            break
+        }
+    }
+
+    mutating func reset() {
+        mode = nil
+        authorization = .none
+        state = .idle
+    }
+}
