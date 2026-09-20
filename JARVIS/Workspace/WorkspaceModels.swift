@@ -23,6 +23,13 @@ struct Conversation: Codable, Identifiable {
     let messageIds: [String]?
 }
 
+/// استجابة POST /conversations: {"ok":…, "created":…, "conversation":{…}} — المحادثة مُغلّفة.
+struct ConversationEnvelope: Codable {
+    let ok: Bool?
+    let created: Bool?
+    let conversation: Conversation
+}
+
 struct Citation: Codable, Identifiable {
     var id: String { citationId }
     let citationId: String

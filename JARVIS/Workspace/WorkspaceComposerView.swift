@@ -16,6 +16,8 @@ struct WorkspaceComposerView: View {
             TextField("اكتب أو أرسل ملفًا…", text: $text)
                 .textFieldStyle(.roundedBorder)
                 .multilineTextAlignment(.trailing)
+                .submitLabel(.send)
+                .onSubmit(onSend)
             Button(action: onSend) {
                 Image(systemName: "arrow.up.circle.fill").font(.title2)
             }

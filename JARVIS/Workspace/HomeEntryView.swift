@@ -23,6 +23,7 @@ struct HomeEntryView: View {
     @State private var showAudioRecorder = false
     @State private var sendError: String?
     @State private var retryText = ""
+    @State private var isSending = false
     @Environment(\.scenePhase) private var scenePhase
     private let api: JarvisAPI
 
@@ -174,6 +175,11 @@ struct HomeEntryView: View {
             LinearGradient(colors: [JarvisColor.bg_0, JarvisColor.bg_1], startPoint: .top, endPoint: .bottom)
                 .ignoresSafeArea()
         )
+        .overlay(alignment: .top) {
+            if ProcessInfo.processInfo.arguments.contains("-diagnostics") {
+                diagnosticsPanel
+            }
+        }
         .task {
             await vm.load()
             await voiceVM.load()
@@ -286,8 +292,33 @@ struct HomeEntryView: View {
         .padding(.vertical, 10)
     }
 
+    /// تشخيص مُمنهج على الشاشة (عبر -diagnostics) — يظهر حالة المصادقة/الـAPI/التنقل بدون Xcode console.
+    private var diagnosticsPanel: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text("JARVIS DIAG").font(.caption2).bold().foregroundColor(.white)
+            Text("enrolled: \(enrollment.isEnrolled)")
+            Text("sessionToken: \(enrollment.sessionToken != nil ? "present" : "nil")")
+            Text("api: \(enrollment.api != nil ? "present" : "nil")")
+            Text("uploadManager: \(enrollment.uploadManager != nil ? "present" : "nil")")
+            Text("newConv: \(newConv?.id ?? "nil")")
+            Text("sendError: \(sendError ?? "none")")
+            Text("newConversationError: \(vm.newConversationError ?? "none")")
+        }
+        .font(.caption2.monospaced())
+        .foregroundColor(.white)
+        .padding(8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.black.opacity(0.78))
+        .cornerRadius(8)
+        .padding(8)
+        .allowsHitTesting(false)
+    }
+
     /// إرسال: نص فقط → توجيه نص؛ مع مرفقات → رفع ثم task. لا تُمسح المرفقات إلا بعد النجاح.
     private func sendMessage(text: String) async {
+        guard !isSending else { return }
+        isSending = true
+        defer { isSending = false }
         retryText = text
         if pendingAttachments.isEmpty {
             if !text.isEmpty {
@@ -384,7 +415,8 @@ final class HomeEntryViewModel: ObservableObject {
     @discardableResult
     func newConversation() async -> Conversation? {
         do {
-            let c: Conversation = try await api.postObject("conversations", body: [:])
+            let env: ConversationEnvelope = try await api.postObject("conversations", body: [:])
+            let c = env.conversation
             newConversationId = c.id
             newConversationError = nil
             return c
