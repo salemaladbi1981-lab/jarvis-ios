@@ -28,7 +28,14 @@ final class ChatViewModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var conversationId: String = ""
 
+    private enum RetryTarget {
+        case load(String)
+        case send(String)
+    }
+
     private let api: JarvisAPI
+    private var retryTarget: RetryTarget?
+    private var requestInFlight = false
 
     init(api: JarvisAPI) { self.api = api }
 
@@ -38,23 +45,47 @@ final class ChatViewModel: ObservableObject {
         do {
             let detail: ConversationDetail = try await api.getObject("conversations/\(id)")
             messages = detail.messages ?? []
+            status = .idle
+            statusLabel = ""
+            retryTarget = nil
         } catch {
-            errorMessage = "تعذر تحميل المحادثة"
+            status = .failed
+            statusLabel = ""
+            errorMessage = userFacingMessage(for: error, operation: "تحميل المحادثة")
+            retryTarget = .load(id)
         }
     }
 
     func send(_ text: String) async {
+        await send(text, appendLocalUserMessage: true)
+    }
+
+    private func send(_ text: String, appendLocalUserMessage: Bool) async {
         let cid = conversationId
         guard !cid.isEmpty else { return }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+        guard !requestInFlight else { return }
 
-        let userMsg = ChatMessage(messageId: "local-\(UUID().uuidString.prefix(8))",
-                                  conversationId: cid, role: "user", content: trimmed,
-                                  citations: nil, toolCalls: nil, attachmentRefs: nil,
-                                  taskRefs: nil, deliveryRefs: nil,
-                                  executionState: nil, createdAt: Date().timeIntervalSince1970)
-        messages.append(userMsg)
+        guard !api.sessionToken.isEmpty else {
+            status = .failed
+            statusLabel = ""
+            errorMessage = "جلسة جارفس غير متاحة. أعد ربط الجهاز ثم حاول مرة أخرى."
+            retryTarget = .send(trimmed)
+            return
+        }
+
+        requestInFlight = true
+        defer { requestInFlight = false }
+
+        if appendLocalUserMessage {
+            let userMsg = ChatMessage(messageId: "local-\(UUID().uuidString.prefix(8))",
+                                      conversationId: cid, role: "user", content: trimmed,
+                                      citations: nil, toolCalls: nil, attachmentRefs: nil,
+                                      taskRefs: nil, deliveryRefs: nil,
+                                      executionState: nil, createdAt: Date().timeIntervalSince1970)
+            messages.append(userMsg)
+        }
 
         streamingText = ""
         liveCitations = []
@@ -62,32 +93,51 @@ final class ChatViewModel: ObservableObject {
         errorMessage = nil
         status = .working
         statusLabel = "جارٍ المعالجة"
+        retryTarget = .send(trimmed)
 
         var req = URLRequest(url: api.baseURL.appendingPathComponent("conversations/\(cid)/chat"))
         req.httpMethod = "POST"
+        req.timeoutInterval = 45
         req.setValue(api.sessionToken, forHTTPHeaderField: "X-Jarvis-Session")
+        req.setValue(api.workspace, forHTTPHeaderField: "X-Jarvis-Workspace")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try? JSONSerialization.data(withJSONObject: ["text": trimmed])
 
         do {
-            let (bytes, _) = try await URLSession.shared.bytes(for: req)
+            let (bytes, response) = try await URLSession.shared.bytes(for: req)
+            guard let http = response as? HTTPURLResponse else {
+                failSend("استجابة الخادم غير صالحة.")
+                return
+            }
+            guard (200..<300).contains(http.statusCode) else {
+                failSend(message(forHTTPStatus: http.statusCode))
+                return
+            }
+
             var currentEvent = ""
+            var sawTerminalEvent = false
             for try await line in bytes.lines {
                 if line.hasPrefix("event: ") {
                     currentEvent = String(line.dropFirst(7))
                 } else if line.hasPrefix("data: ") {
                     let payload = String(line.dropFirst(6))
-                    handle(currentEvent, payload)
+                    if handle(currentEvent, payload) {
+                        sawTerminalEvent = true
+                    }
                 }
             }
+
+            if !sawTerminalEvent && status != .idle && status != .backgroundTask && status != .failed {
+                failSend("انتهى الاتصال قبل اكتمال الرد. يمكنك إعادة المحاولة.")
+            }
         } catch {
-            status = .failed
-            errorMessage = "انقطع الاتصال"
+            failSend(userFacingMessage(for: error, operation: "إرسال الرسالة"))
         }
     }
 
-    private func handle(_ event: String, _ payload: String) {
-        guard let data = payload.data(using: .utf8) else { return }
+    /// يعيد true عند حدث نهائي حتى نميز انتهاء SSE الطبيعي عن انقطاع صامت.
+    private func handle(_ event: String, _ payload: String) -> Bool {
+        guard let data = payload.data(using: .utf8) else { return false }
         switch event {
         case "message_start":
             status = .working
@@ -117,6 +167,7 @@ final class ChatViewModel: ObservableObject {
                     status = .backgroundTask
                     statusLabel = "انتقل إلى مهمة خلفية"
                     pendingTaskId = c.taskId
+                    retryTarget = nil
                     #if os(iOS)
                     if let tid = c.taskId {
                         NotificationManager.shared.notifyTaskHandoff(tid)
@@ -125,15 +176,19 @@ final class ChatViewModel: ObservableObject {
                 } else {
                     finishAssistant(c)
                 }
+                return true
             }
         case "error":
             if let e = try? JSONDecoder().decode(ErrorEvent.self, from: data) {
                 status = .failed
-                errorMessage = e.message ?? "حدث خطأ"
+                statusLabel = ""
+                errorMessage = e.message ?? "حدث خطأ أثناء تنفيذ الطلب"
+                return true
             }
         default:
             break
         }
+        return false
     }
 
     private func finishAssistant(_ c: CompleteEvent) {
@@ -149,14 +204,69 @@ final class ChatViewModel: ObservableObject {
         liveCitations = []
         status = .idle
         statusLabel = ""
+        retryTarget = nil
+    }
+
+    private func failSend(_ message: String) {
+        status = .failed
+        statusLabel = ""
+        errorMessage = message
+    }
+
+    private func message(forHTTPStatus code: Int) -> String {
+        switch code {
+        case 401:
+            return "انتهت جلسة جارفس أو لم تعد صالحة. أعد ربط الجهاز."
+        case 403:
+            return "هذه المساحة أو العملية غير مصرح بها."
+        case 408, 504:
+            return "انتهت مهلة الاتصال بالخادم. يمكنك إعادة المحاولة."
+        case 429:
+            return "الخدمة مشغولة حاليًا. حاول مرة أخرى بعد قليل."
+        case 500...599:
+            return "الخادم غير متاح مؤقتًا. يمكنك إعادة المحاولة."
+        default:
+            return "تعذر تنفيذ الطلب (HTTP \(code))."
+        }
+    }
+
+    private func userFacingMessage(for error: Error, operation: String) -> String {
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .notConnectedToInternet:
+                return "لا يوجد اتصال بالإنترنت. تحقق من الشبكة ثم أعد المحاولة."
+            case .timedOut:
+                return "انتهت مهلة \(operation). أعد المحاولة."
+            case .networkConnectionLost:
+                return "انقطع اتصال الشبكة أثناء \(operation). أعد المحاولة."
+            case .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed:
+                return "تعذر الوصول إلى خادم جارفس. تحقق من الشبكة ثم أعد المحاولة."
+            default:
+                break
+            }
+        }
+
+        let nsError = error as NSError
+        if nsError.domain == "JarvisAPI" {
+            return message(forHTTPStatus: nsError.code)
+        }
+        return "تعذر \(operation). أعد المحاولة."
     }
 
     func retry() async {
-        // يعيد آخر نص مستخدم فشل
-        if let last = messages.last(where: { $0.role == "user" })?.content {
-            // إزالة الرسالة الفاشلة إن وُجدت
-            messages.removeAll { $0.executionState?.status == "failed" }
-            await send(last)
+        guard !requestInFlight else { return }
+        guard let target = retryTarget else {
+            if !conversationId.isEmpty { await load(conversationId) }
+            return
+        }
+
+        errorMessage = nil
+        switch target {
+        case .load(let id):
+            await load(id)
+        case .send(let text):
+            // الرسالة المحلية موجودة أصلًا؛ لا نكررها عند retry.
+            await send(text, appendLocalUserMessage: false)
         }
     }
 }
