@@ -25,6 +25,17 @@ except ImportError:
     _load_env_file(Path(__file__).parent / ".env")
     _load_env_file("/opt/data/.env")
 
+# Project Health truthfulness guard.
+# main.py reads these fields through os.getenv(). Seed only genuinely missing
+# planning metadata with "unknown" so legacy route fallbacks can never masquerade
+# as current milestones. Explicit deployment/CI values remain authoritative.
+for _health_key in (
+    "JARVIS_CURRENT_PHASE",
+    "JARVIS_CURRENT_MILESTONE",
+    "JARVIS_NEXT_MILESTONE",
+):
+    os.environ.setdefault(_health_key, "unknown")
+
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")

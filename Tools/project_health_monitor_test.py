@@ -1,5 +1,5 @@
 """Project Health Monitor regression checks."""
-import os, sys
+import os, subprocess, sys
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 PASS = FAIL = 0
@@ -11,6 +11,7 @@ def check(name, cond):
     else: FAIL += 1
 
 main = open(os.path.join(ROOT, 'phase3', 'backend', 'main.py'), encoding='utf-8').read()
+config = open(os.path.join(ROOT, 'phase3', 'backend', 'config.py'), encoding='utf-8').read()
 home = open(os.path.join(ROOT, 'JARVIS', 'Workspace', 'HomeEntryView.swift'), encoding='utf-8').read()
 models = open(os.path.join(ROOT, 'JARVIS', 'Workspace', 'WorkspaceModels.swift'), encoding='utf-8').read()
 pbx = open(os.path.join(ROOT, 'JARVIS.xcodeproj', 'project.pbxproj'), encoding='utf-8').read()
@@ -64,6 +65,41 @@ check("project health has an independent retry path",
       'Task { await vm.refreshProjectHealth() }' in home and
       'صحة جارفس غير متاحة' in home and
       'إعادة فحص الصحة' in home)
+
+health_keys = ('JARVIS_CURRENT_PHASE', 'JARVIS_CURRENT_MILESTONE', 'JARVIS_NEXT_MILESTONE')
+backend_dir = os.path.join(ROOT, 'phase3', 'backend')
+probe = (
+    'import os,sys; '
+    f'sys.path.insert(0, {backend_dir!r}); '
+    'import config; '
+    'print("|".join(os.environ[k] for k in '
+    + repr(health_keys) + '))'
+)
+clean_env = os.environ.copy()
+for key in health_keys:
+    clean_env.pop(key, None)
+try:
+    defaults = subprocess.check_output([sys.executable, '-c', probe], env=clean_env, text=True).strip()
+except Exception:
+    defaults = '<probe-failed>'
+
+check("missing milestone metadata fails closed to unknown",
+      'os.environ.setdefault(_health_key, "unknown")' in config and
+      defaults == 'unknown|unknown|unknown')
+
+override_env = clean_env.copy()
+override_env.update({
+    'JARVIS_CURRENT_PHASE': '4',
+    'JARVIS_CURRENT_MILESTONE': 'Gold cinematic UI migration',
+    'JARVIS_NEXT_MILESTONE': 'Meeting foundation',
+})
+try:
+    explicit = subprocess.check_output([sys.executable, '-c', probe], env=override_env, text=True).strip()
+except Exception:
+    explicit = '<probe-failed>'
+
+check("explicit deployment milestone metadata remains authoritative",
+      explicit == '4|Gold cinematic UI migration|Meeting foundation')
 
 print(f"\n== RESULT: {PASS} PASS / {FAIL} FAIL ==")
 sys.exit(1 if FAIL else 0)
