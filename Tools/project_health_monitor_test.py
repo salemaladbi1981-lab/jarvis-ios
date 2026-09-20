@@ -12,7 +12,8 @@ def check(name, cond):
 
 main = open(os.path.join(ROOT, 'phase3', 'backend', 'main.py'), encoding='utf-8').read()
 home = open(os.path.join(ROOT, 'JARVIS', 'Workspace', 'HomeEntryView.swift'), encoding='utf-8').read()
-model = open(os.path.join(ROOT, 'JARVIS', 'Workspace', 'ProjectHealth.swift'), encoding='utf-8').read()
+models = open(os.path.join(ROOT, 'JARVIS', 'Workspace', 'WorkspaceModels.swift'), encoding='utf-8').read()
+pbx = open(os.path.join(ROOT, 'JARVIS.xcodeproj', 'project.pbxproj'), encoding='utf-8').read()
 
 check("authenticated project health endpoint exists",
       '@app.get("/project/health")' in main and
@@ -30,10 +31,14 @@ check("health reports real runtime blockers and approvals",
       '"tasks_failed": failed' in main and
       '"owner_actions": pending_approvals' in main)
 
-check("health model decodes snake_case through JarvisAPI decoder",
-      'struct ProjectHealth: Codable' in model and
-      'let currentMilestone: String?' in model and
-      'let ownerActions: Int?' in model)
+check("health model is compiled through existing shared workspace source",
+      'struct ProjectHealth: Codable' in models and
+      'let currentMilestone: String?' in models and
+      'let ownerActions: Int?' in models and
+      'WorkspaceModels.swift' in pbx)
+
+check("health model does not rely on an unregistered standalone source",
+      'ProjectHealth.swift' not in pbx)
 
 check("home loads project health endpoint",
       'api.getObject("project/health")' in home and
