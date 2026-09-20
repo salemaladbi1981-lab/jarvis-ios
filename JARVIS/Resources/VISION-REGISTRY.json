@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-09-20",
+  "states": ["PLANNED","ANALYZED","APPROVED","BUILDING","TESTING","SECURITY_REVIEW","DEVICE_GATE","LIVE","MONITORING"],
+  "capabilities": [
+    {
+      "id": "operator.project_health",
+      "name": "Project Health Monitor",
+      "phase": "3.6",
+      "state": "BUILDING",
+      "risk_class": "low",
+      "owner_actions_target": 0,
+      "device_gate_required": false,
+      "notes": "Build/CI/tests/blockers/current milestone/next milestone/owner actions."
+    },
+    {
+      "id": "voice.personas",
+      "name": "Voice 2.0 Personas",
+      "phase": "3.6D",
+      "state": "APPROVED",
+      "risk_class": "low",
+      "owner_actions_target": 0,
+      "device_gate_required": true,
+      "notes": "Classic, Executive, Companion, Tactical, Night; Gulf Arabic identity; no real-person voice cloning."
+    },
+    {
+      "id": "voice.siri_gateway",
+      "name": "Siri / App Intents Gateway",
+      "phase": "3.6D",
+      "state": "APPROVED",
+      "risk_class": "medium",
+      "owner_actions_target": 1,
+      "device_gate_required": true,
+      "notes": "Lock-screen-safe access using official Apple paths only."
+    },
+    {
+      "id": "voice.headset_routes",
+      "name": "Shokz / AirPods Voice Routing",
+      "phase": "3.6D",
+      "state": "APPROVED",
+      "risk_class": "low",
+      "owner_actions_target": 0,
+      "device_gate_required": true,
+      "notes": "Verify input/output route, interruption, Siri/Shortcut invocation, locked/unlocked."
+    },
+    {
+      "id": "mac.operator",
+      "name": "Mac Operator Foundation",
+      "phase": "3.6A",
+      "state": "APPROVED",
+      "risk_class": "medium",
+      "owner_actions_target": 0,
+      "device_gate_required": true,
+      "notes": "Local execution foundation for files, Xcode/build/test, Git/CI, Shortcuts/Apple Events under policy."
+    },
+    {
+      "id": "agents.capability_registry",
+      "name": "Agent Capability Registry",
+      "phase": "3.6",
+      "state": "BUILDING",
+      "risk_class": "low",
+      "owner_actions_target": 0,
+      "device_gate_required": false,
+      "notes": "Distinguish exists/UI/routable/backend/tools/executable/mock/device-verified."
+    },
+    {
+      "id": "meetings.foundation",
+      "name": "Meeting Foundation",
+      "phase": "3.6",
+      "state": "APPROVED",
+      "risk_class": "medium",
+      "owner_actions_target": 0,
+      "device_gate_required": true,
+      "notes": "Official platform mechanisms only; visible join or authorized capture modes."
+    }
+  ]
+}
