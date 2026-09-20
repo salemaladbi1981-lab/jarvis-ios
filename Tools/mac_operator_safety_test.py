@@ -39,6 +39,25 @@ check(
 )
 
 check(
+    "target shape validation runs before permission and owner-approval prompts",
+    "struct MacOperatorTargetPolicy" in SOURCE
+    and "case invalidTarget" in SOURCE
+    and SOURCE.find("targetPolicy.isValid(request)")
+    < SOURCE.find("grantedPermissions.contains(permission)")
+    < SOURCE.find("request.action.requiresOwnerApproval"),
+)
+
+check(
+    "file and app targets are constrained before authorization",
+    "target.utf8.count <= maxTargetUTF8Bytes" in SOURCE
+    and "target.rangeOfCharacter(from: .controlCharacters) == nil" in SOURCE
+    and 'target.hasPrefix("/")' in SOURCE
+    and 'target != "/"' in SOURCE
+    and 'components.contains(where: { $0 == ".." })' in SOURCE
+    and "isBundleIdentifier(target)" in SOURCE,
+)
+
+check(
     "permission gate executes before owner approval gate",
     SOURCE.find("grantedPermissions.contains(permission)")
     < SOURCE.find("request.action.requiresOwnerApproval"),
