@@ -60,14 +60,31 @@ final class HomeViewModel: ObservableObject {
     }
 
     init(
-        smartHome: SmartHomeProvider = MockSmartHomeProvider(),
-        security: SecurityProvider = MockSecurityProvider(),
-        media: MediaProvider = MockMediaProvider(),
+        smartHome: SmartHomeProvider? = nil,
+        security: SecurityProvider? = nil,
+        media: MediaProvider? = nil,
         voice: VoiceProvider = MockVoiceProvider()
     ) {
-        self.smartHome = smartHome
-        self.security = security
-        self.media = media
+        let demoRuntime = ProcessInfo.processInfo.arguments.contains("-demo")
+
+        if let smartHome {
+            self.smartHome = smartHome
+        } else {
+            self.smartHome = demoRuntime ? MockSmartHomeProvider() : UnavailableSmartHomeProvider()
+        }
+
+        if let security {
+            self.security = security
+        } else {
+            self.security = demoRuntime ? MockSecurityProvider() : UnavailableSecurityProvider()
+        }
+
+        if let media {
+            self.media = media
+        } else {
+            self.media = demoRuntime ? MockMediaProvider() : UnavailableMediaProvider()
+        }
+
         self.voice = voice
         bindVoice()
     }
@@ -179,9 +196,25 @@ final class HomeViewModel: ObservableObject {
     func load() async {
         registry = try? AgentRegistry.load()
         if let r = registry { approval = ApprovalPolicyEvaluator(registry: r) }
-        homeDevices = await smartHome.readDevices()
-        securityStatus = await security.status()
-        mediaTrack = await media.nowPlaying()
+
+        if smartHome is UnavailableSmartHomeProvider {
+            homeDevices = []
+        } else {
+            homeDevices = await smartHome.readDevices()
+        }
+
+        if security is UnavailableSecurityProvider {
+            securityStatus = nil
+        } else {
+            securityStatus = await security.status()
+        }
+
+        if media is UnavailableMediaProvider {
+            mediaTrack = nil
+        } else {
+            mediaTrack = await media.nowPlaying()
+        }
+
         applyLaunchArguments()
     }
 
