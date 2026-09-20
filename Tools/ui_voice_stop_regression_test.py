@@ -27,8 +27,11 @@ check("Core: uses perceptual (micP/outP)", 'micP' in core and 'outP' in core and
 check("Core: coreScale يستخدم micP/outP", 'listening * micP' in core and 'speaking * outP' in core)
 check("Waveform: perceptual level", 'Level.perceptual' in wave)
 
-# 2) UI touch/scroll لا يوقف الصوت
-check("HomeViewModel: stopListening مرة واحدة فقط (في toggleVoice)", vm.count('stopListening') == 1)
+# 2) UI touch/scroll لا يوقف الصوت. stopListening is allowed only in two explicit lifecycle seams:
+#    a) manual toggleVoice stop, b) transport disconnect cleanup. It must not leak into arbitrary UI handlers.
+check("HomeViewModel: stopListening محصور في manual toggle + transport disconnect cleanup",
+      vm.count('stopListening') == 2 and
+      'case .disconnected:' in vm and 'self.voiceSession.stopListening()' in vm)
 _bg = vm.find('func handleAppBackgrounded')
 check("HomeViewModel: disconnect في background handling (handleAppBackgrounded)",
       _bg >= 0 and 'disconnect(' in vm[_bg:])
