@@ -145,6 +145,58 @@ def health():
     return {"ok": True, "provider": config.REALTIME_PROVIDER}
 
 
+@app.get("/project/health")
+def project_health(user_id: str = Depends(get_user_id), workspace_id: str = Depends(get_workspace)):
+    """Truthful project/runtime health surface for the owner dashboard.
+
+    Build/CI/test metadata is reported only when injected by the deployment/CI
+    environment. Missing evidence is returned as "unknown" rather than fabricated.
+    """
+    tasks = tasks_mod.list_tasks(user_id, workspace_id)
+    state_counts = {}
+    failed = 0
+    active = 0
+    for task in tasks:
+        js = worker.job_state_for(task.get("task_id"))
+        state = (js or {}).get("state") or task.get("status") or "UNKNOWN"
+        state = str(state).upper()
+        state_counts[state] = state_counts.get(state, 0) + 1
+        if state in ("FAILED", "ERROR"):
+            failed += 1
+        if state in ("QUEUED", "RUNNING", "PROCESSING"):
+            active += 1
+
+    pending_approvals = len(approval_store.list_pending(workspace_id))
+    cap_summary = capabilities.list_capabilities(summary=True)
+    capability_count = len(cap_summary) if isinstance(cap_summary, list) else 0
+
+    return {
+        "ok": True,
+        "phase": os.getenv("JARVIS_CURRENT_PHASE", "3.6"),
+        "current_milestone": os.getenv("JARVIS_CURRENT_MILESTONE", "Operator & Autopilot"),
+        "next_milestone": os.getenv("JARVIS_NEXT_MILESTONE", "Siri / App Intents foundation"),
+        "build_sha": os.getenv("JARVIS_BUILD_SHA", ""),
+        "ci_status": os.getenv("JARVIS_CI_STATUS", "unknown"),
+        "tests_status": os.getenv("JARVIS_TESTS_STATUS", "unknown"),
+        "provider": config.REALTIME_PROVIDER,
+        "kill_switch": bool(kill_switch.engaged()),
+        "workspace_id": workspace_id,
+        "tasks_total": len(tasks),
+        "tasks_active": active,
+        "tasks_failed": failed,
+        "task_states": state_counts,
+        "pending_approvals": pending_approvals,
+        "owner_actions": pending_approvals,
+        "capability_count": capability_count,
+        "blockers": failed + (1 if kill_switch.engaged() else 0),
+        "evidence": {
+            "build": "reported" if os.getenv("JARVIS_BUILD_SHA") else "unknown",
+            "ci": "reported" if os.getenv("JARVIS_CI_STATUS") else "unknown",
+            "tests": "reported" if os.getenv("JARVIS_TESTS_STATUS") else "unknown",
+        },
+    }
+
+
 @app.get("/capabilities")
 def list_capabilities():
     """قائمة القدرات المنظمة (بدل raw skills)."""
