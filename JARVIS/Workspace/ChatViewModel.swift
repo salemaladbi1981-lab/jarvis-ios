@@ -29,6 +29,7 @@ final class ChatViewModel: ObservableObject {
     @Published var conversationId: String = ""
 
     private let api: JarvisAPI
+    private var isSending = false
 
     init(api: JarvisAPI) { self.api = api }
 
@@ -39,22 +40,35 @@ final class ChatViewModel: ObservableObject {
             let detail: ConversationDetail = try await api.getObject("conversations/\(id)")
             messages = detail.messages ?? []
         } catch {
-            errorMessage = "تعذر تحميل المحادثة"
+            errorMessage = Self.userMessage(for: error)
         }
     }
 
     func send(_ text: String) async {
-        let cid = conversationId
-        guard !cid.isEmpty else { return }
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        await performSend(text, appendUserMessage: true)
+    }
 
-        let userMsg = ChatMessage(messageId: "local-\(UUID().uuidString.prefix(8))",
-                                  conversationId: cid, role: "user", content: trimmed,
-                                  citations: nil, toolCalls: nil, attachmentRefs: nil,
-                                  taskRefs: nil, deliveryRefs: nil,
-                                  executionState: nil, createdAt: Date().timeIntervalSince1970)
-        messages.append(userMsg)
+    private func performSend(_ text: String, appendUserMessage: Bool) async {
+        let cid = conversationId
+        guard !cid.isEmpty else {
+            errorMessage = "المحادثة غير جاهزة"
+            return
+        }
+
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !isSending else { return }
+
+        isSending = true
+        defer { isSending = false }
+
+        if appendUserMessage {
+            let userMsg = ChatMessage(messageId: "local-\(UUID().uuidString.prefix(8))",
+                                      conversationId: cid, role: "user", content: trimmed,
+                                      citations: nil, toolCalls: nil, attachmentRefs: nil,
+                                      taskRefs: nil, deliveryRefs: nil,
+                                      executionState: nil, createdAt: Date().timeIntervalSince1970)
+            messages.append(userMsg)
+        }
 
         streamingText = ""
         liveCitations = []
@@ -65,12 +79,22 @@ final class ChatViewModel: ObservableObject {
 
         var req = URLRequest(url: api.baseURL.appendingPathComponent("conversations/\(cid)/chat"))
         req.httpMethod = "POST"
+        req.timeoutInterval = 60
         req.setValue(api.sessionToken, forHTTPHeaderField: "X-Jarvis-Session")
+        req.setValue(api.workspace, forHTTPHeaderField: "X-Jarvis-Workspace")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try? JSONSerialization.data(withJSONObject: ["text": trimmed])
 
         do {
-            let (bytes, _) = try await URLSession.shared.bytes(for: req)
+            let (bytes, response) = try await URLSession.shared.bytes(for: req)
+            if let http = response as? HTTPURLResponse,
+               !(200..<300).contains(http.statusCode) {
+                status = .failed
+                statusLabel = ""
+                errorMessage = Self.httpMessage(statusCode: http.statusCode)
+                return
+            }
+
             var currentEvent = ""
             for try await line in bytes.lines {
                 if line.hasPrefix("event: ") {
@@ -82,7 +106,8 @@ final class ChatViewModel: ObservableObject {
             }
         } catch {
             status = .failed
-            errorMessage = "انقطع الاتصال"
+            statusLabel = ""
+            errorMessage = Self.userMessage(for: error)
         }
     }
 
@@ -100,9 +125,11 @@ final class ChatViewModel: ObservableObject {
             if let t = try? JSONDecoder().decode(ToolCallEvent.self, from: data) {
                 let name = t.toolName ?? ""
                 if name.lowercased().contains("search") || name.lowercased().contains("web") {
-                    status = .searching; statusLabel = "يبحث"
+                    status = .searching
+                    statusLabel = "يبحث"
                 } else {
-                    status = .usingTool; statusLabel = "يستخدم أداة"
+                    status = .usingTool
+                    statusLabel = "يستخدم أداة"
                 }
             }
         case "citation":
@@ -129,7 +156,8 @@ final class ChatViewModel: ObservableObject {
         case "error":
             if let e = try? JSONDecoder().decode(ErrorEvent.self, from: data) {
                 status = .failed
-                errorMessage = e.message ?? "حدث خطأ"
+                statusLabel = ""
+                errorMessage = e.message ?? "حدث خطأ أثناء معالجة الرد"
             }
         default:
             break
@@ -152,11 +180,51 @@ final class ChatViewModel: ObservableObject {
     }
 
     func retry() async {
-        // يعيد آخر نص مستخدم فشل
-        if let last = messages.last(where: { $0.role == "user" })?.content {
-            // إزالة الرسالة الفاشلة إن وُجدت
-            messages.removeAll { $0.executionState?.status == "failed" }
-            await send(last)
+        guard !isSending,
+              let last = messages.last(where: { $0.role == "user" })?.content else { return }
+        // الرسالة الأصلية موجودة بالفعل في الـtimeline؛ لا نضيف نسخة ثانية عند retry.
+        await performSend(last, appendUserMessage: false)
+    }
+
+    private static func httpMessage(statusCode: Int) -> String {
+        switch statusCode {
+        case 401:
+            return "انتهت جلسة جارفس — أعد تفعيل الاتصال"
+        case 403:
+            return "الجلسة لا تملك صلاحية الوصول المطلوبة"
+        case 404:
+            return "المحادثة غير موجودة أو لم تعد متاحة"
+        case 408:
+            return "انتهت مهلة الاتصال — حاول مرة أخرى"
+        case 429:
+            return "جارفس مشغول حاليًا — حاول بعد قليل"
+        case 500...599:
+            return "الخادم يواجه مشكلة مؤقتة — حاول بعد قليل"
+        default:
+            return "تعذّر إرسال الرسالة (HTTP \(statusCode))"
+        }
+    }
+
+    private static func userMessage(for error: Error) -> String {
+        guard let urlError = error as? URLError else {
+            let ns = error as NSError
+            if ns.domain == "JarvisAPI", ns.code > 0 {
+                return httpMessage(statusCode: ns.code)
+            }
+            return "حدث خطأ غير متوقع — حاول مرة أخرى"
+        }
+
+        switch urlError.code {
+        case .notConnectedToInternet, .networkConnectionLost:
+            return "لا يوجد اتصال بالإنترنت"
+        case .timedOut:
+            return "انتهت مهلة الاتصال — حاول مرة أخرى"
+        case .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed:
+            return "تعذّر الوصول إلى خادم جارفس"
+        case .cancelled:
+            return "تم إلغاء الطلب"
+        default:
+            return "تعذّر الاتصال — حاول مرة أخرى"
         }
     }
 }
