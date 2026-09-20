@@ -1,24 +1,43 @@
 import SwiftUI
+import Foundation
 
 /// macOS Home — approved cinematic desktop direction (three-zone):
-/// Left: nav + Smart Home + Security + Media
+/// Left: nav + connected provider cards (demo-only until live providers are wired)
 /// Center: JARVIS + Core/orbit + title + greeting + waveform/status + suggestions + voice
-/// Right: contextual demo modules (empty for now — no invented live data)
+/// Right: contextual modules (empty for now — no invented live data)
 #if os(macOS)
 struct MacHomeView: View {
     @StateObject private var vm = HomeViewModel()
     @State private var selectedTab = "home"
 
+    /// Synthetic provider data is permitted only for explicitly launched screenshot/demo sessions.
+    /// Normal production launches must never present mock home/security/media state as live truth.
+    private var demoMode: Bool {
+        ProcessInfo.processInfo.arguments.contains("-demo")
+    }
+
     var body: some View {
         HStack(spacing: 0) {
-            // LEFT zone — nav + cards
+            // LEFT zone — nav + provider-backed cards
             VStack(spacing: JarvisSpacing.md) {
                 macSidebar
-                SmartHomeCard(devices: vm.homeDevices)
-                    .onTapGesture { vm.requestAction(agentID: "core_home", action: "read-temperature") }
-                SecurityCard(status: vm.securityStatus ?? SecurityStatus(systemsNormal: true, doorsLocked: true, camerasActive: true))
-                    .onTapGesture { vm.requestAction(agentID: "core_home", action: "unlock-door") }
-                MediaCard(track: vm.mediaTrack ?? MediaTrack(title: "Blinding Lights", artist: "The Weeknd", current: "2:06", duration: "3:20"))
+
+                if demoMode {
+                    SmartHomeCard(devices: vm.homeDevices)
+                        .onTapGesture { vm.requestAction(agentID: "core_home", action: "read-temperature") }
+
+                    if let status = vm.securityStatus {
+                        SecurityCard(status: status)
+                            .onTapGesture { vm.requestAction(agentID: "core_home", action: "unlock-door") }
+                    }
+
+                    if let track = vm.mediaTrack, !track.title.isEmpty {
+                        MediaCard(track: track)
+                    }
+                } else {
+                    providerUnavailableCard
+                }
+
                 Spacer()
             }
             .frame(width: 340)
@@ -40,8 +59,8 @@ struct MacHomeView: View {
                     JarvisWaveformStatusView(vm: vm)
 
                     QuickSuggestions(commands: QuickCommand.productionCases) { cmd in
-                            Task { await vm.handleQuickCommand(cmd) }
-                        }
+                        Task { await vm.handleQuickCommand(cmd) }
+                    }
 
                     VoiceInputBar(isListening: vm.isListening) { vm.toggleVoice() }
 
@@ -69,6 +88,25 @@ struct MacHomeView: View {
                 .ignoresSafeArea()
         )
         .task { await vm.load() }
+    }
+
+    private var providerUnavailableCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("البيانات المباشرة غير متصلة", systemImage: "link.badge.plus")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(JarvisColor.text_secondary)
+            Text("لن يعرض جارفس حالة منزل أو أمان أو وسائط وهمية في وضع الإنتاج.")
+                .font(.system(size: 12))
+                .foregroundColor(JarvisColor.text_muted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(JarvisSpacing.md)
+        .background(
+            RoundedRectangle(cornerRadius: JarvisRadius.control)
+                .fill(JarvisColor.bg_1.opacity(0.45))
+        )
+        .accessibilityLabel("البيانات المباشرة غير متصلة")
     }
 
     private var macSidebar: some View {
