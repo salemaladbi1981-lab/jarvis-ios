@@ -131,4 +131,95 @@ final class HomeViewModelTests: XCTestCase {
         XCTAssertTrue(MeetingSessionLifecycle.canTransition(from: .stopped, to: .idle))
         XCTAssertTrue(MeetingSessionLifecycle.canTransition(from: .active, to: .active))
     }
+
+    func testMeetingCoordinatorKeepsBlockedLiveSessionAwaitingAuthorization() throws {
+        var coordinator = MeetingSessionCoordinator(
+            descriptor: MeetingSessionDescriptor(
+                title: "Weekly review",
+                inputMode: .authorizedLiveCapture
+            )
+        )
+
+        let decision = try coordinator.prepare(
+            ownerAuthorized: true,
+            participantConsentConfirmed: false
+        )
+
+        XCTAssertFalse(decision.allowed)
+        XCTAssertEqual(decision.blockReason, .participantConsentRequired)
+        XCTAssertEqual(coordinator.descriptor.state, .awaitingAuthorization)
+    }
+
+    func testMeetingCoordinatorRechecksLiveConsentAtActivation() {
+        var coordinator = MeetingSessionCoordinator(
+            descriptor: MeetingSessionDescriptor(
+                title: "Injected ready state",
+                inputMode: .authorizedLiveCapture,
+                state: .ready
+            )
+        )
+
+        XCTAssertThrowsError(
+            try coordinator.activate(
+                ownerAuthorized: true,
+                participantConsentConfirmed: false
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? MeetingSessionTransitionError,
+                .captureBlocked(.participantConsentRequired)
+            )
+        }
+        XCTAssertEqual(coordinator.descriptor.state, .ready)
+    }
+
+    func testMeetingCoordinatorAllowsAuthorizedReadyActiveStopResetFlow() throws {
+        var coordinator = MeetingSessionCoordinator(
+            descriptor: MeetingSessionDescriptor(
+                title: "Authorized meeting",
+                inputMode: .authorizedLiveCapture
+            )
+        )
+
+        let decision = try coordinator.prepare(
+            ownerAuthorized: true,
+            participantConsentConfirmed: true
+        )
+        XCTAssertTrue(decision.allowed)
+        XCTAssertEqual(coordinator.descriptor.state, .ready)
+
+        try coordinator.activate(
+            ownerAuthorized: true,
+            participantConsentConfirmed: true
+        )
+        XCTAssertEqual(coordinator.descriptor.state, .active)
+
+        try coordinator.stop()
+        XCTAssertEqual(coordinator.descriptor.state, .stopped)
+
+        try coordinator.reset()
+        XCTAssertEqual(coordinator.descriptor.state, .idle)
+    }
+
+    func testMeetingCoordinatorRejectsDirectIdleActivationEvenForMetadata() {
+        var coordinator = MeetingSessionCoordinator(
+            descriptor: MeetingSessionDescriptor(
+                title: "Metadata only",
+                inputMode: .metadataOnly
+            )
+        )
+
+        XCTAssertThrowsError(
+            try coordinator.activate(
+                ownerAuthorized: false,
+                participantConsentConfirmed: false
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? MeetingSessionTransitionError,
+                .invalidTransition(from: .idle, to: .active)
+            )
+        }
+        XCTAssertEqual(coordinator.descriptor.state, .idle)
+    }
 }

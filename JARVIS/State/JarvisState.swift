@@ -186,6 +186,77 @@ public struct MeetingSessionDescriptor: Identifiable, Equatable, Codable {
     }
 }
 
+/// أخطاء متوقعة عند قيادة جلسة اجتماع عبر الـcoordinator المشترك.
+/// لا تتضمن أي تنفيذ منصة أو صلاحيات فعلية.
+public enum MeetingSessionTransitionError: Error, Equatable {
+    case invalidTransition(from: MeetingSessionState, to: MeetingSessionState)
+    case captureBlocked(MeetingCaptureBlockReason)
+}
+
+/// واجهة حالة مشتركة آمنة للـDesktop وMeeting Agent المستقبلي.
+/// الهدف منع المستهلكين من تغيير state مباشرة بطريقة تتجاوز بوابة الموافقات.
+/// لا يطلب هذا النوع إذن ميكروفون ولا يبدأ تسجيلًا ولا يلتقط أي محتوى.
+public struct MeetingSessionCoordinator {
+    public private(set) var descriptor: MeetingSessionDescriptor
+
+    public init(descriptor: MeetingSessionDescriptor) {
+        self.descriptor = descriptor
+    }
+
+    /// يقيّم سياسة المصدر وينقل الجلسة فقط إلى ready أو awaitingAuthorization.
+    /// الاستدعاء المتكرر آمن طالما الحالة الحالية تسمح بنفس الانتقال.
+    @discardableResult
+    public mutating func prepare(
+        ownerAuthorized: Bool,
+        participantConsentConfirmed: Bool
+    ) throws -> MeetingCaptureDecision {
+        let decision = MeetingCapturePolicy.evaluate(
+            inputMode: descriptor.inputMode,
+            ownerAuthorized: ownerAuthorized,
+            participantConsentConfirmed: participantConsentConfirmed
+        )
+        let target: MeetingSessionState = decision.allowed ? .ready : .awaitingAuthorization
+        try transition(to: target)
+        return decision
+    }
+
+    /// لا يسمح بتنشيط جلسة live حتى لو أُنشئ descriptor خارجيًا بحالة ready؛
+    /// تتم إعادة فحص بوابة الموافقات عند لحظة التفعيل لمنع bypass بحالة محقونة.
+    public mutating func activate(
+        ownerAuthorized: Bool,
+        participantConsentConfirmed: Bool
+    ) throws {
+        let decision = MeetingCapturePolicy.evaluate(
+            inputMode: descriptor.inputMode,
+            ownerAuthorized: ownerAuthorized,
+            participantConsentConfirmed: participantConsentConfirmed
+        )
+        if let reason = decision.blockReason {
+            throw MeetingSessionTransitionError.captureBlocked(reason)
+        }
+        try transition(to: .active)
+    }
+
+    public mutating func stop() throws {
+        try transition(to: .stopped)
+    }
+
+    public mutating func reset() throws {
+        try transition(to: .idle)
+    }
+
+    public mutating func markFailed() throws {
+        try transition(to: .failed)
+    }
+
+    private mutating func transition(to target: MeetingSessionState) throws {
+        guard MeetingSessionLifecycle.canTransition(from: descriptor.state, to: target) else {
+            throw MeetingSessionTransitionError.invalidTransition(from: descriptor.state, to: target)
+        }
+        descriptor.state = target
+    }
+}
+
 /// نقطة توسعة مستقبلية لمصدر اجتماع. أي مزود حقيقي يجب أن يمر عبر MeetingCapturePolicy
 /// قبل التنفيذ. لا يوجد مزود تسجيل ضمن هذه المرحلة.
 public protocol MeetingInputProvider {
