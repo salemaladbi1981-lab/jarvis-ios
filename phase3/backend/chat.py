@@ -103,6 +103,9 @@ def _execute_chat(conversation_id: str, text: str, ident: dict, attachments=None
     بنوع content_delta/tool_call/citation. قابل للحقن للاختبار."""
     user_id = ident["user_id"]
     workspace_id = ident["workspace_id"]
+    ident = dict(ident, conversation_id=conversation_id,
+                 memory_namespace=conversation.memory_namespace_for(user_id, workspace_id, conversation_id),
+                 session_id=ident.get("session_id") or conversation_id)
 
     # auth + conversation ownership
     conv = conversation.ConversationStore().get(conversation_id, user_id, workspace_id)
@@ -191,7 +194,11 @@ def hermes_stream_source(text, ident):
     ملاحظة: الـcontent يُبثّ كقطعة واحدة في هذه النسخة (Hermes /v1/chat/completions
     لا يعيد stream نصيًا عبر هذا المسار)؛ citations/tool_calls تُملأ عند توفر مصدر منظم.
     """
-    import brain_tools
+    import brain_tools, memory_tools
+    recall = memory_tools.answer_personal_memory(text, ident)
+    if recall is not None:
+        yield {"type": "content_delta", "delta": recall}
+        return
     r = brain_tools.execute_brain_tool("jarvis_brain", {"query": text, **ident})
     if not r.get("ok"):
         raise RuntimeError(r.get("error", "provider_error"))

@@ -43,10 +43,15 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
         comps.scheme = comps.scheme == "https" ? "wss" : "ws"
         comps.path = "/realtime"
         guard let url = comps.url else { throw URLError(.badURL) }
+        let token = JarvisConfig.injectedSessionToken ?? KeychainStore.load() ?? ""
+        guard !token.isEmpty else { throw JarvisAPIError.authentication }
+        var request = URLRequest(url: url)
+        request.setValue(token, forHTTPHeaderField: "X-Jarvis-Session")
+        request.setValue("PERSONAL", forHTTPHeaderField: "X-Jarvis-Workspace")
         // بدء اتصال جديد → جيل جديد يربط به الـ receiveLoop
         let gen = stateQueue.sync { self.guardState.beginConnection() }
         stateQueue.sync {
-            self.ws = self.session.webSocketTask(with: url)
+            self.ws = self.session.webSocketTask(with: request)
             self.ws?.resume()
         }
         trace("WS resume → \(url) (handshake pending — NOT connected yet)")

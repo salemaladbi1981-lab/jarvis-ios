@@ -281,7 +281,7 @@ final class HomeViewModel: ObservableObject {
                     isListening = true
                 } catch {
                     state = .alert
-                    calendarMessage = "تعذّر الاتصال بالخادم الصوتي"
+                    calendarMessage = JarvisAPIError.message(for: error)
                 }
             }
         }

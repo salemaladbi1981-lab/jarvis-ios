@@ -654,5 +654,21 @@ def approve(req: ApproveReq):
 
 @app.websocket("/realtime")
 async def realtime_ws(ws: WebSocket):
+    token = ws.headers.get("x-jarvis-session", "")
+    session = auth.resolve_session(token)
+    if not session:
+        await ws.close(code=4401)
+        return
+    requested = ws.headers.get("x-jarvis-workspace") or session["workspace_id"]
+    authorized = workspace.authorize(session["workspace_id"], requested)
+    if authorized is None:
+        await ws.close(code=4403)
+        return
+    conv, _ = conversation.ConversationStore().get_or_create(
+        session["user_id"], authorized, conversation_id=session.get("conversation_id"))
+    auth.set_session_conversation(token, conv["conversation_id"])
+    trusted_identity = {"user_id": session["user_id"], "workspace_id": authorized,
+                        "conversation_id": conv["conversation_id"], "session_id": uuid.uuid4().hex,
+                        "memory_namespace": conv["memory_namespace"]}
     await ws.accept()
-    await realtime.openai_realtime_proxy(ws, {})
+    await realtime.openai_realtime_proxy(ws, {}, trusted_identity=trusted_identity)
