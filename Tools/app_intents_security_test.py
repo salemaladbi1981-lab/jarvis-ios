@@ -16,6 +16,7 @@ def check(name, cond):
 
 
 intent = open(os.path.join(ROOT, 'JARVIS', 'App', 'JarvisAppIntent.swift'), encoding='utf-8').read()
+maps_intent = open(os.path.join(ROOT, 'JARVIS', 'App', 'JarvisMapsIntent.swift'), encoding='utf-8').read()
 shortcuts = open(os.path.join(ROOT, 'JARVIS', 'App', 'JarvisShortcuts.swift'), encoding='utf-8').read()
 home = open(os.path.join(ROOT, 'JARVIS', 'Workspace', 'HomeEntryView.swift'), encoding='utf-8').read()
 home_vm = open(os.path.join(ROOT, 'JARVIS', 'Home', 'HomeViewModel.swift'), encoding='utf-8').read()
@@ -46,6 +47,27 @@ check("pending voice launch is consumed exactly once",
 check("shortcut phrases expose the intent through AppShortcutsProvider",
       'struct JarvisShortcuts: AppShortcutsProvider' in shortcuts and
       'intent: JarvisVoiceIntent()' in shortcuts)
+
+check("navigation shortcut uses App Intents and requires authentication",
+      'struct JarvisNavigateIntent: AppIntent' in maps_intent and
+      'static var openAppWhenRun: Bool = true' in maps_intent and
+      'static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication' in maps_intent)
+
+check("navigation destination is normalized and bounded before handoff",
+      'trimmingCharacters(in: .whitespacesAndNewlines)' in maps_intent and
+      '!normalized.isEmpty' in maps_intent and
+      'normalized.utf8.count <= 512' in maps_intent)
+
+check("navigation handoff uses structured HTTPS URL components",
+      'URLComponents(string: "https://www.google.com/maps/dir/")' in maps_intent and
+      'URLQueryItem(name: "destination", value: normalized)' in maps_intent and
+      'UIApplication.shared.open(url)' in maps_intent and
+      'googlemaps://' not in maps_intent)
+
+check("navigation intent does not request hidden location or microphone access",
+      'CLLocationManager' not in maps_intent and
+      'AVAudio' not in maps_intent and
+      'AudioCapture' not in maps_intent)
 
 check("production home consumes the one-shot intent request",
       'voiceVM.handleAppIntentStart()' in home and
