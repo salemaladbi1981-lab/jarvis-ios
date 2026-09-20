@@ -32,6 +32,12 @@ check("intent asks the system to open the app instead of starting hidden audio",
       'AudioCapture' not in intent and
       'AVAudio' not in intent)
 
+check("pending voice launch is short-lived instead of indefinitely sticky",
+      'pendingStartVoiceMaxAge: TimeInterval = 30' in intent and
+      'Date().timeIntervalSince1970 - requestedAt' in intent and
+      'age >= 0, age <= pendingStartVoiceMaxAge' in intent and
+      'removeObject(forKey: pendingStartVoiceKey)' in intent)
+
 check("shortcut phrases expose the intent through AppShortcutsProvider",
       'struct JarvisShortcuts: AppShortcutsProvider' in shortcuts and
       'intent: JarvisVoiceIntent()' in shortcuts)
