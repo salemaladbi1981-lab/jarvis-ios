@@ -156,3 +156,34 @@ jobs:
         with:
           name: mac-screenshots
           path: '*.png'
+
+  project-health-metadata:
+    name: Project Health CI metadata
+    if: ${{ always() }}
+    needs: [backend-tests, ios, mac]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate truthful Project Health metadata
+        env:
+          JARVIS_BACKEND_TEST_RESULT: ${{ needs.backend-tests.result }}
+          JARVIS_IOS_RESULT: ${{ needs.ios.result }}
+          JARVIS_MAC_RESULT: ${{ needs.mac.result }}
+          JARVIS_CURRENT_PHASE: ${{ vars.JARVIS_CURRENT_PHASE }}
+          JARVIS_CURRENT_MILESTONE: ${{ vars.JARVIS_CURRENT_MILESTONE }}
+          JARVIS_NEXT_MILESTONE: ${{ vars.JARVIS_NEXT_MILESTONE }}
+        run: |
+          python3 Tools/project_health_ci_metadata.py \
+            --output project-health-ci.json \
+            --env-output project-health.env
+          cat project-health-ci.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: project-health-metadata
+          path: |
+            project-health-ci.json
+            project-health.env
+          retention-days: 14
