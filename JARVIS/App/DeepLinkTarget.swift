@@ -78,6 +78,48 @@ struct MacOperatorRequest: Equatable {
     let target: String
 }
 
+/// Validates target shape before any permission prompt or owner-approval flow.
+/// This does not grant filesystem/app access; it only rejects malformed or ambiguous targets
+/// so a future adapter never receives relative paths, traversal segments, control characters,
+/// or arbitrary command-shaped automation destinations through this foundation seam.
+struct MacOperatorTargetPolicy {
+    private let maxTargetUTF8Bytes = 1_024
+
+    func isValid(_ request: MacOperatorRequest) -> Bool {
+        let target = request.target
+        guard !target.isEmpty,
+              target.utf8.count <= maxTargetUTF8Bytes,
+              target.rangeOfCharacter(from: .controlCharacters) == nil else {
+            return false
+        }
+
+        switch request.action {
+        case .inspectSelectedItemMetadata, .revealSelectedItemInFinder:
+            return isAbsoluteUserSelectedPath(target)
+        case .accessibilityInteraction:
+            return target == "frontmost-app" || isBundleIdentifier(target)
+        case .appleEventAutomation:
+            return isBundleIdentifier(target)
+        }
+    }
+
+    private func isAbsoluteUserSelectedPath(_ target: String) -> Bool {
+        guard target.hasPrefix("/"), target != "/" else { return false }
+        let components = target.split(separator: "/", omittingEmptySubsequences: false)
+        return !components.contains(where: { $0 == ".." })
+    }
+
+    private func isBundleIdentifier(_ target: String) -> Bool {
+        let parts = target.split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count >= 2, !parts.contains(where: { $0.isEmpty }) else { return false }
+
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-"))
+        return parts.allSatisfy { part in
+            part.unicodeScalars.allSatisfy { allowed.contains($0) }
+        }
+    }
+}
+
 /// Owner approval is bound to the exact action + target, uniquely identified, and expires quickly.
 /// This prevents a confirmation for one Finder/app target from being reused for a different local
 /// action. The unique id also lets the execution gate reject replay of the same approval.
@@ -100,21 +142,28 @@ struct MacOperatorApprovalGrant: Equatable {
 
 enum MacOperatorAuthorizationDecision: Equatable {
     case allowed
+    case invalidTarget
     case permissionRequired(MacOperatorPermission)
     case ownerApprovalRequired
 }
 
-/// Fail-closed gate. Permission is checked before owner approval so the UI can request
-/// the official macOS permission first; approval alone can never bypass OS permission.
-/// Approval is request-bound and time-limited, so changing action/target after confirmation
-/// forces a new owner decision instead of inheriting a stale boolean approval.
+/// Fail-closed gate. Target shape is validated before prompting for platform permission,
+/// then the official macOS permission is checked before owner approval. Approval alone can
+/// never bypass either validation or OS permission. Approval is request-bound and time-limited,
+/// so changing action/target after confirmation forces a new owner decision.
 struct MacOperatorAuthorizationPolicy {
+    private let targetPolicy = MacOperatorTargetPolicy()
+
     func evaluate(
         _ request: MacOperatorRequest,
         grantedPermissions: Set<MacOperatorPermission>,
         ownerApproval: MacOperatorApprovalGrant?,
         now: Date = Date()
     ) -> MacOperatorAuthorizationDecision {
+        guard targetPolicy.isValid(request) else {
+            return .invalidTarget
+        }
+
         let permission = request.action.requiredPermission
         guard grantedPermissions.contains(permission) else {
             return .permissionRequired(permission)
