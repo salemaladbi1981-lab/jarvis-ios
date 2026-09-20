@@ -25,28 +25,79 @@ final class EnrollmentManager: ObservableObject {
     func enroll(code: String) async -> Bool {
         let trimmed = code.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { error = "أدخل الرمز"; return false }
+        error = nil
 
         var req = URLRequest(url: baseURL.appendingPathComponent("/auth/enroll"))
         req.httpMethod = "POST"
+        req.timeoutInterval = 30
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try? JSONSerialization.data(withJSONObject: ["code": trimmed])
 
         do {
             let (d, resp) = try await URLSession.shared.data(for: req)
-            guard (resp as? HTTPURLResponse)?.statusCode == 200,
-                  let obj = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any],
-                  let token = obj["session_token"] as? String else {
-                error = "الرمز غير صالح أو منتهي"
+            guard let http = resp as? HTTPURLResponse else {
+                error = "استجابة خادم جارفس غير صالحة"
                 return false
             }
-            KeychainStore.save(token)
+
+            guard http.statusCode == 200 else {
+                error = enrollmentMessage(forHTTPStatus: http.statusCode)
+                return false
+            }
+
+            guard let obj = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any],
+                  let token = obj["session_token"] as? String,
+                  !token.isEmpty else {
+                error = "استجابة الربط ناقصة. حاول مرة أخرى."
+                return false
+            }
+
+            guard KeychainStore.save(token) else {
+                error = "تعذر حفظ جلسة جارفس بأمان على الجهاز"
+                return false
+            }
+
             sessionToken = token
             isEnrolled = true
             wire(token)
+            error = nil
             return true
         } catch {
-            self.error = "فشل الاتصال"
+            self.error = enrollmentMessage(for: error)
             return false
+        }
+    }
+
+    private func enrollmentMessage(forHTTPStatus code: Int) -> String {
+        switch code {
+        case 400, 401, 404, 410:
+            return "الرمز غير صالح أو منتهي"
+        case 408, 504:
+            return "انتهت مهلة الاتصال بخادم جارفس. حاول مرة أخرى."
+        case 429:
+            return "محاولات الربط كثيرة حاليًا. حاول مرة أخرى بعد قليل."
+        case 500...599:
+            return "خادم جارفس غير متاح مؤقتًا. حاول مرة أخرى."
+        default:
+            return "تعذر ربط الجهاز (HTTP \(code))"
+        }
+    }
+
+    private func enrollmentMessage(for error: Error) -> String {
+        guard let urlError = error as? URLError else {
+            return "فشل الاتصال بخادم جارفس"
+        }
+        switch urlError.code {
+        case .notConnectedToInternet:
+            return "لا يوجد اتصال بالإنترنت. تحقق من الشبكة ثم حاول مرة أخرى."
+        case .timedOut:
+            return "انتهت مهلة الاتصال بخادم جارفس. حاول مرة أخرى."
+        case .networkConnectionLost:
+            return "انقطع اتصال الشبكة أثناء ربط الجهاز. حاول مرة أخرى."
+        case .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed:
+            return "تعذر الوصول إلى خادم جارفس. تحقق من الشبكة ثم حاول مرة أخرى."
+        default:
+            return "فشل الاتصال بخادم جارفس"
         }
     }
 
@@ -56,7 +107,7 @@ final class EnrollmentManager: ObservableObject {
         uploadManager = um
         api = JarvisAPI(baseURL: baseURL, sessionToken: token)
         #if os(iOS)
-        BackgroundSessionBridge.shared = um   // <== الربط الفعلي هنا
+        BackgroundSessionBridge.shared = um
         #endif
     }
 }

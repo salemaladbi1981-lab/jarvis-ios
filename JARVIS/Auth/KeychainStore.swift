@@ -6,7 +6,8 @@ enum KeychainStore {
     private static let service = "com.jarvis.session"
     private static let account = "session_token"
 
-    static func save(_ value: String) {
+    @discardableResult
+    static func save(_ value: String) -> Bool {
         let data = Data(value.utf8)
         let base: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -17,7 +18,7 @@ enum KeychainStore {
         var attrs = base
         attrs[kSecValueData as String] = data
         attrs[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
-        SecItemAdd(attrs as CFDictionary, nil)
+        return SecItemAdd(attrs as CFDictionary, nil) == errSecSuccess
     }
 
     static func load() -> String? {
