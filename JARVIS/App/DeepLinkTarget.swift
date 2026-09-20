@@ -78,6 +78,18 @@ struct MacOperatorRequest: Equatable {
     let target: String
 }
 
+/// Owner approval is bound to the exact action + target and expires quickly.
+/// This prevents a confirmation for one Finder/app target from being reused for
+/// a different local action. It is policy state only; no platform capability is granted here.
+struct MacOperatorApprovalGrant: Equatable {
+    let request: MacOperatorRequest
+    let expiresAt: Date
+
+    func authorizes(_ request: MacOperatorRequest, now: Date) -> Bool {
+        self.request == request && now < expiresAt
+    }
+}
+
 enum MacOperatorAuthorizationDecision: Equatable {
     case allowed
     case permissionRequired(MacOperatorPermission)
@@ -86,18 +98,23 @@ enum MacOperatorAuthorizationDecision: Equatable {
 
 /// Fail-closed gate. Permission is checked before owner approval so the UI can request
 /// the official macOS permission first; approval alone can never bypass OS permission.
+/// Approval is request-bound and time-limited, so changing action/target after confirmation
+/// forces a new owner decision instead of inheriting a stale boolean approval.
 struct MacOperatorAuthorizationPolicy {
     func evaluate(
         _ request: MacOperatorRequest,
         grantedPermissions: Set<MacOperatorPermission>,
-        ownerApproved: Bool
+        ownerApproval: MacOperatorApprovalGrant?,
+        now: Date = Date()
     ) -> MacOperatorAuthorizationDecision {
         let permission = request.action.requiredPermission
         guard grantedPermissions.contains(permission) else {
             return .permissionRequired(permission)
         }
-        guard !request.action.requiresOwnerApproval || ownerApproved else {
-            return .ownerApprovalRequired
+        if request.action.requiresOwnerApproval {
+            guard let ownerApproval, ownerApproval.authorizes(request, now: now) else {
+                return .ownerApprovalRequired
+            }
         }
         return .allowed
     }

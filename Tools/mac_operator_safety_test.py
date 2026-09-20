@@ -24,10 +24,11 @@ def check(name: str, condition: bool) -> None:
 
 
 check(
-    "Mac Operator has explicit permission + owner-approval policy",
+    "Mac Operator has explicit permission + request-bound owner-approval policy",
     "struct MacOperatorAuthorizationPolicy" in SOURCE
     and "grantedPermissions.contains(permission)" in SOURCE
-    and "ownerApproved" in SOURCE,
+    and "struct MacOperatorApprovalGrant" in SOURCE
+    and "ownerApproval.authorizes(request, now: now)" in SOURCE,
 )
 
 check(
@@ -41,6 +42,11 @@ check(
     "permission gate executes before owner approval gate",
     SOURCE.find("grantedPermissions.contains(permission)")
     < SOURCE.find("request.action.requiresOwnerApproval"),
+)
+
+check(
+    "owner approval is exact-request-bound and expiring",
+    "self.request == request && now < expiresAt" in SOURCE,
 )
 
 check(

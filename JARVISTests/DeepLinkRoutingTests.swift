@@ -51,30 +51,36 @@ final class DeepLinkRoutingTests: XCTestCase {
 
     // MARK: Mac Operator foundation
 
+    private let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+    private func grant(for request: MacOperatorRequest, ttl: TimeInterval = 120) -> MacOperatorApprovalGrant {
+        MacOperatorApprovalGrant(request: request, expiresAt: now.addingTimeInterval(ttl))
+    }
+
     func testMacOperatorReadOnlyMetadataRequiresUserSelectedFilePermission() {
         let policy = MacOperatorAuthorizationPolicy()
         let request = MacOperatorRequest(action: .inspectSelectedItemMetadata, target: "/selected/item")
 
         XCTAssertEqual(
-            policy.evaluate(request, grantedPermissions: [], ownerApproved: false),
+            policy.evaluate(request, grantedPermissions: [], ownerApproval: nil, now: now),
             .permissionRequired(.userSelectedFiles)
         )
         XCTAssertEqual(
-            policy.evaluate(request, grantedPermissions: [.userSelectedFiles], ownerApproved: false),
+            policy.evaluate(request, grantedPermissions: [.userSelectedFiles], ownerApproval: nil, now: now),
             .allowed
         )
     }
 
-    func testMacOperatorVisibleFinderActionRequiresOwnerApproval() {
+    func testMacOperatorVisibleFinderActionRequiresBoundOwnerApproval() {
         let policy = MacOperatorAuthorizationPolicy()
         let request = MacOperatorRequest(action: .revealSelectedItemInFinder, target: "/selected/item")
 
         XCTAssertEqual(
-            policy.evaluate(request, grantedPermissions: [.userSelectedFiles], ownerApproved: false),
+            policy.evaluate(request, grantedPermissions: [.userSelectedFiles], ownerApproval: nil, now: now),
             .ownerApprovalRequired
         )
         XCTAssertEqual(
-            policy.evaluate(request, grantedPermissions: [.userSelectedFiles], ownerApproved: true),
+            policy.evaluate(request, grantedPermissions: [.userSelectedFiles], ownerApproval: grant(for: request), now: now),
             .allowed
         )
     }
@@ -84,7 +90,7 @@ final class DeepLinkRoutingTests: XCTestCase {
         let request = MacOperatorRequest(action: .accessibilityInteraction, target: "frontmost-app")
 
         XCTAssertEqual(
-            policy.evaluate(request, grantedPermissions: [], ownerApproved: true),
+            policy.evaluate(request, grantedPermissions: [], ownerApproval: grant(for: request), now: now),
             .permissionRequired(.accessibility)
         )
     }
@@ -94,11 +100,11 @@ final class DeepLinkRoutingTests: XCTestCase {
         let request = MacOperatorRequest(action: .accessibilityInteraction, target: "frontmost-app")
 
         XCTAssertEqual(
-            policy.evaluate(request, grantedPermissions: [.accessibility], ownerApproved: false),
+            policy.evaluate(request, grantedPermissions: [.accessibility], ownerApproval: nil, now: now),
             .ownerApprovalRequired
         )
         XCTAssertEqual(
-            policy.evaluate(request, grantedPermissions: [.accessibility], ownerApproved: true),
+            policy.evaluate(request, grantedPermissions: [.accessibility], ownerApproval: grant(for: request), now: now),
             .allowed
         )
     }
@@ -108,16 +114,64 @@ final class DeepLinkRoutingTests: XCTestCase {
         let request = MacOperatorRequest(action: .appleEventAutomation, target: "com.apple.Finder")
 
         XCTAssertEqual(
-            policy.evaluate(request, grantedPermissions: [], ownerApproved: false),
+            policy.evaluate(request, grantedPermissions: [], ownerApproval: nil, now: now),
             .permissionRequired(.automation)
         )
         XCTAssertEqual(
-            policy.evaluate(request, grantedPermissions: [.automation], ownerApproved: false),
+            policy.evaluate(request, grantedPermissions: [.automation], ownerApproval: nil, now: now),
             .ownerApprovalRequired
         )
         XCTAssertEqual(
-            policy.evaluate(request, grantedPermissions: [.automation], ownerApproved: true),
+            policy.evaluate(request, grantedPermissions: [.automation], ownerApproval: grant(for: request), now: now),
             .allowed
+        )
+    }
+
+    func testMacOperatorApprovalIsBoundToExactTarget() {
+        let policy = MacOperatorAuthorizationPolicy()
+        let approved = MacOperatorRequest(action: .revealSelectedItemInFinder, target: "/selected/item")
+        let changedTarget = MacOperatorRequest(action: .revealSelectedItemInFinder, target: "/different/item")
+
+        XCTAssertEqual(
+            policy.evaluate(
+                changedTarget,
+                grantedPermissions: [.userSelectedFiles],
+                ownerApproval: grant(for: approved),
+                now: now
+            ),
+            .ownerApprovalRequired
+        )
+    }
+
+    func testMacOperatorApprovalIsBoundToExactAction() {
+        let policy = MacOperatorAuthorizationPolicy()
+        let approved = MacOperatorRequest(action: .accessibilityInteraction, target: "frontmost-app")
+        let changedAction = MacOperatorRequest(action: .appleEventAutomation, target: "frontmost-app")
+
+        XCTAssertEqual(
+            policy.evaluate(
+                changedAction,
+                grantedPermissions: [.automation],
+                ownerApproval: grant(for: approved),
+                now: now
+            ),
+            .ownerApprovalRequired
+        )
+    }
+
+    func testMacOperatorExpiredApprovalFailsClosed() {
+        let policy = MacOperatorAuthorizationPolicy()
+        let request = MacOperatorRequest(action: .appleEventAutomation, target: "com.apple.Finder")
+        let expired = MacOperatorApprovalGrant(request: request, expiresAt: now)
+
+        XCTAssertEqual(
+            policy.evaluate(
+                request,
+                grantedPermissions: [.automation],
+                ownerApproval: expired,
+                now: now
+            ),
+            .ownerApprovalRequired
         )
     }
 
