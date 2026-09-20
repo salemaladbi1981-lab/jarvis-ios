@@ -51,5 +51,19 @@ check("home displays project health card",
       'health.currentMilestone' in home and
       'health.nextMilestone' in home)
 
+check("project health failure is isolated from workspace content",
+      'let (c, t, d, h) = try await' not in home and
+      '@Published var projectHealthError: String?' in home and
+      'conversations = try await convs' in home and
+      'let loadedTasks = try await tasks' in home and
+      'deliveries = try await dels' in home and
+      'projectHealth = try await health' in home)
+
+check("project health has an independent retry path",
+      'func refreshProjectHealth() async' in home and
+      'Task { await vm.refreshProjectHealth() }' in home and
+      'صحة جارفس غير متاحة' in home and
+      'إعادة فحص الصحة' in home)
+
 print(f"\n== RESULT: {PASS} PASS / {FAIL} FAIL ==")
 sys.exit(1 if FAIL else 0)

@@ -42,6 +42,8 @@ struct HomeEntryView: View {
 
                     if let health = vm.projectHealth {
                         projectHealthCard(health)
+                    } else if let healthError = vm.projectHealthError {
+                        projectHealthUnavailableCard(healthError)
                     }
 
                     // نتيجة أدوات التقويم/التذكيرات (تُعرض هنا بدل الرد الصوتي الثاني — دماغ واحد)
@@ -310,6 +312,27 @@ struct HomeEntryView: View {
         )
     }
 
+    private func projectHealthUnavailableCard(_ error: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("صحة جارفس غير متاحة", systemImage: "exclamationmark.triangle")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(JarvisColor.text_primary)
+            Text(error)
+                .font(.system(size: 11))
+                .foregroundColor(JarvisColor.text_muted)
+                .lineLimit(2)
+            Button("إعادة فحص الصحة") {
+                Task { await vm.refreshProjectHealth() }
+            }
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundColor(JarvisColor.highlight_blue)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 16).fill(JarvisColor.bg_1.opacity(0.45)))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(JarvisColor.danger.opacity(0.22), lineWidth: 1))
+    }
+
     private func healthMetric(title: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(value)
@@ -465,6 +488,7 @@ final class HomeEntryViewModel: ObservableObject {
     @Published var activeTasks: [JarvisTask] = []
     @Published var deliveries: [DeliveryItem] = []
     @Published var projectHealth: ProjectHealth?
+    @Published var projectHealthError: String?
     @Published var newConversationId: String?
     @Published var newConversationError: String?
     private let api: JarvisAPI
@@ -475,15 +499,42 @@ final class HomeEntryViewModel: ObservableObject {
         async let tasks: [JarvisTask] = api.getArray("tasks")
         async let dels: [DeliveryItem] = api.getArray("deliveries")
         async let health: ProjectHealth = api.getObject("project/health")
+
         do {
-            let (c, t, d, h) = try await (convs, tasks, dels, health)
-            conversations = c
-            activeTasks = t.filter { ["QUEUED", "RUNNING"].contains(($0.jobState ?? $0.status ?? "").uppercased()) }
-            deliveries = d
-            projectHealth = h
+            conversations = try await convs
         } catch {
-            conversations = []; activeTasks = []; deliveries = []
+            conversations = []
+        }
+
+        do {
+            let loadedTasks = try await tasks
+            activeTasks = loadedTasks.filter { ["QUEUED", "RUNNING"].contains(($0.jobState ?? $0.status ?? "").uppercased()) }
+        } catch {
+            activeTasks = []
+        }
+
+        do {
+            deliveries = try await dels
+        } catch {
+            deliveries = []
+        }
+
+        do {
+            projectHealth = try await health
+            projectHealthError = nil
+        } catch {
             projectHealth = nil
+            projectHealthError = "تعذّر تحميل بيانات صحة المشروع: \(error.localizedDescription)"
+        }
+    }
+
+    func refreshProjectHealth() async {
+        do {
+            projectHealth = try await api.getObject("project/health")
+            projectHealthError = nil
+        } catch {
+            projectHealth = nil
+            projectHealthError = "تعذّر تحميل بيانات صحة المشروع: \(error.localizedDescription)"
         }
     }
 
