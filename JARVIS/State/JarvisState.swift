@@ -117,6 +117,51 @@ public enum MeetingCapturePolicy {
     }
 }
 
+/// انتقالات جلسة الاجتماع المشتركة بين macOS وأي Meeting Agent مستقبلي.
+/// هذه طبقة حالة فقط: لا تفتح الميكروفون، لا تبدأ تسجيلًا، ولا تمنح صلاحيات.
+public enum MeetingSessionLifecycle {
+    /// يحول نتيجة بوابة الالتقاط إلى حالة استعداد واحدة يمكن للواجهات والوكلاء الاعتماد عليها.
+    /// أي live capture غير مكتمل الموافقات يبقى صراحة في awaitingAuthorization.
+    public static func preparedState(
+        inputMode: MeetingInputMode,
+        ownerAuthorized: Bool,
+        participantConsentConfirmed: Bool
+    ) -> MeetingSessionState {
+        let decision = MeetingCapturePolicy.evaluate(
+            inputMode: inputMode,
+            ownerAuthorized: ownerAuthorized,
+            participantConsentConfirmed: participantConsentConfirmed
+        )
+        return decision.allowed ? .ready : .awaitingAuthorization
+    }
+
+    /// يمنع القفز مباشرة إلى active قبل المرور بحالة ready.
+    /// التكرار لنفس الحالة مسموح لجعل handoff/reconnect idempotent.
+    public static func canTransition(from: MeetingSessionState, to: MeetingSessionState) -> Bool {
+        if from == to { return true }
+
+        switch (from, to) {
+        case (.idle, .awaitingAuthorization),
+             (.idle, .ready),
+             (.idle, .failed),
+             (.awaitingAuthorization, .ready),
+             (.awaitingAuthorization, .stopped),
+             (.awaitingAuthorization, .failed),
+             (.ready, .awaitingAuthorization),
+             (.ready, .active),
+             (.ready, .stopped),
+             (.ready, .failed),
+             (.active, .stopped),
+             (.active, .failed),
+             (.stopped, .idle),
+             (.failed, .idle):
+            return true
+        default:
+            return false
+        }
+    }
+}
+
 /// حالة مشتركة قابلة للنقل بين واجهة macOS وأي Meeting Agent مستقبلي.
 /// لا تُخزّن صوتًا ولا تمنح أي صلاحية بحد ذاتها.
 public struct MeetingSessionDescriptor: Identifiable, Equatable, Codable {

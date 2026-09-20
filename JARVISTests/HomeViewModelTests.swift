@@ -92,4 +92,43 @@ final class HomeViewModelTests: XCTestCase {
         XCTAssertFalse(blocked.allowed, "silent observer mode must never bypass participant consent")
         XCTAssertTrue(blocked.requiresVisibleCaptureIndicator, "silent assistant behavior must not imply invisible capture")
     }
+
+    func testMeetingPreparationKeepsUnauthorizedLiveCaptureWaiting() {
+        let state = MeetingSessionLifecycle.preparedState(
+            inputMode: .authorizedLiveCapture,
+            ownerAuthorized: true,
+            participantConsentConfirmed: false
+        )
+        XCTAssertEqual(state, .awaitingAuthorization)
+    }
+
+    func testMeetingPreparationBecomesReadyOnlyAfterBothLiveCaptureGates() {
+        let state = MeetingSessionLifecycle.preparedState(
+            inputMode: .authorizedLiveCapture,
+            ownerAuthorized: true,
+            participantConsentConfirmed: true
+        )
+        XCTAssertEqual(state, .ready)
+    }
+
+    func testMeetingMetadataPreparationIsReadyWithoutCapturePermissions() {
+        let state = MeetingSessionLifecycle.preparedState(
+            inputMode: .metadataOnly,
+            ownerAuthorized: false,
+            participantConsentConfirmed: false
+        )
+        XCTAssertEqual(state, .ready)
+    }
+
+    func testMeetingLifecycleCannotJumpFromIdleOrAuthorizationWaitToActive() {
+        XCTAssertFalse(MeetingSessionLifecycle.canTransition(from: .idle, to: .active))
+        XCTAssertFalse(MeetingSessionLifecycle.canTransition(from: .awaitingAuthorization, to: .active))
+    }
+
+    func testMeetingLifecycleAllowsReadyActiveStoppedFlowAndIdempotence() {
+        XCTAssertTrue(MeetingSessionLifecycle.canTransition(from: .ready, to: .active))
+        XCTAssertTrue(MeetingSessionLifecycle.canTransition(from: .active, to: .stopped))
+        XCTAssertTrue(MeetingSessionLifecycle.canTransition(from: .stopped, to: .idle))
+        XCTAssertTrue(MeetingSessionLifecycle.canTransition(from: .active, to: .active))
+    }
 }
