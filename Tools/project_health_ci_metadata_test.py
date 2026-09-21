@@ -117,8 +117,13 @@ check("missing or malformed plan fails closed to unknown planning metadata",
       malformed_meta["current_milestone"] == "unknown")
 
 check("checked-in plan tracks the active approved priority order",
-      str(plan.get("current_milestone", "")).startswith("Gold cinematic UI migration") and
-      str(plan.get("next_milestone", "")).startswith("Meeting foundation") and
+      plan.get("phase") == "device-validation" and
+      str(plan.get("current_milestone", "")).startswith("Device-only validation & final stabilization") and
+      "Siri lock-screen" in str(plan.get("current_milestone", "")) and
+      "AirPods/Shokz" in str(plan.get("current_milestone", "")) and
+      "Mac permissions" in str(plan.get("current_milestone", "")) and
+      str(plan.get("next_milestone", "")).startswith("Release readiness") and
+      "explicit user approval" in str(plan.get("next_milestone", "")) and
       plan.get("source") == "user-approved priority order")
 
 with tempfile.TemporaryDirectory() as temp_dir:
