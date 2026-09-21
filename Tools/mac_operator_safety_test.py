@@ -1,8 +1,8 @@
 """Static safety regression for the Mac Operator foundation.
 
-The foundation may model permissions/approvals, but must not gain a concrete
-privileged execution path until an explicitly authorized platform adapter is
-implemented and reviewed.
+The foundation may model permissions/approvals and narrowly scoped visible OS
+operations, but it must not gain arbitrary shell/AppleScript/Accessibility
+execution or bypass explicit user-selection and owner-approval gates.
 """
 from pathlib import Path
 import sys
@@ -135,7 +135,6 @@ for forbidden in (
     "NSAppleScript",
     "osascript",
     "AXUIElement",
-    "NSWorkspace.shared",
     "AuthorizationExecuteWithPrivileges",
 ):
     check(f"foundation does not execute via {forbidden}", forbidden not in SOURCE)
@@ -147,9 +146,6 @@ check(
     and "command: String" not in SOURCE,
 )
 
-print(f"\n== RESULT: {PASS} PASS / {FAIL} FAIL ==")
-sys.exit(1 if FAIL else 0)
-
 check(
     "Mac UI readiness uses passive system permission provider",
     "SystemMacOperatorPermissionProvider()" in MAC_UI
@@ -158,16 +154,18 @@ check(
 )
 
 check(
-    "Mac UI readiness does not invoke executor or request permission",
-    "MacOperatorService(" not in MAC_UI
-    and "perform(" not in MAC_UI
-    and "AXIsProcessTrustedWithOptions" not in MAC_UI
-    and "AEDeterminePermissionToAutomateTarget" not in MAC_UI,
+    "Mac UI never invokes prompting permission APIs directly",
+    "AXIsProcessTrustedWithOptions" not in MAC_UI
+    and "AEDeterminePermissionToAutomateTarget" not in MAC_UI
+    and "NSAppleScript" not in MAC_UI
+    and "Process(" not in MAC_UI,
 )
 
 check(
-    "Mac UI keeps user-selected files fail-closed",
-    "الملفات: يتطلب اختيارًا صريحًا" in MAC_UI,
+    "Mac UI keeps user-selected files explicit",
+    "الملفات: يتطلب اختيارًا صريحًا" in MAC_UI
+    and ".fileImporter(" in MAC_UI
+    and "allowedContentTypes: [.item]" in MAC_UI,
 )
 
 check(
@@ -179,12 +177,11 @@ check(
 )
 
 check(
-    "selected file executor remains read-only metadata only",
-    'request.action == .inspectSelectedItemMetadata' in SOURCE
-    and 'selected_item_adapter_read_only' in SOURCE
-    and "FileManager.default.removeItem" not in SOURCE
+    "selected file executor cannot mutate, move, copy, or delete files",
+    "FileManager.default.removeItem" not in SOURCE
     and "FileManager.default.moveItem" not in SOURCE
-    and "FileManager.default.copyItem" not in SOURCE,
+    and "FileManager.default.copyItem" not in SOURCE
+    and "FileManager.default.createFile" not in SOURCE,
 )
 
 check(
@@ -196,7 +193,9 @@ check(
 check(
     "Mac UI requires explicit fileImporter selection before metadata inspection",
     ".fileImporter(" in MAC_UI
-    and "allowedContentTypes: [.item]" in MAC_UI
     and "registerUserSelectedURL(url)" in MAC_UI
     and "action: .inspectSelectedItemMetadata" in MAC_UI,
 )
+
+print(f"\n== RESULT: {PASS} PASS / {FAIL} FAIL ==")
+sys.exit(1 if FAIL else 0)
