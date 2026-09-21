@@ -118,7 +118,7 @@ struct RootView: View {
                 .tabItem { Label("التسليمات", systemImage: "doc.fill") }
                 .tag("deliveries")
         }
-        .tint(JarvisColor.highlight_blue)
+        .tint(JarvisColor.highlight_gold)
         .overlay(alignment: .top) {
             if ProcessInfo.processInfo.arguments.contains("-showArgs") {
                 Text(ProcessInfo.processInfo.arguments.joined(separator: " | "))
