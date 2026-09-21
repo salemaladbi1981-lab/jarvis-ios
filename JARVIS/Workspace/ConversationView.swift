@@ -109,7 +109,7 @@ private struct StreamingBubble: View {
                 }
                 Text(statusLabel.isEmpty ? "يعمل" : statusLabel)
                     .font(.system(size: 12))
-                    .foregroundColor(JarvisColor.highlight_blue)
+                    .foregroundColor(JarvisColor.highlight_gold)
             }
             if !text.isEmpty {
                 Text(text)
@@ -124,6 +124,11 @@ private struct StreamingBubble: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(JarvisColor.surface)
         .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(JarvisColor.primary_gold.opacity(0.16), lineWidth: 1)
+        )
+        .shadow(color: JarvisColor.primary_gold.opacity(0.05), radius: 10, x: 0, y: 4)
     }
 }
 
@@ -132,7 +137,7 @@ private struct TaskHandoffCard: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "arrow.right.circle.fill")
-                .foregroundColor(JarvisColor.highlight_blue)
+                .foregroundColor(JarvisColor.primary_gold)
             VStack(alignment: .leading, spacing: 2) {
                 Text("تحول الطلب إلى مهمة خلفية")
                     .font(.system(size: 14, weight: .semibold))
@@ -147,6 +152,10 @@ private struct TaskHandoffCard: View {
         .padding(12)
         .background(JarvisColor.bg_1)
         .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(JarvisColor.primary_gold.opacity(0.14), lineWidth: 1)
+        )
     }
 }
 
@@ -158,7 +167,7 @@ private struct CitationsView: View {
                 if let url = c.url, let u = URL(string: url) {
                     Link("[\(idx + 1)] \(c.title ?? "مصدر")", destination: u)
                         .font(.system(size: 12))
-                        .foregroundColor(JarvisColor.highlight_blue)
+                        .foregroundColor(JarvisColor.highlight_gold)
                 }
             }
         }
@@ -178,7 +187,7 @@ private struct ErrorBanner: View {
             Spacer()
             Button("إعادة", action: onRetry)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(JarvisColor.highlight_blue)
+                .foregroundColor(JarvisColor.highlight_gold)
         }
         .padding(12)
         .background(JarvisColor.bg_1)
@@ -195,13 +204,18 @@ private struct InputBar: View {
                 .textFieldStyle(.plain)
                 .font(.system(size: 15))
                 .foregroundColor(JarvisColor.text_primary)
+                .tint(JarvisColor.highlight_gold)
                 .padding(12)
                 .background(JarvisColor.surface)
                 .cornerRadius(12)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(JarvisColor.primary_gold.opacity(0.16), lineWidth: 1)
+                )
             Button(action: onSend) {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.system(size: 28))
-                    .foregroundColor(disabled ? JarvisColor.text_muted : JarvisColor.highlight_blue)
+                    .foregroundColor(disabled ? JarvisColor.text_muted : JarvisColor.highlight_gold)
             }
             .disabled(disabled || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
