@@ -19,7 +19,7 @@ struct ConversationListView: View {
                             .foregroundColor(JarvisColor.text_muted)
                         Button("بدء محادثة") { Task { await vm.newConversation() } }
                             .buttonStyle(.borderedProminent)
-                            .tint(JarvisColor.highlight_blue)
+                            .tint(JarvisColor.highlight_gold)
                     }
                 } else {
                     List {
@@ -47,11 +47,13 @@ struct ConversationListView: View {
                 ToolbarItem(placement: .primaryAction) {
                     Button { Task { await vm.newConversation() } } label: {
                         Image(systemName: "square.and.pencil")
+                            .foregroundColor(JarvisColor.highlight_gold)
                     }
                 }
             }
             .task { await vm.load() }
         }
+        .tint(JarvisColor.highlight_gold)
     }
 }
 
