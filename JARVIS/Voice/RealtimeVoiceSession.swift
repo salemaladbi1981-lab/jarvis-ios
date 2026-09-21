@@ -29,6 +29,10 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     private var startAttemptID = 0
     private var pcmAppendCount = 0
     private var bargeStartTime: TimeInterval = 0
+    /// Voice barge-in confirmation: semantic VAD must remain active briefly before
+    /// cancelling playback. This restores natural interruption while filtering clicks/echo.
+    private var pendingBargeWorkItem: DispatchWorkItem?
+    private let bargeConfirmDelay: TimeInterval = 0.22
     /// هوية item الصوت الحالي (للـ conversation.item.truncate عند المقاطعة).
     private var currentOutputItemID: String?
     private var currentContentIndex = 0
@@ -125,8 +129,30 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
         eventPublisher.send(.interrupted)
     }
 
-    /// المقاطعة اليدوية (زر المايك) — الإلغاء الفوري الوحيد أثناء الكلام.
-    /// كلام الغرفة/الخلفية لا يستدعي هذا أبداً (لا مقاطعة تلقائية من speech_started).
+    private func scheduleConfirmedVoiceBargeIn() {
+        pendingBargeWorkItem?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.stateQueue.async {
+                guard self.isSpeaking else { return }
+                self.trace("BARGE confirmed voice interruption")
+                self.bargeStartTime = Date().timeIntervalSinceReferenceDate
+                self.guardState.onBarge()
+                self.isSpeaking = false
+                self.bargeIn()
+            }
+        }
+        pendingBargeWorkItem = work
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + bargeConfirmDelay, execute: work)
+    }
+
+    private func cancelPendingVoiceBargeIn() {
+        pendingBargeWorkItem?.cancel()
+        pendingBargeWorkItem = nil
+    }
+
+    /// Manual mic-button interruption remains immediate; spoken interruption is confirmed
+    /// separately through semantic VAD to avoid room-noise false positives.
     func interrupt() {
         bargeStartTime = Date().timeIntervalSinceReferenceDate
         stateQueue.sync {
@@ -142,6 +168,32 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
         let resp = #"{"type":"response.create"}"#
         ws?.send(.string(resp)) { _ in }
         eventPublisher.send(.thinking)
+    }
+
+    /// Replace any speculative model answer with authoritative on-device data
+    /// (e.g. EventKit calendar/reminders), then ask Realtime to speak only from that result.
+    func sendGroundedDeviceResult(userRequest: String, result: String) {
+        let payload = "Authoritative device result for my previous request. Use ONLY this result; do not claim lack of access and do not invent anything. Request: \(userRequest)\nResult: \(result)"
+        let escaped = payload
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+            .replacingOccurrences(of: "\n", with: "\\n")
+
+        stateQueue.sync {
+            if self.guardState.currentResponseID != nil || self.isSpeaking {
+                self.guardState.onBarge()
+                self.isSpeaking = false
+                let cancel = #"{"type":"response.cancel"}"#
+                self.ws?.send(.string(cancel)) { _ in }
+                self.audio.flush()
+            }
+        }
+
+        let item = #"{"type":"conversation.item.create","item":{"type":"message","role":"user","content":[{"type":"input_text","text":"\#(escaped)"}]}}"#
+        ws?.send(.string(item)) { _ in }
+        ws?.send(.string(#"{"type":"response.create"}"#)) { _ in }
+        eventPublisher.send(.thinking)
+        trace("device grounding injected")
     }
 
     func sendAudio(pcm16: Data) {
@@ -246,9 +298,8 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                     break
                 }
                 if isSpeaking {
-                    // لا مقاطعة تلقائية أثناء الكلام — كلام الغرفة/الخلفية لا يُلغي الرد.
-                    // المقاطعة يدوية فقط عبر interrupt() (زر المايك).
-                    trace("speech_started while speaking → ignored (manual interruption only)")
+                    trace("speech_started while speaking → confirm voice barge-in")
+                    scheduleConfirmedVoiceBargeIn()
                 } else {
                     audio.flush()
                     eventPublisher.send(.listening)   // انتقال الواجهة إلى Listening
@@ -256,7 +307,8 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                 }
             case "input_audio_buffer.speech_stopped":
                 trace("VAD speech_stopped payload: \(text)")
-                // لا مقاطعة تلقائية — الحدث يُسجَّل فقط (الكلام انتهى).
+                // Short speech/noise before the confirmation window must not cancel JARVIS.
+                cancelPendingVoiceBargeIn()
             case "conversation.item.input_audio_transcription.completed":
                 // نص المستخدم فقط — للتوجيه (tool routing). لا نوجّه نص الرد.
                 if let txt = SessionEventParser.transcript(text) {
