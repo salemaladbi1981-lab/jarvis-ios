@@ -1,5 +1,9 @@
 import Foundation
 
+#if os(macOS)
+import ApplicationServices
+#endif
+
 /// deep-link canonical: jarvis://conversation|task|delivery/{id}.
 /// Foundation خالصة (قابلة للاختبار في target الاختبار macOS مباشرة).
 enum DeepLinkTarget: Equatable {
@@ -258,7 +262,7 @@ struct DisabledMacOperatorExecutor: MacOperatorExecuting {
 }
 
 /// Permission state is obtained by the service rather than accepted as caller-supplied truth.
-/// A future macOS adapter can implement this protocol with official system APIs only.
+/// Platform adapters must use official system APIs and remain non-prompting during passive checks.
 protocol MacOperatorPermissionProviding {
     func grantedPermissions(for request: MacOperatorRequest) async -> Set<MacOperatorPermission>
 }
@@ -270,6 +274,79 @@ struct DisabledMacOperatorPermissionProvider: MacOperatorPermissionProviding {
         []
     }
 }
+
+#if os(macOS)
+/// Official, non-prompting macOS permission probe for the capabilities the OS can verify safely.
+/// Accessibility uses AXIsProcessTrusted(). Apple Events uses
+/// AEDeterminePermissionToAutomateTarget(..., askUserIfNeeded: false), so a passive health check
+/// never opens a consent dialog or launches/controls the target app. User-selected file access is
+/// deliberately not inferred from a path string; a future security-scoped selection adapter must
+/// prove that provenance separately before granting `.userSelectedFiles`.
+struct SystemMacOperatorPermissionProvider: MacOperatorPermissionProviding {
+    typealias AccessibilityProbe = @Sendable () -> Bool
+    typealias AutomationProbe = @Sendable (String) -> Bool
+
+    private let accessibilityProbe: AccessibilityProbe
+    private let automationProbe: AutomationProbe
+
+    init() {
+        accessibilityProbe = { AXIsProcessTrusted() }
+        automationProbe = { bundleIdentifier in
+            SystemMacOperatorPermissionProvider.isAutomationAuthorized(bundleIdentifier: bundleIdentifier)
+        }
+    }
+
+    init(
+        accessibilityProbe: @escaping AccessibilityProbe,
+        automationProbe: @escaping AutomationProbe
+    ) {
+        self.accessibilityProbe = accessibilityProbe
+        self.automationProbe = automationProbe
+    }
+
+    func grantedPermissions(for request: MacOperatorRequest) async -> Set<MacOperatorPermission> {
+        switch request.action.requiredPermission {
+        case .accessibility:
+            let probe = accessibilityProbe
+            let granted = await Task.detached(priority: .utility) { probe() }.value
+            return granted ? [.accessibility] : []
+
+        case .automation:
+            let probe = automationProbe
+            let target = request.target
+            let granted = await Task.detached(priority: .utility) { probe(target) }.value
+            return granted ? [.automation] : []
+
+        case .userSelectedFiles:
+            return []
+        }
+    }
+
+    private static func isAutomationAuthorized(bundleIdentifier: String) -> Bool {
+        let bundleID = Data(bundleIdentifier.utf8)
+        guard !bundleID.isEmpty else { return false }
+
+        var target = AEAddressDesc()
+        let createStatus = bundleID.withUnsafeBytes { bytes in
+            AECreateDesc(
+                typeApplicationBundleID,
+                bytes.baseAddress,
+                bundleID.count,
+                &target
+            )
+        }
+        guard createStatus == noErr else { return false }
+        defer { AEDisposeDesc(&target) }
+
+        return AEDeterminePermissionToAutomateTarget(
+            &target,
+            typeWildCard,
+            typeWildCard,
+            false
+        ) == noErr
+    }
+}
+#endif
 
 /// Public operation result keeps authorization failures distinct from executor outcomes.
 /// A caller can render a permission/approval request without accidentally invoking a local adapter.
