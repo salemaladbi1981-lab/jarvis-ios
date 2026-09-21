@@ -9,9 +9,10 @@ plan = json.loads(PLAN.read_text(encoding="utf-8"))
 checks = {
     "plan schema remains evidence-compatible": plan.get("schema_version") == 2,
     "plan remains sourced from user-approved priority order": plan.get("source") == "user-approved priority order",
-    "current milestone advances to Mac Operator foundation": str(plan.get("current_milestone", "")).startswith("Mac Operator foundation"),
-    "next milestone advances to Gold cinematic UI migration": str(plan.get("next_milestone", "")).startswith("Gold cinematic UI migration"),
-    "meeting work is not falsely reported as current before Gold migration": not str(plan.get("current_milestone", "")).startswith("Meeting"),
+    "current milestone advances to Gold cinematic UI migration": str(plan.get("current_milestone", "")).startswith("Gold cinematic UI migration"),
+    "next milestone advances to Meeting foundation": str(plan.get("next_milestone", "")).startswith("Meeting foundation"),
+    "Mac Operator is no longer falsely reported as current": not str(plan.get("current_milestone", "")).startswith("Mac Operator"),
+    "Meeting is next but not falsely reported as current": not str(plan.get("current_milestone", "")).startswith("Meeting"),
 }
 
 failed = []
