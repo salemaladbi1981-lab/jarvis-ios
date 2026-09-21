@@ -479,33 +479,47 @@ final class HomeViewModel: ObservableObject {
         return markers.contains { t.contains($0) }
     }
 
-    private func runMeetings(userRequest: String) async {
+    func refreshMeetings(requestPermissionIfNeeded: Bool = false) async {
         state = .executing
-        var access = await calendarProvider.eventAccess()
-        if access == .notDetermined {
+        var access = calendarProvider.eventAccess()
+        if access == .notDetermined && requestPermissionIfNeeded {
             access = await calendarProvider.requestEvents()
         }
+        meetingAccessState = access
+
         guard access == .authorized else {
-            state = .alert
-            let msg = access == .denied
+            meetingTargets = []
+            state = access == .denied ? .alert : .idle
+            calendarMessage = access == .denied
                 ? "صلاحية التقويم مرفوضة — فعّلها من إعدادات النظام"
-                : "الوصول إلى الاجتماعات غير متاح لأن قراءة التقويم غير مصرح بها"
-            calendarMessage = msg
-            voiceSession.sendGroundedDeviceResult(userRequest: userRequest, result: msg)
+                : "اضغط تحديث الاجتماعات للسماح بقراءة تقويم الجهاز"
             return
         }
 
         do {
-            let targets = try await calendarProvider.upcomingMeetingTargets()
+            meetingTargets = try await calendarProvider.upcomingMeetingTargets()
             state = .idle
-            let grounded = Self.formatMeetings(targets)
-            calendarMessage = grounded
-            voiceSession.sendGroundedDeviceResult(userRequest: userRequest, result: grounded)
+            calendarMessage = Self.formatMeetings(meetingTargets)
         } catch {
+            meetingTargets = []
             state = .alert
-            let msg = "تعذر قراءة الاجتماعات من تقويم الجهاز"
-            calendarMessage = msg
-            voiceSession.sendGroundedDeviceResult(userRequest: userRequest, result: msg)
+            calendarMessage = "تعذر قراءة الاجتماعات من تقويم الجهاز"
+        }
+    }
+
+    /// Last-mile handoff for an explicit meeting button tap. EventKit is re-read
+    /// immediately before returning the URL; no permission request or auto-join occurs here.
+    func meetingHandoffURL(for target: MeetingLaunchTarget) -> URL? {
+        calendarProvider.handoffURL(for: target, userInitiated: true)
+    }
+
+    private func runMeetings(userRequest: String) async {
+        await refreshMeetings(requestPermissionIfNeeded: true)
+        let grounded = Self.formatMeetings(meetingTargets)
+        if meetingAccessState == .authorized {
+            voiceSession.sendGroundedDeviceResult(userRequest: userRequest, result: grounded)
+        } else if let calendarMessage {
+            voiceSession.sendGroundedDeviceResult(userRequest: userRequest, result: calendarMessage)
         }
     }
 
