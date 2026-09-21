@@ -389,7 +389,9 @@ final class HomeViewModel: ObservableObject {
         let result = await calendarTools.today()
         state = .idle
         if result.ok {
-            calendarMessage = Self.formatEvents(result.events)
+            let grounded = Self.formatEvents(result.events)
+            calendarMessage = grounded
+            voiceSession.sendGroundedDeviceResult(userRequest: "calendar today", result: grounded)
         } else {
             state = .alert
             calendarMessage = "التقويم غير متاح"
@@ -417,7 +419,9 @@ final class HomeViewModel: ObservableObject {
         let result = await calendarTools.upcomingReminders()
         state = .idle
         if result.ok {
-            calendarMessage = Self.formatReminders(result.reminders)
+            let grounded = Self.formatReminders(result.reminders)
+            calendarMessage = grounded
+            voiceSession.sendGroundedDeviceResult(userRequest: "upcoming reminders", result: grounded)
         } else {
             state = .alert
             if result.error == "permission_denied" {
