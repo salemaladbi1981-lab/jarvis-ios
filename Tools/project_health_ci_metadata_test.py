@@ -117,8 +117,8 @@ check("missing or malformed plan fails closed to unknown planning metadata",
       malformed_meta["current_milestone"] == "unknown")
 
 check("checked-in plan tracks the active approved priority order",
-      str(plan.get("current_milestone", "")).startswith("Mac Operator foundation") and
-      str(plan.get("next_milestone", "")).startswith("Gold cinematic UI migration") and
+      str(plan.get("current_milestone", "")).startswith("Gold cinematic UI migration") and
+      str(plan.get("next_milestone", "")).startswith("Meeting foundation") and
       plan.get("source") == "user-approved priority order")
 
 with tempfile.TemporaryDirectory() as temp_dir:
