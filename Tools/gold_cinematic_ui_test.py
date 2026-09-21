@@ -35,6 +35,7 @@ home = read('JARVIS/Workspace/HomeEntryView.swift')
 header = read('JARVIS/Home/HeaderView.swift')
 bottom_nav = read('JARVIS/Home/BottomNavBar.swift')
 quick_suggestions = read('JARVIS/Home/QuickSuggestions.swift')
+cards = read('JARVIS/Cards/Cards.swift')
 hero = read('JARVIS/Core/JarvisHeroView.swift')
 colors = spec['colors']
 glow = spec['glow']
@@ -84,7 +85,18 @@ check('Suggestion chips no longer use legacy blue aliases', 'JarvisColor.primary
 check('Suggestion typed command dispatch is preserved', '.onTapGesture { onTap(cmd) }' in quick_suggestions and 'let commands: [QuickCommand]' in quick_suggestions)
 check('Suggestion accessibility button semantics preserved', '.accessibilityAddTraits(.isButton)' in quick_suggestions and '.accessibilityLabel("أمر: \\(cmd.label)")' in quick_suggestions)
 
-# 7) Migration must not replace production interaction/data paths.
+# 7) Shared cards/media adopt gold chrome while retaining semantic status roles.
+check('Shared card border uses primary gold', 'stroke(JarvisColor.primary_gold.opacity(0.18)' in cards)
+check('Shared card glow is restrained gold', 'shadow(color: JarvisColor.primary_gold.opacity(0.05)' in cards)
+check('Security icon accents use primary gold', '.foregroundColor(JarvisColor.primary_gold)' in cards)
+check('Media artwork gradient uses primary gold', 'LinearGradient(colors: [JarvisColor.primary_gold, JarvisColor.bg_1]' in cards)
+check('Media progress uses explicit primary gold', 'Capsule().fill(JarvisColor.primary_gold.opacity(0.15))' in cards and 'Capsule().fill(JarvisColor.primary_gold).frame(width: geo.size.width * 0.6' in cards)
+check('Cards no longer use legacy blue aliases', 'JarvisColor.primary_blue' not in cards and 'JarvisColor.highlight_blue' not in cards)
+check('Demo badge warning semantics preserved', '.foregroundColor(JarvisColor.warning_demo)' in cards and 'JarvisColor.warning_demo.opacity(0.12)' in cards)
+check('Security success semantics preserved', '.foregroundColor(JarvisColor.success)' in cards)
+check('Card production models preserved', 'let devices: [SmartDevice]' in cards and 'let status: SecurityStatus' in cards and 'let track: MediaTrack' in cards)
+
+# 8) Migration must not replace production interaction/data paths.
 check('Home keeps cinematic hero', 'JarvisHeroView(vm: voiceVM)' in home)
 check('Home keeps real microphone control', 'JarvisMicControl(vm: voiceVM)' in home and 'onMic: { voiceVM.toggleVoice() }' in home)
 check('Home keeps project health monitor', 'projectHealthCard(health)' in home and 'api.getObject("project/health")' in home)
