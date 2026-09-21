@@ -38,6 +38,7 @@ quick_suggestions = read('JARVIS/Home/QuickSuggestions.swift')
 cards = read('JARVIS/Cards/Cards.swift')
 composer = read('JARVIS/Workspace/WorkspaceComposerView.swift')
 conversation = read('JARVIS/Workspace/ConversationView.swift')
+conversation_list = read('JARVIS/Workspace/ConversationListView.swift')
 hero = read('JARVIS/Core/JarvisHeroView.swift')
 colors = spec['colors']
 glow = spec['glow']
@@ -122,7 +123,17 @@ check('Conversation preserves streaming and retry paths', 'StreamingBubble(text:
 check('Conversation preserves citations and attachment refs', 'CitationsView(citations: cits)' in conversation and 'AttachmentView(fileId: ref, api: api)' in conversation)
 check('Conversation send gating is unchanged', '.disabled(disabled || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)' in conversation)
 
-# 10) Migration must not replace production interaction/data paths.
+# 10) Conversation list adopts gold navigation accents while retaining real API navigation flow.
+check('Conversation list empty-state CTA uses highlight gold', '.tint(JarvisColor.highlight_gold)' in conversation_list)
+check('Conversation list toolbar action uses highlight gold', 'Image(systemName: "square.and.pencil")' in conversation_list and '.foregroundColor(JarvisColor.highlight_gold)' in conversation_list)
+check('Conversation list navigation tint uses highlight gold', conversation_list.count('.tint(JarvisColor.highlight_gold)') >= 2)
+check('Conversation list no longer uses legacy blue aliases', 'JarvisColor.primary_blue' not in conversation_list and 'JarvisColor.highlight_blue' not in conversation_list)
+check('Conversation list preserves API loading', 'conversations = try await api.getArray("conversations")' in conversation_list)
+check('Conversation list preserves new conversation API path', 'let c: Conversation = try await api.postObject("conversations", body: [:])' in conversation_list and 'conversations.insert(c, at: 0)' in conversation_list)
+check('Conversation list preserves detail navigation', 'ConversationView(api: api, conversationId: id)' in conversation_list)
+check('Conversation list preserves both create actions', conversation_list.count('Task { await vm.newConversation() }') >= 2)
+
+# 11) Migration must not replace production interaction/data paths.
 check('Home keeps cinematic hero', 'JarvisHeroView(vm: voiceVM)' in home)
 check('Home keeps real microphone control', 'JarvisMicControl(vm: voiceVM)' in home and 'onMic: { voiceVM.toggleVoice() }' in home)
 check('Home keeps project health monitor', 'projectHealthCard(health)' in home and 'api.getObject("project/health")' in home)
