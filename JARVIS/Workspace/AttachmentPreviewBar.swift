@@ -31,7 +31,7 @@ struct AttachmentThumb: View {
                 thumbnail
                     .frame(width: 64, height: 64)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(JarvisColor.primary_blue.opacity(0.25), lineWidth: 1))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(JarvisColor.primary_gold.opacity(0.25), lineWidth: 1))
                 Button(action: onRemove) {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 16))
@@ -66,7 +66,7 @@ struct AttachmentThumb: View {
             JarvisColor.bg_1.opacity(0.6)
             Image(systemName: icon)
                 .font(.system(size: 26))
-                .foregroundColor(JarvisColor.text_muted)
+                .foregroundColor(JarvisColor.primary_gold)
         }
     }
 

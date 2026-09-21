@@ -13,7 +13,9 @@ struct AttachmentMenu: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("إضافة مرفق").font(.headline)
+            Text("إضافة مرفق")
+                .font(.headline)
+                .foregroundColor(JarvisColor.text_primary)
             HStack {
                 attachItem("photo", "صورة", onPickPhotos)
                 attachItem("video", "فيديو", onPickVideos)
@@ -31,14 +33,25 @@ struct AttachmentMenu: View {
 
     private func attachItem(_ icon: String, _ label: String, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            VStack {
-                Image(systemName: icon).font(.title2)
-                Text(label).font(.caption)
+            VStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.title2)
+                    .foregroundColor(JarvisColor.primary_gold)
+                Text(label)
+                    .font(.caption)
+                    .foregroundColor(JarvisColor.text_secondary)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 10)
-            .background(JarvisColor.surface)
-            .cornerRadius(10)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(JarvisColor.surface)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(JarvisColor.primary_gold.opacity(0.18), lineWidth: 1)
+            )
         }
+        .buttonStyle(.plain)
     }
 }

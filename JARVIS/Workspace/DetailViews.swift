@@ -18,7 +18,7 @@ struct TaskDetailView: View {
                 if let t = vm.task {
                     HStack(spacing: 8) {
                         Image(systemName: "hammer")
-                            .foregroundColor(JarvisColor.highlight_blue)
+                            .foregroundColor(JarvisColor.highlight_gold)
                         Text(t.prompt ?? "مهمة")
                             .font(.system(size: 17, weight: .semibold))
                             .foregroundColor(JarvisColor.text_primary)
@@ -42,7 +42,7 @@ struct TaskDetailView: View {
                         } label: {
                             Label("فتح المحادثة", systemImage: "bubble.left.and.bubble.right")
                                 .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(JarvisColor.highlight_blue)
+                                .foregroundColor(JarvisColor.highlight_gold)
                         }
                     }
                 } else if vm.loading {
@@ -149,7 +149,7 @@ struct DeliveryDetailView: View {
                 if let d = vm.delivery {
                     HStack(spacing: 8) {
                         Image(systemName: "doc.fill")
-                            .foregroundColor(JarvisColor.highlight_blue)
+                            .foregroundColor(JarvisColor.highlight_gold)
                         Text(d.filename ?? "تسليم")
                             .font(.system(size: 17, weight: .semibold))
                             .foregroundColor(JarvisColor.text_primary)
@@ -163,7 +163,7 @@ struct DeliveryDetailView: View {
                         } label: {
                             Label("فتح المهمة المصدر", systemImage: "hammer")
                                 .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(JarvisColor.highlight_blue)
+                                .foregroundColor(JarvisColor.highlight_gold)
                         }
                     }
                 } else if vm.loading {

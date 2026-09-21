@@ -12,20 +12,34 @@ struct DeliveriesView: View {
         NavigationView {
             List(vm.items) { d in
                 HStack {
-                    Image(systemName: d.icon).frame(width: 36)
+                    Image(systemName: d.icon)
+                        .foregroundColor(JarvisColor.primary_gold)
+                        .frame(width: 36)
                     VStack(alignment: .leading) {
-                        Text(d.filename).font(.body).lineLimit(1)
-                        Text(d.type).font(.caption).foregroundColor(.secondary)
+                        Text(d.filename)
+                            .font(.body)
+                            .foregroundColor(JarvisColor.text_primary)
+                            .lineLimit(1)
+                        Text(d.type)
+                            .font(.caption)
+                            .foregroundColor(JarvisColor.text_muted)
                     }
                     Spacer()
-                    Button("فتح") { Task { await vm.open(d) } }.font(.caption)
+                    Button("فتح") { Task { await vm.open(d) } }
+                        .font(.caption)
+                        .foregroundColor(JarvisColor.highlight_gold)
                 }
             }
             .navigationTitle("التسليمات")
-            .overlay { if vm.loading { ProgressView() } }
+            .overlay {
+                if vm.loading {
+                    ProgressView().tint(JarvisColor.primary_gold)
+                }
+            }
             .task { await vm.load() }
             .refreshable { await vm.load() }
         }
+        .tint(JarvisColor.highlight_gold)
     }
 }
 
