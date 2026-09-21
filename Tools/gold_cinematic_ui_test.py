@@ -40,6 +40,7 @@ composer = read('JARVIS/Workspace/WorkspaceComposerView.swift')
 conversation = read('JARVIS/Workspace/ConversationView.swift')
 conversation_list = read('JARVIS/Workspace/ConversationListView.swift')
 hero = read('JARVIS/Core/JarvisHeroView.swift')
+mac_home = read('JARVIS/macOS/MacHomeView.swift')
 colors = spec['colors']
 glow = spec['glow']
 
@@ -145,3 +146,9 @@ check('Hero behavior remains state-driven', 'vm.toggleVoice()' in hero and 'swit
 
 print(f"\n== RESULT: {PASS} PASS / {FAIL} FAIL ==")
 sys.exit(1 if FAIL else 0)
+
+check("Mac home uses gold desktop chrome",
+      "JarvisColor.highlight_gold" in mac_home
+      and "JarvisColor.primary_gold" in mac_home
+      and "JarvisColor.highlight_blue" not in mac_home
+      and "JarvisColor.primary_blue" not in mac_home)
