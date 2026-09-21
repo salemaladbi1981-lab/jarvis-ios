@@ -8,6 +8,9 @@ import SwiftUI
 struct MacHomeView: View {
     @StateObject private var vm = HomeViewModel()
     @State private var selectedTab = "home"
+    @State private var accessibilityReady = false
+    @State private var automationReady = false
+    @State private var macOperatorChecked = false
 
     var body: some View {
         HStack(spacing: 0) {
@@ -46,7 +49,7 @@ struct MacHomeView: View {
                     Text("JARVIS")
                         .font(.custom("CormorantGaramond-SemiBold", size: 30))
                         .tracking(4)
-                        .foregroundColor(JarvisColor.highlight_blue)
+                        .foregroundColor(JarvisColor.highlight_gold)
 
                     JarvisHeroView(vm: vm, coreSize: 300)
 
@@ -73,6 +76,9 @@ struct MacHomeView: View {
                 Text("جارفس")
                     .font(.custom("IBMPlexSansArabic-Bold", size: 18))
                     .foregroundColor(JarvisColor.text_secondary)
+
+                macOperatorReadinessCard
+
                 Spacer()
             }
             .frame(width: 240)
@@ -83,7 +89,79 @@ struct MacHomeView: View {
             LinearGradient(colors: [JarvisColor.bg_0, JarvisColor.bg_1], startPoint: .top, endPoint: .bottom)
                 .ignoresSafeArea()
         )
-        .task { await vm.load() }
+        .task {
+            await vm.load()
+            await refreshMacOperatorReadiness()
+        }
+    }
+
+    private var macOperatorReadinessCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Image(systemName: "desktopcomputer")
+                    .foregroundColor(JarvisColor.highlight_gold)
+                Text("Mac Operator")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(JarvisColor.text_secondary)
+                Spacer()
+            }
+
+            permissionRow("Accessibility", ready: accessibilityReady)
+            permissionRow("Automation", ready: automationReady)
+
+            HStack {
+                Circle()
+                    .fill(JarvisColor.text_muted.opacity(0.5))
+                    .frame(width: 7, height: 7)
+                Text("الملفات: يتطلب اختيارًا صريحًا")
+                    .font(.system(size: 11))
+                    .foregroundColor(JarvisColor.text_muted)
+            }
+
+            Text(macOperatorChecked ? "فحص غير مُطالب بالصلاحيات" : "جارٍ فحص الجاهزية…")
+                .font(.system(size: 10))
+                .foregroundColor(JarvisColor.text_muted)
+        }
+        .padding(JarvisSpacing.md)
+        .background(
+            RoundedRectangle(cornerRadius: JarvisRadius.card)
+                .fill(JarvisColor.bg_1.opacity(0.36))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: JarvisRadius.card)
+                .stroke(JarvisColor.primary_gold.opacity(0.18), lineWidth: 1)
+        )
+    }
+
+    private func permissionRow(_ label: String, ready: Bool) -> some View {
+        HStack {
+            Circle()
+                .fill(ready ? JarvisColor.success : JarvisColor.text_muted.opacity(0.5))
+                .frame(width: 7, height: 7)
+            Text("\(label): \(ready ? "جاهز" : "غير ممنوح")")
+                .font(.system(size: 11))
+                .foregroundColor(ready ? JarvisColor.text_secondary : JarvisColor.text_muted)
+            Spacer()
+        }
+    }
+
+    private func refreshMacOperatorReadiness() async {
+        let provider = SystemMacOperatorPermissionProvider()
+        let accessibilityRequest = MacOperatorRequest(
+            action: .accessibilityInteraction,
+            target: "frontmost-app"
+        )
+        let automationRequest = MacOperatorRequest(
+            action: .appleEventAutomation,
+            target: "com.apple.Finder"
+        )
+
+        let accessibility = await provider.grantedPermissions(for: accessibilityRequest)
+        let automation = await provider.grantedPermissions(for: automationRequest)
+
+        accessibilityReady = accessibility.contains(.accessibility)
+        automationReady = automation.contains(.automation)
+        macOperatorChecked = true
     }
 
     private var macSidebar: some View {
@@ -101,12 +179,12 @@ struct MacHomeView: View {
                             .font(.system(size: 14))
                         Spacer()
                     }
-                    .foregroundColor(selectedTab == id ? JarvisColor.highlight_blue : JarvisColor.text_muted)
+                    .foregroundColor(selectedTab == id ? JarvisColor.highlight_gold : JarvisColor.text_muted)
                     .padding(.horizontal, JarvisSpacing.md)
                     .padding(.vertical, JarvisSpacing.sm)
                     .background(
                         RoundedRectangle(cornerRadius: JarvisRadius.control)
-                            .fill(selectedTab == id ? JarvisColor.primary_blue.opacity(0.12) : .clear)
+                            .fill(selectedTab == id ? JarvisColor.primary_gold.opacity(0.12) : .clear)
                     )
                 }
                 .buttonStyle(.plain)
