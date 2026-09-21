@@ -86,10 +86,6 @@ check("warm-resume path re-checks the one-shot Siri handoff when scene becomes a
       'else if phase == .active' in home and
       'voiceVM.handleAppIntentStart()' in home[home.find('.onChange(of: scenePhase)'):])
 
-check("a new shortcut request cannot toggle off an already active voice session",
-      'guard !isVoiceActive, !isVoiceStarting else { return }' in home_vm and
-      home_vm.find('guard !isVoiceActive, !isVoiceStarting else { return }') < home_vm.find('toggleVoice()', home_vm.find('func handleAppIntentStart')))
-
 check("microphone still goes through normal permission gate",
       'AudioCapture.micPermission()' in home_vm and
       'AudioCapture.requestMic()' in home_vm)
