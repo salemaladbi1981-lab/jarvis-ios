@@ -115,6 +115,33 @@ enum MeetingLinkPolicy {
     }
 }
 
+/// Pure selection policy used by EventKit and future authorized calendar adapters.
+/// It never opens a URL and never requests permissions. Only currently-valid or
+/// upcoming timed events with an allow-listed `meetingURL` can become targets.
+enum MeetingDiscoveryPolicy {
+    static func upcomingTargets(from events: [JarvisCalendarEvent],
+                                now: Date = Date(),
+                                limit: Int = 10) -> [MeetingLaunchTarget] {
+        let safeLimit = min(max(limit, 0), 20)
+        guard safeLimit > 0 else { return [] }
+
+        var seen = Set<String>()
+        let targets = events
+            .filter { !$0.isAllDay && $0.end >= now }
+            .sorted {
+                if $0.start == $1.start { return $0.id < $1.id }
+                return $0.start < $1.start
+            }
+            .compactMap { event -> MeetingLaunchTarget? in
+                guard let target = event.meetingTarget,
+                      seen.insert(target.id).inserted else { return nil }
+                return target
+            }
+
+        return Array(targets.prefix(safeLimit))
+    }
+}
+
 extension JarvisCalendarEvent {
     var meetingTarget: MeetingLaunchTarget? { MeetingLinkPolicy.target(for: self) }
 }
