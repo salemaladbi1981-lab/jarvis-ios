@@ -15,7 +15,9 @@ struct InboxView: View {
         NavigationStack {
             Group {
                 if vm.loading {
-                    ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                    ProgressView()
+                        .tint(JarvisColor.primary_gold)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if vm.items.isEmpty {
                     VStack(spacing: 8) {
                         Image(systemName: "tray")
@@ -38,6 +40,7 @@ struct InboxView: View {
                 destination(for: item)
             }
             .navigationTitle("الوارد")
+            .tint(JarvisColor.highlight_gold)
         }
         .task { await vm.load() }
     }
