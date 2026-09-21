@@ -46,6 +46,10 @@ check("Agent inventory voice uses bundled registry grounding",
       'isAgentInventoryQuestion' in vm and 'groundedAgentInventoryAnswer' in vm and 'voiceSession.sendGroundedDeviceResult(userRequest: text, result: grounded)' in vm)
 check("Bundled registry grounding explicitly covers architect/coach names",
       '"معمار"' in vm and '"المدرب"' in vm)
+check("Meeting voice uses on-device EventKit grounding",
+      'isMeetingQuestion' in vm and 'runMeetings(userRequest:' in vm and 'calendarProvider.upcomingMeetingTargets()' in vm)
+check("Meeting voice result is spoken through grounded device reply",
+      'voiceSession.sendGroundedDeviceResult(userRequest: userRequest, result: grounded)' in vm)
 check("Realtime cancels speculative answer before grounded device reply",
       'Authoritative device result for my previous request' in open(os.path.join(ROOT, 'Voice/RealtimeVoiceSession.swift'), encoding='utf-8').read())
 
