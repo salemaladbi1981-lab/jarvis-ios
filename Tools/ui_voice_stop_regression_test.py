@@ -58,3 +58,11 @@ for name, f in [("HomeView", home), ("MacHomeView", mac), ("iPadLandscapeView", 
 print(f"\n== RESULT: {PASS} PASS / {FAIL} FAIL ==")
 import sys
 sys.exit(1 if FAIL else 0)
+
+
+check("VoiceAudioEngine: AVAudioSession start activation off main thread",
+      'DispatchQueue.global(qos: .userInitiated).async' in vae and 'start FAILED at AVAudioSession activation' in vae)
+check("VoiceAudioEngine: interruption resume activation off main thread",
+      'resume setActive FAILED' in vae and 'DispatchQueue.global(qos: .userInitiated).async' in vae)
+check("VoiceAudioEngine: stop deactivation off main thread",
+      'stop: setActive(false) OK' in vae and 'DispatchQueue.global(qos: .utility).async' in vae)
