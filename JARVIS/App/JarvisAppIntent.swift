@@ -57,4 +57,20 @@ struct JarvisVoiceIntent: AppIntent {
         return .result()
     }
 }
+
+/// فتح التطبيق فقط من Siri / Shortcuts بدون تسليح الميكروفون.
+/// هذا يفصل أمر "افتح جارفس" عن أمر "كلّم جارفس" حتى لا يبدأ الصوت
+/// لمجرد أن المستخدم أراد الوصول للتطبيق من شاشة القفل.
+struct JarvisOpenIntent: AppIntent {
+    static var title: LocalizedStringResource = "Open Jarvis"
+    static var description = IntentDescription("Open Jarvis without starting the microphone.")
+    static var openAppWhenRun: Bool = true
+    static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
+
+    func perform() async throws -> some IntentResult {
+        // امسح أي طلب صوت قديم قصير العمر؛ أمر الفتح وحده لا يطلب الميكروفون.
+        AppBridge.pendingStartVoice = false
+        return .result()
+    }
+}
 #endif
