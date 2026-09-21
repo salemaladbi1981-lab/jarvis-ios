@@ -37,6 +37,7 @@ bottom_nav = read('JARVIS/Home/BottomNavBar.swift')
 quick_suggestions = read('JARVIS/Home/QuickSuggestions.swift')
 cards = read('JARVIS/Cards/Cards.swift')
 composer = read('JARVIS/Workspace/WorkspaceComposerView.swift')
+conversation = read('JARVIS/Workspace/ConversationView.swift')
 hero = read('JARVIS/Core/JarvisHeroView.swift')
 colors = spec['colors']
 glow = spec['glow']
@@ -107,7 +108,21 @@ check('Composer preserves attachment and mic callbacks', 'Button(action: onAttac
 check('Composer send gating preserves text-or-attachment rule', '!text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || hasAttachments' in composer and '.disabled(!canSend)' in composer)
 check('Composer no longer depends on legacy blue aliases', 'JarvisColor.primary_blue' not in composer and 'JarvisColor.highlight_blue' not in composer)
 
-# 9) Migration must not replace production interaction/data paths.
+# 9) Conversation screen adopts gold chrome without touching streaming/chat production paths.
+check('Conversation streaming status uses highlight gold', '.foregroundColor(JarvisColor.highlight_gold)' in conversation)
+check('Conversation streaming shell uses restrained gold border and glow', 'stroke(JarvisColor.primary_gold.opacity(0.16)' in conversation and 'shadow(color: JarvisColor.primary_gold.opacity(0.05)' in conversation)
+check('Conversation handoff icon uses primary gold', 'Image(systemName: "arrow.right.circle.fill")' in conversation and '.foregroundColor(JarvisColor.primary_gold)' in conversation)
+check('Conversation citations use highlight gold', 'Link("[\\(idx + 1)] \\(c.title ?? "مصدر")", destination: u)' in conversation and '.foregroundColor(JarvisColor.highlight_gold)' in conversation)
+check('Conversation input adopts gold tint and border', '.tint(JarvisColor.highlight_gold)' in conversation and 'stroke(JarvisColor.primary_gold.opacity(0.16)' in conversation)
+check('Conversation send-ready state uses highlight gold', 'disabled ? JarvisColor.text_muted : JarvisColor.highlight_gold' in conversation)
+check('Conversation keeps semantic error danger', 'Image(systemName: "exclamationmark.triangle.fill")' in conversation and '.foregroundColor(JarvisColor.danger)' in conversation)
+check('Conversation no longer uses legacy blue aliases', 'JarvisColor.primary_blue' not in conversation and 'JarvisColor.highlight_blue' not in conversation)
+check('Conversation preserves load and send paths', 'await vm.load(conversationId)' in conversation and 'Task { await vm.send(t) }' in conversation)
+check('Conversation preserves streaming and retry paths', 'StreamingBubble(text: vm.streamingText' in conversation and 'Task { await vm.retry() }' in conversation)
+check('Conversation preserves citations and attachment refs', 'CitationsView(citations: cits)' in conversation and 'AttachmentView(fileId: ref, api: api)' in conversation)
+check('Conversation send gating is unchanged', '.disabled(disabled || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)' in conversation)
+
+# 10) Migration must not replace production interaction/data paths.
 check('Home keeps cinematic hero', 'JarvisHeroView(vm: voiceVM)' in home)
 check('Home keeps real microphone control', 'JarvisMicControl(vm: voiceVM)' in home and 'onMic: { voiceVM.toggleVoice() }' in home)
 check('Home keeps project health monitor', 'projectHealthCard(health)' in home and 'api.getObject("project/health")' in home)
