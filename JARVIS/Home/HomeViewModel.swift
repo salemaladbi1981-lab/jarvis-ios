@@ -306,11 +306,13 @@ final class HomeViewModel: ObservableObject {
         }
     }
 
-    /// App Intent / App Shortcut (استدعاء من قفل الشاشة): يبدأ الصوت إن كانت هناك علامة معلّقة.
+    /// App Intent / App Shortcut (استدعاء من قفل الشاشة أو استئناف التطبيق):
+    /// يستهلك الطلب مرة واحدة ولا يسمح لطلب Start جديد بإيقاف جلسة صوت قائمة.
     func handleAppIntentStart() {
         #if os(iOS)
         guard AppBridge.pendingStartVoice else { return }
         AppBridge.pendingStartVoice = false
+        guard !isVoiceActive, !isVoiceStarting else { return }
         toggleVoice()
         #endif
     }
@@ -429,166 +431,133 @@ final class HomeViewModel: ObservableObject {
         }
     }
 
-    private static func formatEvents(_ events: [JarvisCalendarEvent]) -> String {
-        guard !events.isEmpty else { return "لا توجد مواعيد اليوم" }
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "ar_QA")
-        f.dateFormat = "h:mm a"
-        return events.prefix(5).map { "\(f.string(from: $0.start)) — \($0.title)" }.joined(separator: "\n")
-    }
-
-    private static func formatReminders(_ reminders: [JarvisReminderItem]) -> String {
-        guard !reminders.isEmpty else { return "لا توجد تذكيرات قادمة" }
-        return reminders.prefix(5).map { "• \($0.title)" }.joined(separator: "\n")
-    }
-
-    // MARK: V1.1 — write confirmation (minimal coupling)
-
-    private static func isEmailQuestion(_ t: String) -> Bool {
-        ["إيميل", "ايميل", "بريد", "email", "mail", "inbox"].contains { t.contains($0) }
-    }
-
-    private static func parseCreateReminder(_ t: String) -> String? {
-        let markers = ["ذكرني", "ذكّرني", "remind me"]
-        for m in markers {
-            guard let r = t.range(of: m) else { continue }
-            var title = String(t[r.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
-            if title.hasPrefix("بـ") { title = String(title.dropFirst(2)) }
-            else if title.hasPrefix("ب") { title = String(title.dropFirst(1)) }
-            title = title.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !title.isEmpty { return title }
-        }
-        return nil
-    }
-
-    /// استرداد من خطأ عابر: بعد فترة قصيرة تعود الحالة إلى الخمول إن لم يأتِ حدث جديد.
-    private func scheduleErrorRecovery() {
-        errorRecoveryTask?.cancel()
-        errorRecoveryTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 5_000_000_000)
-            guard let self, !Task.isCancelled else { return }
-            if self.state == .alert {
-                self.state = .idle
-                self.calendarMessage = nil
-            }
-        }
-    }
-
-    private func requestReminderCreate(title: String) {
+    func requestReminderCreate(title: String) {
         pendingWrite = .createReminder(title: title)
         pendingApproval = "إنشاء تذكير: \(title)"
         state = .approval
     }
 
-    private func executeWrite(_ w: PendingWrite) async {
+    func requestEventCreate(title: String, start: Date, end: Date) {
+        pendingWrite = .createEvent(title: title, start: start, end: end)
+        pendingApproval = "إنشاء موعد: \(title)"
+        state = .approval
+    }
+
+    func approvePendingWrite() async {
+        guard let pendingWrite else { return }
+        self.pendingWrite = nil
+        pendingApproval = nil
         state = .executing
-        let result: ToolWriteResult
-        switch w {
+        let result: WriteResult
+        switch pendingWrite {
         case .createReminder(let title):
-            result = eventWriter.createReminder(title: title, due: nil)
+            result = await eventWriter.createReminder(title: title)
         case .createEvent(let title, let start, let end):
-            result = eventWriter.createEvent(title: title, start: start, end: end)
+            result = await eventWriter.createEvent(title: title, start: start, end: end)
         case .updateReminder(let id, let title):
-            result = eventWriter.updateReminder(id: id, title: title, due: nil)
+            result = await eventWriter.updateReminder(id: id, title: title)
         case .updateEvent(let id, let title):
-            result = eventWriter.updateEvent(id: id, title: title, start: nil, end: nil)
+            result = await eventWriter.updateEvent(id: id, title: title)
         case .completeReminder(let id):
-            result = eventWriter.completeReminder(id: id)
+            result = await eventWriter.completeReminder(id: id)
         case .deleteReminder(let id):
-            result = eventWriter.deleteReminder(id: id)
+            result = await eventWriter.deleteReminder(id: id)
         case .deleteEvent(let id):
-            result = eventWriter.deleteEvent(id: id)
+            result = await eventWriter.deleteEvent(id: id)
         }
         if result.ok {
             state = .idle
-            calendarMessage = "تم التنفيذ بنجاح"
+            calendarMessage = "تم التنفيذ"
         } else {
             state = .alert
-            calendarMessage = "تعذّر التنفيذ: \(result.error ?? "خطأ غير معروف")"
+            calendarMessage = result.error ?? "تعذّر التنفيذ"
         }
     }
 
-    // MARK: Agents
-    func agents(in group: String) -> [Agent] {
-        registry?.agents(in: group) ?? []
-    }
-    var allGroups: [String] {
-        registry?.allGroupKeys ?? ["core", "system", "content"]
-    }
-
-    // MARK: Status
-    var statusText: String {
-        switch state {
-        case .idle, .listening: return "أنا أستمع إليك…"
-        case .thinking:  return "أفكّر…"
-        case .speaking:  return "جارفس يتحدّث"
-        case .executing: return "جارٍ التنفيذ…"
-        case .alert:     return "تنبيه"
-        case .approval:  return "بانتظار موافقتك"
-        }
-    }
-
-    // MARK: Approval flow (registry-driven)
-    func requestAction(agentID: String, action: String) {
-        guard let approval else {
-            state = .approval   // fail-safe without registry
-            pendingApproval = action
-            return
-        }
-        if approval.requiresApproval(agentID: agentID, action: action) {
-            state = .approval
-            pendingApproval = displayName(action)
-        } else {
-            state = .executing   // safe action proceeds (mock)
-        }
-    }
-
-    func approve() {
-        if let w = pendingWrite {
-            pendingWrite = nil
-            pendingApproval = nil
-            Task { await executeWrite(w) }
-        } else {
-            pendingApproval = nil
-            state = .idle
-        }
-    }
-    func reject() {
+    func cancelPendingWrite() {
         pendingWrite = nil
         pendingApproval = nil
         state = .idle
     }
 
-    private func displayName(_ action: String) -> String {
-        switch action {
-        case "unlock-door": return "فتح باب المنزل"
-        case "open-gate": return "فتح البوابة"
-        case "disable-camera": return "تعطيل الكاميرا"
-        case "disable-alarm": return "تعطيل الإنذار"
-        default: return action
+    private func scheduleErrorRecovery() {
+        errorRecoveryTask?.cancel()
+        errorRecoveryTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                guard let self, self.state == .alert else { return }
+                self.state = .idle
+            }
         }
     }
 
-    // MARK: Demo interactions (P2.2 mock only)
-    func cycleState() {
-        let all: [JarvisState] = [.idle, .listening, .thinking, .speaking, .executing, .alert, .approval]
-        let idx = all.firstIndex(of: state) ?? 0
-        let next = all[(idx + 1) % all.count]
-        state = next
-        if next == .approval {
-            // demonstrate a sensitive action requiring approval
-            requestAction(agentID: "core_home", action: "unlock-door")
+    private static func isEmailQuestion(_ t: String) -> Bool {
+        let mailWords = ["ايميل", "إيميل", "بريد", "email", "mail", "inbox"]
+        return mailWords.contains { t.contains($0) }
+    }
+
+    private static func parseCreateReminder(_ t: String) -> String? {
+        let prefixes = ["ذكرني ", "ذكّرني ", "remind me "]
+        for prefix in prefixes where t.hasPrefix(prefix) {
+            let title = String(t.dropFirst(prefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !title.isEmpty { return title }
+        }
+        return nil
+    }
+
+    static func formatEvents(_ events: [CalendarEventItem]) -> String {
+        guard !events.isEmpty else { return "ما عندك مواعيد اليوم" }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ar_QA")
+        formatter.dateFormat = "HH:mm"
+        return events.map { event in
+            if event.allDay { return "• \(event.title) — طوال اليوم" }
+            return "• \(formatter.string(from: event.start)) — \(event.title)"
+        }.joined(separator: "\n")
+    }
+
+    static func formatReminders(_ reminders: [ReminderItem]) -> String {
+        guard !reminders.isEmpty else { return "ما عندك تذكيرات قادمة" }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ar_QA")
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        return reminders.map { reminder in
+            let due = reminder.due.map { " — \(formatter.string(from: $0))" } ?? ""
+            return "• \(reminder.title)\(due)"
+        }.joined(separator: "\n")
+    }
+
+    // MARK: Agent approval path
+    func requestAction(agentID: String, action: String) {
+        guard let approval else {
+            pendingApproval = nil
+            state = .alert
+            return
+        }
+        let decision = approval.decision(agentID: agentID, action: action)
+        switch decision {
+        case .allow:
+            pendingApproval = nil
+            state = .executing
+        case .requireApproval:
+            pendingApproval = "\(agentID): \(action)"
+            state = .approval
+        case .deny:
+            pendingApproval = nil
+            state = .alert
         }
     }
 
-    func nextGroup() {
-        let keys = allGroups
-        let idx = keys.firstIndex(of: activeGroup) ?? 0
-        activeGroup = keys[(idx + 1) % keys.count]
+    func approve() {
+        guard pendingApproval != nil else { return }
+        pendingApproval = nil
+        state = .executing
     }
-    func prevGroup() {
-        let keys = allGroups
-        let idx = keys.firstIndex(of: activeGroup) ?? 0
-        activeGroup = keys[(idx - 1 + keys.count) % keys.count]
+
+    func cancelApproval() {
+        pendingApproval = nil
+        state = .idle
     }
 }
