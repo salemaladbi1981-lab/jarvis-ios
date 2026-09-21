@@ -42,6 +42,10 @@ check("Calendar voice uses authoritative EventKit grounding",
       'voiceSession.sendGroundedDeviceResult(userRequest: "calendar today", result: grounded)' in vm)
 check("Reminders voice uses authoritative device grounding",
       'voiceSession.sendGroundedDeviceResult(userRequest: "upcoming reminders", result: grounded)' in vm)
+check("Agent inventory voice uses bundled registry grounding",
+      'isAgentInventoryQuestion' in vm and 'groundedAgentInventoryAnswer' in vm and 'voiceSession.sendGroundedDeviceResult(userRequest: text, result: grounded)' in vm)
+check("Bundled registry grounding explicitly covers architect/coach names",
+      '"معمار"' in vm and '"المدرب"' in vm)
 check("Realtime cancels speculative answer before grounded device reply",
       'Authoritative device result for my previous request' in open(os.path.join(ROOT, 'Voice/RealtimeVoiceSession.swift'), encoding='utf-8').read())
 
