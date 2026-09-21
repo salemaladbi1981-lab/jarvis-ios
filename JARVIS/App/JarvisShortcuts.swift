@@ -12,10 +12,22 @@ struct JarvisShortcuts: AppShortcutsProvider {
                 "Talk to \(.applicationName)",
                 "شغل \(.applicationName)",
                 "اسأل \(.applicationName)",
-                "افتح \(.applicationName)"
+                "كلّم \(.applicationName)"
             ],
             shortTitle: "Start Jarvis",
             systemImageName: "mic.fill"
+        )
+
+        AppShortcut(
+            intent: JarvisOpenIntent(),
+            phrases: [
+                "Open \(.applicationName)",
+                "Show \(.applicationName)",
+                "افتح \(.applicationName)",
+                "ورني \(.applicationName)"
+            ],
+            shortTitle: "Open Jarvis",
+            systemImageName: "app.fill"
         )
 
         AppShortcut(
