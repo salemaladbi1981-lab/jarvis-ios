@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
   "phase": "stability-recovery",
-  "current_milestone": "Project Health Monitor — real build, CI, tests, blockers and owner actions",
-  "next_milestone": "Siri / App Intents + Shortcuts lock-screen foundation — official Apple mechanisms only",
+  "current_milestone": "Mac Operator foundation — safe local execution seams, permissions, approval gates and tests",
+  "next_milestone": "Gold cinematic UI migration — approved concept without breaking production flows",
   "source": "user-approved priority order",
   "updated_at": "2026-09-21"
 }
