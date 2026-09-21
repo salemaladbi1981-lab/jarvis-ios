@@ -99,8 +99,8 @@ check("missing or malformed plan fails closed to unknown planning metadata",
       malformed_meta["current_milestone"] == "unknown")
 
 check("checked-in plan matches approved priority order",
-      str(plan.get("current_milestone", "")).startswith("Project Health Monitor") and
-      str(plan.get("next_milestone", "")).startswith("Siri / App Intents") and
+      str(plan.get("current_milestone", "")).startswith("Siri / App Intents") and
+      str(plan.get("next_milestone", "")).startswith("Mac Operator foundation") and
       plan.get("source") == "user-approved priority order")
 
 with tempfile.TemporaryDirectory() as temp_dir:
