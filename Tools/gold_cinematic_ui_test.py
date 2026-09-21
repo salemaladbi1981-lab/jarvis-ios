@@ -34,6 +34,7 @@ swift = read('JARVIS/DesignSystem/JarvisTokens.swift')
 home = read('JARVIS/Workspace/HomeEntryView.swift')
 header = read('JARVIS/Home/HeaderView.swift')
 bottom_nav = read('JARVIS/Home/BottomNavBar.swift')
+quick_suggestions = read('JARVIS/Home/QuickSuggestions.swift')
 hero = read('JARVIS/Core/JarvisHeroView.swift')
 colors = spec['colors']
 glow = spec['glow']
@@ -76,7 +77,14 @@ check('Mic interaction remains manual toggleVoice', 'Button(action: { vm.toggleV
 check('Mic state labels preserve interruption behavior', 'case .speaking: return "اضغط للمقاطعة"' in hero and 'case .listening: return "أنا أسمعك…"' in hero)
 check('Semantic execution/error/approval colors stay distinct', 'case .executing: return JarvisColor.success' in hero and 'case .alert: return JarvisColor.danger' in hero and 'case .approval: return JarvisColor.warning_demo' in hero)
 
-# 6) Migration must not replace production interaction/data paths.
+# 6) Quick suggestions adopt gold styling without changing typed command dispatch.
+check('Suggestion chips use primary gold border', 'JarvisColor.primary_gold.opacity(0.24)' in quick_suggestions)
+check('Suggestion chips use restrained gold glow', 'JarvisColor.primary_gold.opacity(0.07)' in quick_suggestions)
+check('Suggestion chips no longer use legacy blue aliases', 'JarvisColor.primary_blue' not in quick_suggestions and 'JarvisColor.highlight_blue' not in quick_suggestions)
+check('Suggestion typed command dispatch is preserved', '.onTapGesture { onTap(cmd) }' in quick_suggestions and 'let commands: [QuickCommand]' in quick_suggestions)
+check('Suggestion accessibility button semantics preserved', '.accessibilityAddTraits(.isButton)' in quick_suggestions and '.accessibilityLabel("أمر: \\(cmd.label)")' in quick_suggestions)
+
+# 7) Migration must not replace production interaction/data paths.
 check('Home keeps cinematic hero', 'JarvisHeroView(vm: voiceVM)' in home)
 check('Home keeps real microphone control', 'JarvisMicControl(vm: voiceVM)' in home and 'onMic: { voiceVM.toggleVoice() }' in home)
 check('Home keeps project health monitor', 'projectHealthCard(health)' in home and 'api.getObject("project/health")' in home)
