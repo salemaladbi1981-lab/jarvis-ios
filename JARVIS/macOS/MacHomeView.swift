@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// macOS Home — approved cinematic desktop direction (three-zone):
 /// Left: nav + Smart Home + Security + Media
@@ -11,6 +12,8 @@ struct MacHomeView: View {
     @State private var accessibilityReady = false
     @State private var automationReady = false
     @State private var macOperatorChecked = false
+    @State private var showMacFileImporter = false
+    @State private var selectedItemMetadataText: String?
 
     var body: some View {
         HStack(spacing: 0) {
@@ -89,6 +92,14 @@ struct MacHomeView: View {
             LinearGradient(colors: [JarvisColor.bg_0, JarvisColor.bg_1], startPoint: .top, endPoint: .bottom)
                 .ignoresSafeArea()
         )
+        .fileImporter(
+            isPresented: $showMacFileImporter,
+            allowedContentTypes: [.item],
+            allowsMultipleSelection: false
+        ) { result in
+            guard case .success(let urls) = result, let url = urls.first else { return }
+            Task { await inspectUserSelectedItem(url) }
+        }
         .task {
             await vm.load()
             await refreshMacOperatorReadiness()
@@ -118,6 +129,19 @@ struct MacHomeView: View {
                     .foregroundColor(JarvisColor.text_muted)
             }
 
+            Button("فحص ملف مختار") {
+                showMacFileImporter = true
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+
+            if let selectedItemMetadataText {
+                Text(selectedItemMetadataText)
+                    .font(.system(size: 10))
+                    .foregroundColor(JarvisColor.text_secondary)
+                    .lineLimit(4)
+            }
+
             Text(macOperatorChecked ? "فحص غير مُطالب بالصلاحيات" : "جارٍ فحص الجاهزية…")
                 .font(.system(size: 10))
                 .foregroundColor(JarvisColor.text_muted)
@@ -142,6 +166,34 @@ struct MacHomeView: View {
                 .font(.system(size: 11))
                 .foregroundColor(ready ? JarvisColor.text_secondary : JarvisColor.text_muted)
             Spacer()
+        }
+    }
+
+    private func inspectUserSelectedItem(_ url: URL) async {
+        let adapter = UserSelectedFileMacOperatorAdapter()
+        await adapter.registerUserSelectedURL(url)
+
+        let service = MacOperatorService(
+            permissionProvider: adapter,
+            executor: adapter
+        )
+        let request = MacOperatorRequest(
+            action: .inspectSelectedItemMetadata,
+            target: url.standardizedFileURL.path
+        )
+        let result = await service.perform(request, ownerApproval: nil)
+
+        switch result {
+        case .execution(.metadata(let metadata)):
+            let kind = metadata.isDirectory ? "مجلد" : "ملف"
+            let size = metadata.sizeBytes.map { "\($0) bytes" } ?? "الحجم غير متاح"
+            selectedItemMetadataText = "\(kind) • \(size)\n\(metadata.path)"
+        case .authorizationBlocked:
+            selectedItemMetadataText = "تم حظر القراءة: الاختيار أو الصلاحية غير مثبتة"
+        case .execution(.blocked(let reason)):
+            selectedItemMetadataText = "تعذر الفحص: \(reason)"
+        case .execution(.completed):
+            selectedItemMetadataText = "اكتمل الفحص"
         }
     }
 
