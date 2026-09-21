@@ -189,10 +189,18 @@ struct HomeEntryView: View {
         .task {
             await vm.load()
             await voiceVM.load()
+            // Cold-launch handoff from Siri / Shortcuts.
             voiceVM.handleAppIntentStart()
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .background { voiceVM.handleAppBackgrounded() }
+            if phase == .background {
+                voiceVM.handleAppBackgrounded()
+            } else if phase == .active {
+                // Warm-resume handoff: App Intents can open an app that already exists in
+                // memory. Re-check the one-shot bridge when the scene becomes active.
+                // The bridge is consumed exactly once, so this cannot replay on later resumes.
+                voiceVM.handleAppIntentStart()
+            }
         }
         .sheet(isPresented: $showAttachments) {
             AttachmentMenu(
