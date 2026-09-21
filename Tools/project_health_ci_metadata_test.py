@@ -38,8 +38,8 @@ base = {
     "JARVIS_IOS_RESULT": "success",
     "JARVIS_MAC_RESULT": "success",
     "JARVIS_CURRENT_PHASE": "4",
-    "JARVIS_CURRENT_MILESTONE": "Project Health Monitor",
-    "JARVIS_NEXT_MILESTONE": "Siri / App Intents foundation",
+    "JARVIS_CURRENT_MILESTONE": "Repository-owned current milestone",
+    "JARVIS_NEXT_MILESTONE": "Repository-owned next milestone",
 }
 metadata = module.build_metadata(base, plan_path=PLAN, generated_at="2026-09-21T13:10:00Z")
 
@@ -59,8 +59,8 @@ check("CI run identity is grounded in GitHub-provided runtime values",
 
 check("repository variables remain authoritative for planning metadata",
       metadata["phase"] == "4" and
-      metadata["current_milestone"] == "Project Health Monitor" and
-      metadata["next_milestone"] == "Siri / App Intents foundation" and
+      metadata["current_milestone"] == "Repository-owned current milestone" and
+      metadata["next_milestone"] == "Repository-owned next milestone" and
       metadata["evidence"]["milestones"] == "github_repository_variables")
 
 fallback_env = {
@@ -116,9 +116,9 @@ check("missing or malformed plan fails closed to unknown planning metadata",
       missing_meta["evidence"]["milestones"] == "unknown" and
       malformed_meta["current_milestone"] == "unknown")
 
-check("checked-in plan matches approved priority order",
-      str(plan.get("current_milestone", "")).startswith("Project Health Monitor") and
-      str(plan.get("next_milestone", "")).startswith("Siri / App Intents + Shortcuts") and
+check("checked-in plan tracks the active approved priority order",
+      str(plan.get("current_milestone", "")).startswith("Mac Operator foundation") and
+      str(plan.get("next_milestone", "")).startswith("Gold cinematic UI migration") and
       plan.get("source") == "user-approved priority order")
 
 with tempfile.TemporaryDirectory() as temp_dir:
