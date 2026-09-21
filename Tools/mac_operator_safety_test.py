@@ -197,21 +197,61 @@ check(
 check(
     "Mac UI requires explicit fileImporter selection before metadata inspection",
     ".fileImporter(" in MAC_UI
+    and "selectedMacOperatorURL = url" in MAC_UI
     and "registerUserSelectedURL(url)" in MAC_UI
     and "action: .inspectSelectedItemMetadata" in MAC_UI,
 )
 
 check(
-    "Finder reveal executor accepts only the typed reveal action and an approval-bearing token",
+    "Finder reveal is offered only for an explicitly selected URL",
+    "if let selectedURL = selectedMacOperatorURL" in MAC_UI
+    and "pendingFinderRevealURL = selectedURL" in MAC_UI
+    and "showFinderRevealApproval = true" in MAC_UI,
+)
+
+check(
+    "Finder reveal requires a visible owner confirmation before execution",
+    '.confirmationDialog(' in MAC_UI
+    and '"السماح لجارفس بإظهار الملف في Finder؟"' in MAC_UI
+    and 'Button("إظهار في Finder")' in MAC_UI
+    and "Task { await revealUserSelectedItem(url) }" in MAC_UI,
+)
+
+check(
+    "Finder reveal owner approval is short-lived and bound to exact request",
+    "MacOperatorApprovalGrant(" in MAC_UI
+    and "request: request" in MAC_UI
+    and "expiresAt: Date().addingTimeInterval(30)" in MAC_UI,
+)
+
+check(
+    "Finder reveal service re-verifies explicit selection before executor",
+    "let adapter = UserSelectedFileMacOperatorAdapter()" in MAC_UI
+    and "await adapter.registerUserSelectedURL(url)" in MAC_UI
+    and "permissionProvider: adapter" in MAC_UI
+    and "executor: FinderRevealMacOperatorExecutor(selectedURL: url)" in MAC_UI,
+)
+
+check(
+    "Finder reveal executor accepts only typed reveal action and approval-bearing token",
     "struct FinderRevealMacOperatorExecutor: MacOperatorExecuting" in MAC_UI
     and "guard request.action == .revealSelectedItemInFinder" in MAC_UI
     and "guard authorization.approvalGrantID != nil" in MAC_UI,
 )
 
 check(
-    "Finder reveal executor uses only visible NSWorkspace reveal and verifies target existence",
-    "FileManager.default.fileExists(atPath: url.path)" in MAC_UI
-    and "NSWorkspace.shared.activateFileViewerSelecting([url])" in MAC_UI
+    "Finder reveal executor is bound to exact selected path",
+    "private let selectedURL: URL" in MAC_UI
+    and "guard request.target == url.path" in MAC_UI
+    and 'return .blocked("finder_reveal_selection_mismatch")' in MAC_UI,
+)
+
+check(
+    "Finder reveal uses security-scoped access and only visible NSWorkspace reveal",
+    "selectedURL.startAccessingSecurityScopedResource()" in MAC_UI
+    and "selectedURL.stopAccessingSecurityScopedResource()" in MAC_UI
+    and "FileManager.default.fileExists(atPath: url.path)" in MAC_UI
+    and "NSWorkspace.shared.activateFileViewerSelecting(urls)" in MAC_UI
     and "NSWorkspace.shared.open" not in MAC_UI
     and "NSAppleScript" not in MAC_UI
     and "Process(" not in MAC_UI
@@ -219,8 +259,10 @@ check(
 )
 
 check(
-    "Finder reveal executor is foundation-only and not silently wired into production UI",
-    "executor: FinderRevealMacOperatorExecutor()" not in MAC_UI,
+    "Finder reveal does not request Accessibility or Apple Events execution",
+    "FinderRevealMacOperatorExecutor" in MAC_UI
+    and "AXIsProcessTrustedWithOptions" not in MAC_UI
+    and "AEDeterminePermissionToAutomateTarget" not in MAC_UI,
 )
 
 print(f"\n== RESULT: {PASS} PASS / {FAIL} FAIL ==")
