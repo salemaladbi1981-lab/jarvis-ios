@@ -4,6 +4,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 models = (ROOT / 'JARVIS/Integrations/EventKitModels.swift').read_text()
 provider = (ROOT / 'JARVIS/Integrations/AppleEventKitProvider.swift').read_text()
+home_vm = (ROOT / 'JARVIS/Home/HomeViewModel.swift').read_text()
+home = (ROOT / 'JARVIS/Workspace/HomeEntryView.swift').read_text()
 
 checks = []
 def check(name, ok):
@@ -51,6 +53,17 @@ check('Provider handoff requires existing authorization', 'func handoffURL' in p
 check('Provider rejects all-day handoff after re-read', 'guard !currentEvent.isAllDay' in provider)
 check('Provider delegates final URL gate to handoff policy', 'MeetingHandoffPolicy.revalidatedURL' in provider)
 check('Provider handoff never requests EventKit permission', 'func handoffURL' in provider and 'requestEvents()' in provider and 'requestEvents()' not in provider.split('func handoffURL', 1)[1].split('func upcomingReminders', 1)[0])
+
+# Production UI integration: discovery is explicit, opening is a user tap, and
+# the URL is revalidated immediately before SwiftUI hands it to the OS.
+check('Home VM publishes authorized meeting targets', '@Published private(set) var meetingTargets: [MeetingLaunchTarget]' in home_vm)
+check('UI refresh can request EventKit permission only from explicit refresh', 'refreshMeetings(requestPermissionIfNeeded: true)' in home)
+check('Background meeting refresh does not silently request permission', 'if access == .notDetermined && requestPermissionIfNeeded' in home_vm)
+check('Home VM exposes revalidated handoff only', 'func meetingHandoffURL(for target: MeetingLaunchTarget) -> URL?' in home_vm and 'calendarProvider.handoffURL(for: target, userInitiated: true)' in home_vm)
+check('Meeting UI opens only after revalidation', 'guard let url = voiceVM.meetingHandoffURL(for: meeting)' in home and 'openURL(url)' in home)
+check('Meeting UI has explicit open button', 'Button("فتح")' in home and '.accessibilityLabel("فتح اجتماع \\(meeting.title)")' in home)
+check('Meeting UI does not auto-open on discovery', 'onAppear' not in home.split('Label("الاجتماعات القادمة"', 1)[1].split('// نقطة دخول واضحة', 1)[0])
+check('Meeting UI uses gold cinematic shell', 'Label("الاجتماعات القادمة"' in home and 'stroke(JarvisColor.primary_gold.opacity(0.16)' in home)
 
 # Milestone ownership intentionally lives in Project Health tests. Meeting regression
 # must not pin the global roadmap to this already-built foundation.
