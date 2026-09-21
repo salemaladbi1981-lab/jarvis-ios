@@ -75,6 +75,12 @@ check("app refreshes App Shortcut metadata on launch through Apple's provider AP
       'AudioCapture' not in app and
       'AVAudio' not in app)
 
+check("production UI exposes official ShortcutsLink for device validation",
+      'import AppIntents' in home and
+      'ShortcutsLink()' in home and
+      'JarvisShortcuts.updateAppShortcutParameters()' in home and
+      'تحديث اختصارات Siri' in home)
+
 check("navigation shortcut uses App Intents and requires authentication",
       'struct JarvisNavigateIntent: AppIntent' in maps_intent and
       'static var openAppWhenRun: Bool = true' in maps_intent and
