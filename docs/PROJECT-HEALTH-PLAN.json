@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "phase": "stability-recovery",
-  "current_milestone": "Gold cinematic UI migration — preserve production flows",
-  "next_milestone": "Meeting foundation — official/authorized platform mechanisms only",
+  "current_milestone": "Meeting foundation — authorized calendar discovery and explicit handoff",
+  "next_milestone": "Physical device acceptance — voice, Siri lock screen, AirPods/Shokz, Mac permissions",
   "source": "user-approved priority order",
   "updated_at": "2026-09-21"
 }
