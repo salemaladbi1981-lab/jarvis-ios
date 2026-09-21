@@ -1,8 +1,28 @@
 """jarvis_agent — أداة تشغيل وكيل متخصص عبر Hermes (execution trace كامل)."""
 from __future__ import annotations
+import json
+from pathlib import Path
 import agent_profiles, agent_runner
 
+_REGISTRY_PATH = Path(__file__).with_name("AGENT-REGISTRY.json")
+
+def _load_registry():
+    with _REGISTRY_PATH.open(encoding="utf-8") as f:
+        return json.load(f)
+
 AGENT_TOOLS = [
+    {
+        "type": "function",
+        "name": "jarvis_agent_lookup",
+        "description": (
+            "Grounded lookup against the authoritative JARVIS agent registry. "
+            "Use this for questions about whether an agent exists, its exact name/id, role, group, "
+            "capabilities or tools. Never answer agent-inventory questions from model memory."
+        ),
+        "parameters": {"type": "object", "properties": {
+            "query": {"type": "string", "description": "agent name, id, role, capability, or tool"}
+        }, "required": ["query"]},
+    },
     {
         "type": "function",
         "name": "jarvis_agent",
@@ -26,6 +46,31 @@ AGENT_TOOLS = [
 
 
 def execute_agent_tool(name, args):
+    if name == "jarvis_agent_lookup":
+        q = " ".join((args.get("query") or "").lower().replace("_", " ").replace("-", " ").split())
+        if not q:
+            return {"ok": False, "error": "missing_query"}
+        agents = _load_registry().get("agents", [])
+        matches = []
+        for agent in agents:
+            hay = " ".join([
+                str(agent.get("id", "")),
+                str(agent.get("name", "")),
+                str(agent.get("role", "")),
+                " ".join(agent.get("capabilities", [])),
+                " ".join(agent.get("tools", [])),
+            ]).lower().replace("_", " ").replace("-", " ")
+            if q in hay or any(tok and tok in hay for tok in q.split()):
+                matches.append({
+                    "id": agent.get("id"),
+                    "name": agent.get("name"),
+                    "group": agent.get("group"),
+                    "role": agent.get("role"),
+                    "capabilities": agent.get("capabilities", []),
+                    "tools": agent.get("tools", []),
+                })
+        return {"ok": True, "count": len(matches), "matches": matches[:10]}
+
     if name != "jarvis_agent":
         return {"ok": False, "error": "unknown_tool"}
     agent_id = (args.get("agent_id") or "").strip()
