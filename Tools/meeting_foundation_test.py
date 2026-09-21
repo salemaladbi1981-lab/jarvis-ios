@@ -36,7 +36,7 @@ check('Discovery deduplicates launch targets', 'var seen = Set<String>()' in mod
 check('Provider exposes upcoming meeting discovery', 'func upcomingMeetingTargets' in provider)
 check('Meeting discovery requires existing EventKit authorization', 'guard eventAccess() == .authorized else { return [] }' in provider)
 check('Meeting discovery horizon is bounded', 'let safeDays = min(max(horizonDays, 1), 30)' in provider)
-check('Meeting discovery can retain an in-progress meeting', 'value: -12, to: now' in provider and 'event.end >= now' in models)
+check('Meeting discovery can retain an in-progress meeting', 'value: -12, to: now' in provider and '$0.end >= now' in models)
 check('Provider delegates eligibility to pure policy', 'MeetingDiscoveryPolicy.upcomingTargets(from: events, now: now, limit: limit)' in provider)
 check('Meeting foundation does not auto-open URLs', 'UIApplication.shared.open' not in provider and 'UIApplication.shared.open' not in models)
 check('Meeting foundation does not silently request access during discovery', 'upcomingMeetingTargets' in provider and 'guard eventAccess() == .authorized' in provider)
