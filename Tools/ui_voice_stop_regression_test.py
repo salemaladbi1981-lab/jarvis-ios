@@ -66,3 +66,8 @@ check("VoiceAudioEngine: interruption resume activation off main thread",
       'resume setActive FAILED' in vae and 'DispatchQueue.global(qos: .userInitiated).async' in vae)
 check("VoiceAudioEngine: stop deactivation off main thread",
       'stop: setActive(false) OK' in vae and 'DispatchQueue.global(qos: .utility).async' in vae)
+
+check("Realtime voice: post-playback echo guard exists",
+      'suppressMicUntil' in read('Voice/RealtimeVoiceSession.swift') and '+ 0.18' in read('Voice/RealtimeVoiceSession.swift'))
+check("Realtime voice: echo guard suppresses mic only after drain",
+      'Date().timeIntervalSinceReferenceDate < suppressMicUntil' in read('Voice/RealtimeVoiceSession.swift'))
