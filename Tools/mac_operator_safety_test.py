@@ -98,6 +98,21 @@ check(
 )
 
 check(
+    "official system permission provider probes without prompting",
+    "struct SystemMacOperatorPermissionProvider" in SOURCE
+    and "AXIsProcessTrusted()" in SOURCE
+    and "AEDeterminePermissionToAutomateTarget(" in SOURCE
+    and "typeApplicationBundleID" in SOURCE
+    and "typeWildCard" in SOURCE
+    and "&target,\n            typeWildCard,\n            typeWildCard,\n            false" in SOURCE,
+)
+
+check(
+    "system provider does not infer user-selected file permission from a path string",
+    "case .userSelectedFiles:\n            return []" in SOURCE,
+)
+
+check(
     "single service seam sources permissions, gates, then invokes executor",
     "actor MacOperatorService" in SOURCE
     and "let grantedPermissions = await permissionProvider.grantedPermissions(for: request)" in SOURCE
