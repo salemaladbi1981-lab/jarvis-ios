@@ -1,8 +1,8 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "phase": "stability-recovery",
-  "current_milestone": "Meeting foundation — authorized calendar discovery and explicit handoff",
-  "next_milestone": "Physical device acceptance — voice, Siri lock screen, AirPods/Shokz, Mac permissions",
+  "current_milestone": "Project Health Monitor — real build, CI, tests, blockers and owner actions",
+  "next_milestone": "Siri / App Intents + Shortcuts lock-screen foundation — official Apple mechanisms only",
   "source": "user-approved priority order",
   "updated_at": "2026-09-21"
 }
