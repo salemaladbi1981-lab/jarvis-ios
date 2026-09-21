@@ -29,6 +29,9 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     private var startAttemptID = 0
     private var pcmAppendCount = 0
     private var bargeStartTime: TimeInterval = 0
+    /// Brief post-playback mic guard to keep the assistant's own acoustic tail from
+    /// being re-submitted as a new user utterance. Barge-in while speaking remains active.
+    private var suppressMicUntil: TimeInterval = 0
     /// Voice barge-in confirmation: semantic VAD must remain active briefly before
     /// cancelling playback. This restores natural interruption while filtering clicks/echo.
     private var pendingBargeWorkItem: DispatchWorkItem?
@@ -86,6 +89,7 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                     self.trace("playback drained — لا اكتمال مطابق (إشعار قديم cycle=\(cycle))")
                 case .success:
                     self.trace("playback drained — اكتمل التشغيل المحلي")
+                    self.suppressMicUntil = Date().timeIntervalSinceReferenceDate + 0.18
                     self.eventPublisher.send(.connected)
                 case .failed:
                     self.trace("playback drained — اكتمل التشغيل (failed)")
@@ -200,6 +204,9 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
         // Gate: لا PCM قبل نجاح handshake/session.created (تحت التسلسل نفسه)
         let ready = stateQueue.sync { self.guardState.isSessionReady }
         guard ready else { return }
+        // After local playback drains, suppress only the tiny acoustic tail window.
+        // This does not affect spoken barge-in during assistant speech.
+        if Date().timeIntervalSinceReferenceDate < suppressMicUntil { return }
         pcmAppendCount += 1
         if pcmAppendCount == 1 {
             trace("PCM append #1 bytes=\(pcm16.count)")
