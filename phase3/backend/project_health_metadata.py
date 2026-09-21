@@ -4,9 +4,11 @@ The CI workflow emits ``project-health.env``. A deployment may mount/copy that
 artifact and point ``JARVIS_PROJECT_HEALTH_METADATA_PATH`` at it. Only Project
 Health keys are accepted; explicit process environment values always win.
 """
+import json
 import os
 import re
 from pathlib import Path
+from urllib.parse import urlparse
 
 HEALTH_KEYS = {
     "JARVIS_BUILD_SHA",
@@ -15,10 +17,25 @@ HEALTH_KEYS = {
     "JARVIS_CURRENT_PHASE",
     "JARVIS_CURRENT_MILESTONE",
     "JARVIS_NEXT_MILESTONE",
+    "JARVIS_CI_RUN_ID",
+    "JARVIS_CI_RUN_NUMBER",
+    "JARVIS_CI_RUN_URL",
+    "JARVIS_CI_BRANCH",
+    "JARVIS_CI_METADATA_GENERATED_AT",
+    "JARVIS_CI_BACKEND_STATUS",
+    "JARVIS_CI_IOS_STATUS",
+    "JARVIS_CI_MAC_STATUS",
 }
-STATUS_KEYS = {"JARVIS_CI_STATUS", "JARVIS_TESTS_STATUS"}
+STATUS_KEYS = {
+    "JARVIS_CI_STATUS",
+    "JARVIS_TESTS_STATUS",
+    "JARVIS_CI_BACKEND_STATUS",
+    "JARVIS_CI_IOS_STATUS",
+    "JARVIS_CI_MAC_STATUS",
+}
 VALID_STATUSES = {"success", "failure", "unknown"}
 _SHA_RE = re.compile(r"^[0-9a-fA-F]{7,40}$")
+_DIGITS_RE = re.compile(r"^[0-9]+$")
 
 
 def _valid_value(key, value):
@@ -26,6 +43,17 @@ def _valid_value(key, value):
         return value.lower() in VALID_STATUSES
     if key == "JARVIS_BUILD_SHA":
         return not value or bool(_SHA_RE.fullmatch(value))
+    if key in {"JARVIS_CI_RUN_ID", "JARVIS_CI_RUN_NUMBER"}:
+        return not value or bool(_DIGITS_RE.fullmatch(value))
+    if key == "JARVIS_CI_RUN_URL":
+        if not value:
+            return True
+        parsed = urlparse(value)
+        return parsed.scheme == "https" and bool(parsed.netloc)
+    if key == "JARVIS_CI_METADATA_GENERATED_AT":
+        return not value or ("T" in value and value.endswith("Z"))
+    if key == "JARVIS_CI_BRANCH":
+        return "\n" not in value and "\r" not in value and len(value) <= 200
     return True
 
 
