@@ -88,13 +88,14 @@ final class AppleEventKitProvider {
 
 extension JarvisCalendarEvent {
     init(ek: EKEvent) {
-        id = ek.eventIdentifier ?? UUID().uuidString
-        title = ek.title ?? "بدون عنوان"
-        start = ek.startDate
-        end = ek.endDate
-        isAllDay = ek.isAllDay
-        calendarName = ek.calendar?.title
-        location = ek.location
+        self.init(id: ek.eventIdentifier ?? UUID().uuidString,
+                  title: ek.title ?? "بدون عنوان",
+                  start: ek.startDate,
+                  end: ek.endDate,
+                  isAllDay: ek.isAllDay,
+                  calendarName: ek.calendar?.title,
+                  location: ek.location,
+                  meetingURL: ek.url)
     }
 }
 
