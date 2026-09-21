@@ -17,6 +17,9 @@ struct MacHomeView: View {
     @State private var macOperatorChecked = false
     @State private var showMacFileImporter = false
     @State private var selectedItemMetadataText: String?
+    @State private var selectedMacOperatorURL: URL?
+    @State private var pendingFinderRevealURL: URL?
+    @State private var showFinderRevealApproval = false
 
     var body: some View {
         HStack(spacing: 0) {
@@ -101,7 +104,23 @@ struct MacHomeView: View {
             allowsMultipleSelection: false
         ) { result in
             guard case .success(let urls) = result, let url = urls.first else { return }
+            selectedMacOperatorURL = url
             Task { await inspectUserSelectedItem(url) }
+        }
+        .confirmationDialog(
+            "السماح لجارفس بإظهار الملف في Finder؟",
+            isPresented: $showFinderRevealApproval,
+            titleVisibility: .visible
+        ) {
+            Button("إظهار في Finder") {
+                guard let url = pendingFinderRevealURL else { return }
+                Task { await revealUserSelectedItem(url) }
+            }
+            Button("إلغاء", role: .cancel) {
+                pendingFinderRevealURL = nil
+            }
+        } message: {
+            Text(pendingFinderRevealURL?.lastPathComponent ?? "")
         }
         .task {
             await vm.load()
@@ -137,6 +156,15 @@ struct MacHomeView: View {
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
+
+            if let selectedURL = selectedMacOperatorURL {
+                Button("إظهار في Finder") {
+                    pendingFinderRevealURL = selectedURL
+                    showFinderRevealApproval = true
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
 
             if let selectedItemMetadataText {
                 Text(selectedItemMetadataText)
@@ -197,6 +225,37 @@ struct MacHomeView: View {
             selectedItemMetadataText = "تعذر الفحص: \(reason)"
         case .execution(.completed):
             selectedItemMetadataText = "اكتمل الفحص"
+        }
+    }
+
+    private func revealUserSelectedItem(_ url: URL) async {
+        let adapter = UserSelectedFileMacOperatorAdapter()
+        await adapter.registerUserSelectedURL(url)
+
+        let request = MacOperatorRequest(
+            action: .revealSelectedItemInFinder,
+            target: url.standardizedFileURL.path
+        )
+        let approval = MacOperatorApprovalGrant(
+            request: request,
+            expiresAt: Date().addingTimeInterval(30)
+        )
+        let service = MacOperatorService(
+            permissionProvider: adapter,
+            executor: FinderRevealMacOperatorExecutor(selectedURL: url)
+        )
+        let result = await service.perform(request, ownerApproval: approval)
+        pendingFinderRevealURL = nil
+
+        switch result {
+        case .execution(.completed):
+            selectedItemMetadataText = "تم إظهار الملف في Finder بعد موافقتك"
+        case .authorizationBlocked:
+            selectedItemMetadataText = "تم حظر الإظهار: الاختيار أو الموافقة لم تعد صالحة"
+        case .execution(.blocked(let reason)):
+            selectedItemMetadataText = "تعذر الإظهار: \(reason)"
+        case .execution(.metadata):
+            selectedItemMetadataText = "تم حظر نتيجة غير متوقعة"
         }
     }
 
@@ -289,10 +348,25 @@ struct MacHomeView: View {
 }
 
 /// Narrow macOS platform executor for the already-authorized Finder reveal action.
-/// It cannot run shell/AppleScript/Accessibility work, cannot mutate the file, and refuses
-/// any execution token that does not carry the one-shot owner-approval identity created by
-/// MacOperatorExecutionGate. It is intentionally not wired into production UI yet.
+/// It is bound to the exact URL selected by the user, cannot run shell/AppleScript/Accessibility
+/// work, cannot mutate the file, and refuses any execution token that lacks owner approval or
+/// targets a different path. The UI creates it only after the explicit confirmation dialog.
 struct FinderRevealMacOperatorExecutor: MacOperatorExecuting {
+    typealias RevealHandler = @MainActor @Sendable ([URL]) -> Void
+
+    private let selectedURL: URL
+    private let revealHandler: RevealHandler
+
+    init(
+        selectedURL: URL,
+        revealHandler: @escaping RevealHandler = { urls in
+            NSWorkspace.shared.activateFileViewerSelecting(urls)
+        }
+    ) {
+        self.selectedURL = selectedURL
+        self.revealHandler = revealHandler
+    }
+
     func execute(_ authorization: MacOperatorExecutionAuthorization) async -> MacOperatorExecutionResult {
         let request = authorization.request
         guard request.action == .revealSelectedItemInFinder else {
@@ -302,14 +376,21 @@ struct FinderRevealMacOperatorExecutor: MacOperatorExecuting {
             return .blocked("finder_reveal_owner_approval_missing")
         }
 
-        let url = URL(fileURLWithPath: request.target).standardizedFileURL
+        let url = selectedURL.standardizedFileURL
+        guard request.target == url.path else {
+            return .blocked("finder_reveal_selection_mismatch")
+        }
+
+        let didAccess = selectedURL.startAccessingSecurityScopedResource()
+        defer {
+            if didAccess { selectedURL.stopAccessingSecurityScopedResource() }
+        }
+
         guard FileManager.default.fileExists(atPath: url.path) else {
             return .blocked("finder_reveal_target_missing")
         }
 
-        await MainActor.run {
-            NSWorkspace.shared.activateFileViewerSelecting([url])
-        }
+        await revealHandler([selectedURL])
         return .completed
     }
 }
