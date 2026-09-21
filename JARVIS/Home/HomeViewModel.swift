@@ -338,6 +338,16 @@ final class HomeViewModel: ObservableObject {
         // أسئلة البريد يعالجها الـ backend LLM عبر function calling — لا نعترضها محلياً
         // (يمنع «وش أهم إيميلاتي اليوم؟» من الوصول لمسار التقويم بسبب كلمة «اليوم»)
         if Self.isEmailQuestion(t) { return }
+
+        // Agent inventory is authoritative on-device from the bundled registry.
+        // This bypasses stale backend/model memory for questions such as
+        // "هل عندي وكيل اسمه معمار؟" / "من هو المدرب؟".
+        if Self.isAgentInventoryQuestion(t) {
+            let grounded = groundedAgentInventoryAnswer(for: t)
+            calendarMessage = grounded
+            voiceSession.sendGroundedDeviceResult(userRequest: text, result: grounded)
+            return
+        }
         // 1) إنشاء تذكير (يتطلب تأكيد)
         if let reminderTitle = Self.parseCreateReminder(t) {
             requestReminderCreate(title: reminderTitle)
@@ -450,6 +460,50 @@ final class HomeViewModel: ObservableObject {
 
     private static func isEmailQuestion(_ t: String) -> Bool {
         ["إيميل", "ايميل", "بريد", "email", "mail", "inbox"].contains { t.contains($0) }
+    }
+
+    private static func isAgentInventoryQuestion(_ t: String) -> Bool {
+        let markers = ["وكيل", "وكلاء", "ايجنت", "إيجنت", "agent", "agents", "معمار", "المدرب"]
+        return markers.contains { t.contains($0) }
+    }
+
+    private func groundedAgentInventoryAnswer(for query: String) -> String {
+        guard let registry else {
+            return "تعذر تحميل سجل الوكلاء على الجهاز"
+        }
+
+        let normalized = query
+            .lowercased()
+            .replacingOccurrences(of: "_", with: " ")
+            .replacingOccurrences(of: "-", with: " ")
+
+        let matches = registry.agents.filter { agent in
+            let fields = [
+                agent.id,
+                agent.name,
+                agent.role,
+                agent.capabilities.joined(separator: " ")
+            ]
+            .joined(separator: " ")
+            .lowercased()
+            .replacingOccurrences(of: "_", with: " ")
+            .replacingOccurrences(of: "-", with: " ")
+
+            if normalized.contains(agent.name.lowercased()) { return true }
+            return normalized
+                .split(separator: " ")
+                .map(String.init)
+                .filter { $0.count >= 3 }
+                .contains { fields.contains($0) }
+        }
+
+        guard !matches.isEmpty else {
+            return "ما لقيت وكيل مطابق في سجل جارفس الرسمي على الجهاز"
+        }
+
+        return matches.prefix(5).map { agent in
+            "\(agent.name) — \(agent.role) [\(agent.id)]"
+        }.joined(separator: "\n")
     }
 
     private static func parseCreateReminder(_ t: String) -> String? {
