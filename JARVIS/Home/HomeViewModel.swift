@@ -348,6 +348,13 @@ final class HomeViewModel: ObservableObject {
             voiceSession.sendGroundedDeviceResult(userRequest: text, result: grounded)
             return
         }
+
+        // Meeting discovery is authoritative on-device from EventKit. This avoids a stale
+        // backend claiming it has no meeting access while Calendar access is already granted.
+        if Self.isMeetingQuestion(t) {
+            await runMeetings(userRequest: text)
+            return
+        }
         // 1) إنشاء تذكير (يتطلب تأكيد)
         if let reminderTitle = Self.parseCreateReminder(t) {
             requestReminderCreate(title: reminderTitle)
@@ -465,6 +472,53 @@ final class HomeViewModel: ObservableObject {
     private static func isAgentInventoryQuestion(_ t: String) -> Bool {
         let markers = ["وكيل", "وكلاء", "ايجنت", "إيجنت", "agent", "agents", "معمار", "المدرب"]
         return markers.contains { t.contains($0) }
+    }
+
+    private static func isMeetingQuestion(_ t: String) -> Bool {
+        let markers = ["اجتماع", "اجتماعات", "meeting", "meetings", "zoom", "teams", "meet.google", "webex", "facetime"]
+        return markers.contains { t.contains($0) }
+    }
+
+    private func runMeetings(userRequest: String) async {
+        state = .executing
+        var access = await calendarProvider.eventAccess()
+        if access == .notDetermined {
+            access = await calendarProvider.requestEvents()
+        }
+        guard access == .authorized else {
+            state = .alert
+            let msg = access == .denied
+                ? "صلاحية التقويم مرفوضة — فعّلها من إعدادات النظام"
+                : "الوصول إلى الاجتماعات غير متاح لأن قراءة التقويم غير مصرح بها"
+            calendarMessage = msg
+            voiceSession.sendGroundedDeviceResult(userRequest: userRequest, result: msg)
+            return
+        }
+
+        do {
+            let targets = try await calendarProvider.upcomingMeetingTargets()
+            state = .idle
+            let grounded = Self.formatMeetings(targets)
+            calendarMessage = grounded
+            voiceSession.sendGroundedDeviceResult(userRequest: userRequest, result: grounded)
+        } catch {
+            state = .alert
+            let msg = "تعذر قراءة الاجتماعات من تقويم الجهاز"
+            calendarMessage = msg
+            voiceSession.sendGroundedDeviceResult(userRequest: userRequest, result: msg)
+        }
+    }
+
+    private static func formatMeetings(_ meetings: [MeetingLaunchTarget]) -> String {
+        guard !meetings.isEmpty else {
+            return "ما لقيت اجتماعات قادمة بروابط مدعومة في تقويم الجهاز"
+        }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "ar_QA")
+        f.dateFormat = "EEE h:mm a"
+        return meetings.prefix(5).map {
+            "\(f.string(from: $0.start)) — \($0.title) — \($0.provider.displayName)"
+        }.joined(separator: "\n")
     }
 
     private func groundedAgentInventoryAnswer(for query: String) -> String {
