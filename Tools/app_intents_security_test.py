@@ -45,9 +45,29 @@ check("pending voice launch is consumed exactly once",
       'get { consumePendingStartVoice() }' in intent and
       intent.count('UserDefaults.standard.removeObject(forKey: pendingStartVoiceKey)') >= 2)
 
-check("shortcut phrases expose the intent through AppShortcutsProvider",
+check("shortcut phrases expose the voice intent through AppShortcutsProvider",
       'struct JarvisShortcuts: AppShortcutsProvider' in shortcuts and
       'intent: JarvisVoiceIntent()' in shortcuts)
+
+check("open-only lock-screen intent uses official App Intents and requires authentication",
+      'struct JarvisOpenIntent: AppIntent' in intent and
+      'static var openAppWhenRun: Bool = true' in intent.split('struct JarvisOpenIntent: AppIntent', 1)[1] and
+      'static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication' in intent.split('struct JarvisOpenIntent: AppIntent', 1)[1])
+
+open_intent_section = intent.split('struct JarvisOpenIntent: AppIntent', 1)[1]
+check("open-only intent never arms the microphone and clears stale voice handoff",
+      'AppBridge.pendingStartVoice = false' in open_intent_section and
+      'AudioCapture' not in open_intent_section and
+      'AVAudio' not in open_intent_section and
+      'startListening()' not in open_intent_section)
+
+voice_shortcut_section = shortcuts.split('intent: JarvisVoiceIntent()', 1)[1].split('AppShortcut(', 1)[0]
+check("plain open phrases are separated from voice-start shortcut",
+      'intent: JarvisOpenIntent()' in shortcuts and
+      '"Open \\(.applicationName)"' in shortcuts and
+      '"افتح \\(.applicationName)"' in shortcuts and
+      '"Open \\(.applicationName)"' not in voice_shortcut_section and
+      '"افتح \\(.applicationName)"' not in voice_shortcut_section)
 
 check("app refreshes App Shortcut metadata on launch through Apple's provider API",
       'import AppIntents' in app and
