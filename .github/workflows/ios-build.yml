@@ -84,19 +84,6 @@ jobs:
           shot deliveries -demo -tab deliveries
           ls -la *.png
 
-      - name: Boot iPad (extra) + screenshots
-        run: |
-          APP=$(find build -name "JARVIS.app" -type d 2>/dev/null | head -1)
-          DEVICE="iPad Pro (11-inch) (4th generation)"
-          xcrun simctl boot "$DEVICE" 2>/dev/null || true
-          xcrun simctl install "$DEVICE" "$APP"
-          xcrun simctl terminate "$DEVICE" com.salemai.jarvis 2>/dev/null || true
-          sleep 2
-          xcrun simctl launch "$DEVICE" com.salemai.jarvis -- -demo -tab home
-          sleep 6
-          xcrun simctl io "$DEVICE" screenshot ipad_home.png
-          ls -la *.png
-
       - name: Real-contract screenshots (backend source + seed + iPhone)
         run: |
           APP=$(find build -name "JARVIS.app" -type d 2>/dev/null | head -1)
