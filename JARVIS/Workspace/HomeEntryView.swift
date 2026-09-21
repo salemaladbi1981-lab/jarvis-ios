@@ -57,6 +57,64 @@ struct HomeEntryView: View {
                             .overlay(RoundedRectangle(cornerRadius: 12).stroke(JarvisColor.primary_blue.opacity(0.16), lineWidth: 1))
                     }
 
+                    VStack(alignment: .leading, spacing: JarvisSpacing.sm) {
+                        HStack {
+                            Label("الاجتماعات القادمة", systemImage: "video.fill")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(JarvisColor.text_primary)
+                            Spacer()
+                            Button("تحديث") {
+                                Task { await voiceVM.refreshMeetings(requestPermissionIfNeeded: true) }
+                            }
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(JarvisColor.highlight_gold)
+                        }
+
+                        if voiceVM.meetingTargets.isEmpty {
+                            Text(voiceVM.meetingAccessState == .authorized
+                                 ? "لا توجد اجتماعات قادمة بروابط مدعومة"
+                                 : "قراءة الاجتماعات تستخدم تقويم Apple بعد موافقتك فقط")
+                                .font(.system(size: 12))
+                                .foregroundColor(JarvisColor.text_muted)
+                        } else {
+                            ForEach(voiceVM.meetingTargets.prefix(3)) { meeting in
+                                HStack(spacing: JarvisSpacing.sm) {
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(meeting.title)
+                                            .font(.system(size: 13, weight: .semibold))
+                                            .foregroundColor(JarvisColor.text_primary)
+                                            .lineLimit(1)
+                                        Text("\(meeting.provider.displayName) • \(meeting.start.formatted(date: .abbreviated, time: .shortened))")
+                                            .font(.system(size: 11))
+                                            .foregroundColor(JarvisColor.text_muted)
+                                    }
+                                    Spacer()
+                                    Button("فتح") {
+                                        guard let url = voiceVM.meetingHandoffURL(for: meeting) else {
+                                            voiceVM.calendarMessage = "تغير الاجتماع أو انتهى — حدّث القائمة قبل الفتح"
+                                            return
+                                        }
+                                        openURL(url)
+                                    }
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(JarvisColor.highlight_gold)
+                                    .accessibilityLabel("فتح اجتماع \(meeting.title)")
+                                }
+                                .padding(.vertical, 4)
+                            }
+                        }
+                    }
+                    .padding(JarvisSpacing.md)
+                    .background(
+                        RoundedRectangle(cornerRadius: JarvisRadius.card, style: .continuous)
+                            .fill(JarvisColor.bg_1.opacity(0.62))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: JarvisRadius.card, style: .continuous)
+                            .stroke(JarvisColor.primary_gold.opacity(0.16), lineWidth: 1)
+                    )
+                    .shadow(color: JarvisColor.primary_gold.opacity(0.04), radius: 10)
+
                     // نقطة دخول واضحة لبدء محادثة جديدة
                     Button {
                         Task {
