@@ -181,7 +181,11 @@ check(
     "FileManager.default.removeItem" not in SOURCE
     and "FileManager.default.moveItem" not in SOURCE
     and "FileManager.default.copyItem" not in SOURCE
-    and "FileManager.default.createFile" not in SOURCE,
+    and "FileManager.default.createFile" not in SOURCE
+    and "FileManager.default.removeItem" not in MAC_UI
+    and "FileManager.default.moveItem" not in MAC_UI
+    and "FileManager.default.copyItem" not in MAC_UI
+    and "FileManager.default.createFile" not in MAC_UI,
 )
 
 check(
@@ -195,6 +199,28 @@ check(
     ".fileImporter(" in MAC_UI
     and "registerUserSelectedURL(url)" in MAC_UI
     and "action: .inspectSelectedItemMetadata" in MAC_UI,
+)
+
+check(
+    "Finder reveal executor accepts only the typed reveal action and an approval-bearing token",
+    "struct FinderRevealMacOperatorExecutor: MacOperatorExecuting" in MAC_UI
+    and "guard request.action == .revealSelectedItemInFinder" in MAC_UI
+    and "guard authorization.approvalGrantID != nil" in MAC_UI,
+)
+
+check(
+    "Finder reveal executor uses only visible NSWorkspace reveal and verifies target existence",
+    "FileManager.default.fileExists(atPath: url.path)" in MAC_UI
+    and "NSWorkspace.shared.activateFileViewerSelecting([url])" in MAC_UI
+    and "NSWorkspace.shared.open" not in MAC_UI
+    and "NSAppleScript" not in MAC_UI
+    and "Process(" not in MAC_UI
+    and "AXUIElement" not in MAC_UI,
+)
+
+check(
+    "Finder reveal executor is foundation-only and not silently wired into production UI",
+    "executor: FinderRevealMacOperatorExecutor()" not in MAC_UI,
 )
 
 print(f"\n== RESULT: {PASS} PASS / {FAIL} FAIL ==")
