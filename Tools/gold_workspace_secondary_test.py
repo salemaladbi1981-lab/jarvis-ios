@@ -29,6 +29,7 @@ details = read('JARVIS/Workspace/DetailViews.swift')
 preview = read('JARVIS/Workspace/AttachmentPreviewBar.swift')
 menu = read('JARVIS/Workspace/AttachmentMenu.swift')
 inbox = read('JARVIS/Workspace/InboxView.swift')
+tasks = read('JARVIS/Workspace/TasksView.swift')
 
 # Deliveries: gold accents, real API/download/share path unchanged.
 check('Deliveries icon uses primary gold', 'foregroundColor(JarvisColor.primary_gold)' in deliveries)
@@ -83,6 +84,19 @@ check('Inbox keeps task/delivery/conversation navigation', all(x in inbox for x 
     'DeliveryDetailView(api: api, deliveryId: deliveryId)',
     'ConversationView(api: api, conversationId: convId)'
 ]))
+
+# Tasks list: gold shell only; backend state and semantic job colors remain authoritative.
+check('Tasks loading and navigation chrome are gold', 'ProgressView().tint(JarvisColor.primary_gold)' in tasks and '.tint(JarvisColor.highlight_gold)' in tasks)
+check('Task cards use restrained gold border and glow', 'stroke(JarvisColor.primary_gold.opacity(0.14)' in tasks and 'shadow(color: JarvisColor.primary_gold.opacity(0.04)' in tasks)
+check('Tasks has no legacy blue aliases', 'JarvisColor.primary_blue' not in tasks and 'JarvisColor.highlight_blue' not in tasks)
+check('Tasks keeps real backend load', 'items = try await api.getArray("tasks")' in tasks)
+check('Tasks semantic job colors preserved', all(x in tasks for x in [
+    'case "succeeded", "ready", "complete": return JarvisColor.success',
+    'case "failed": return JarvisColor.danger',
+    'case "running", "processing": return JarvisColor.warning_demo',
+    'case "cancelled": return JarvisColor.text_muted'
+]))
+check('Tasks still displays backend error text as danger', 'task.lastError' in tasks and 'foregroundColor(JarvisColor.danger)' in tasks)
 
 print(f"\n== RESULT: {PASS} PASS / {FAIL} FAIL ==")
 sys.exit(1 if FAIL else 0)
