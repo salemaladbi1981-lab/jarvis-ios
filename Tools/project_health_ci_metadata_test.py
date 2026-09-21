@@ -98,9 +98,9 @@ check("missing or malformed plan fails closed to unknown planning metadata",
       missing_meta["evidence"]["milestones"] == "unknown" and
       malformed_meta["current_milestone"] == "unknown")
 
-check("checked-in plan matches approved priority order",
-      str(plan.get("current_milestone", "")).startswith("Gold cinematic UI migration") and
-      str(plan.get("next_milestone", "")).startswith("Meeting foundation") and
+check("checked-in plan matches approved priority order and current progress",
+      str(plan.get("current_milestone", "")).startswith("Meeting foundation") and
+      str(plan.get("next_milestone", "")).startswith("Physical device acceptance") and
       plan.get("source") == "user-approved priority order")
 
 with tempfile.TemporaryDirectory() as temp_dir:
