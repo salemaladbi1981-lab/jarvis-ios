@@ -38,6 +38,12 @@ check("لا memoryAnswer محلي", 'memoryAnswer' not in vm)
 check("لا sendText محلي (لا رد منافس)", 'voiceSession.sendText' not in vm)
 check("معالج .error يسجّل رمز الخطأ", 'case .error(let code):' in vm and '[JARVIS-VOICE] error code' in vm)
 check("استرداد تلقائي من الخطأ العابر", 'scheduleErrorRecovery' in vm and 'state = .idle' in vm)
+check("Calendar voice uses authoritative EventKit grounding",
+      'voiceSession.sendGroundedDeviceResult(userRequest: "calendar today", result: grounded)' in vm)
+check("Reminders voice uses authoritative device grounding",
+      'voiceSession.sendGroundedDeviceResult(userRequest: "upcoming reminders", result: grounded)' in vm)
+check("Realtime cancels speculative answer before grounded device reply",
+      'Authoritative device result for my previous request' in open(os.path.join(ROOT, 'Voice/RealtimeVoiceSession.swift'), encoding='utf-8').read())
 
 print(f"\n== RESULT: {PASS} PASS / {FAIL} FAIL ==")
 sys.exit(1 if FAIL else 0)
