@@ -18,6 +18,7 @@ def check(name, cond):
 intent = open(os.path.join(ROOT, 'JARVIS', 'App', 'JarvisAppIntent.swift'), encoding='utf-8').read()
 maps_intent = open(os.path.join(ROOT, 'JARVIS', 'App', 'JarvisMapsIntent.swift'), encoding='utf-8').read()
 shortcuts = open(os.path.join(ROOT, 'JARVIS', 'App', 'JarvisShortcuts.swift'), encoding='utf-8').read()
+app = open(os.path.join(ROOT, 'JARVIS', 'App', 'JARVISApp.swift'), encoding='utf-8').read()
 home = open(os.path.join(ROOT, 'JARVIS', 'Workspace', 'HomeEntryView.swift'), encoding='utf-8').read()
 home_vm = open(os.path.join(ROOT, 'JARVIS', 'Home', 'HomeViewModel.swift'), encoding='utf-8').read()
 
@@ -47,6 +48,12 @@ check("pending voice launch is consumed exactly once",
 check("shortcut phrases expose the intent through AppShortcutsProvider",
       'struct JarvisShortcuts: AppShortcutsProvider' in shortcuts and
       'intent: JarvisVoiceIntent()' in shortcuts)
+
+check("app refreshes App Shortcut metadata on launch through Apple's provider API",
+      'import AppIntents' in app and
+      'JarvisShortcuts.updateAppShortcutParameters()' in app and
+      'AudioCapture' not in app and
+      'AVAudio' not in app)
 
 check("navigation shortcut uses App Intents and requires authentication",
       'struct JarvisNavigateIntent: AppIntent' in maps_intent and
@@ -81,7 +88,9 @@ check("microphone still goes through normal permission gate",
 check("source does not implement an always-on wake word loop",
       'wakeWord' not in intent and
       'alwaysOn' not in intent and
-      'startListening()' not in intent)
+      'startListening()' not in intent and
+      'wakeWord' not in app and
+      'alwaysOn' not in app)
 
 print(f"\n== RESULT: {PASS} PASS / {FAIL} FAIL ==")
 sys.exit(1 if FAIL else 0)
