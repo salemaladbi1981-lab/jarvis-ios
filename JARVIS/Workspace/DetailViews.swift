@@ -13,48 +13,78 @@ struct TaskDetailView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                if let t = vm.task {
-                    HStack(spacing: 8) {
-                        Image(systemName: "hammer")
-                            .foregroundColor(JarvisColor.highlight_gold)
-                        Text(t.prompt ?? "مهمة")
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundColor(JarvisColor.text_primary)
-                    }
-                    HStack(spacing: 8) {
-                        Text(stateLabel(t))
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(stateColor(t))
-                        Text(t.taskId)
-                            .font(.system(size: 11))
-                            .foregroundColor(JarvisColor.text_muted)
-                    }
-                    if let err = t.lastError ?? t.error, !err.isEmpty {
-                        Text("الخطأ: \(err)")
-                            .font(.system(size: 13))
-                            .foregroundColor(JarvisColor.danger)
-                    }
-                    if let conv = t.conversationId, !conv.isEmpty {
-                        NavigationLink {
-                            ConversationView(api: api, conversationId: conv)
-                        } label: {
-                            Label("فتح المحادثة", systemImage: "bubble.left.and.bubble.right")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(JarvisColor.highlight_gold)
+        ZStack {
+            JarvisColor.bg_0.ignoresSafeArea()
+            ScrollView {
+                VStack(alignment: .leading, spacing: JarvisSpacing.md) {
+                    if let t = vm.task {
+                        VStack(alignment: .leading, spacing: JarvisSpacing.md) {
+                            HStack(spacing: JarvisSpacing.sm) {
+                                Image(systemName: "hammer")
+                                    .foregroundColor(JarvisColor.highlight_gold)
+                                Text(t.prompt ?? "مهمة")
+                                    .font(.system(size: 17, weight: .semibold))
+                                    .foregroundColor(JarvisColor.text_primary)
+                            }
+                            HStack(spacing: JarvisSpacing.sm) {
+                                Text(stateLabel(t))
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(stateColor(t))
+                                Text(t.taskId)
+                                    .font(.system(size: 11))
+                                    .foregroundColor(JarvisColor.text_muted)
+                            }
+                            if let err = t.lastError ?? t.error, !err.isEmpty {
+                                Text("الخطأ: \(err)")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(JarvisColor.danger)
+                            }
+                            if let conv = t.conversationId, !conv.isEmpty {
+                                NavigationLink {
+                                    ConversationView(api: api, conversationId: conv)
+                                } label: {
+                                    Label("فتح المحادثة", systemImage: "bubble.left.and.bubble.right")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(JarvisColor.highlight_gold)
+                                }
+                            }
                         }
+                        .padding(JarvisSpacing.lg)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(
+                            RoundedRectangle(cornerRadius: JarvisRadius.card, style: .continuous)
+                                .fill(JarvisColor.bg_1.opacity(0.84))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: JarvisRadius.card, style: .continuous)
+                                .stroke(JarvisColor.primary_gold.opacity(0.16), lineWidth: 1)
+                        )
+                        .shadow(color: JarvisColor.primary_gold.opacity(0.05), radius: 12)
+                    } else if vm.loading {
+                        ProgressView()
+                            .tint(JarvisColor.primary_gold)
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, JarvisSpacing.xl)
+                    } else {
+                        Text("المهمة غير متاحة")
+                            .foregroundColor(JarvisColor.text_muted)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(JarvisSpacing.xl)
+                            .background(
+                                RoundedRectangle(cornerRadius: JarvisRadius.card, style: .continuous)
+                                    .fill(JarvisColor.bg_1.opacity(0.72))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: JarvisRadius.card, style: .continuous)
+                                    .stroke(JarvisColor.primary_gold.opacity(0.12), lineWidth: 1)
+                            )
                     }
-                } else if vm.loading {
-                    ProgressView()
-                } else {
-                    Text("المهمة غير متاحة")
-                        .foregroundColor(JarvisColor.text_muted)
                 }
+                .padding(JarvisSpacing.lg)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .tint(JarvisColor.highlight_gold)
         .navigationTitle("المهمة")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -144,38 +174,68 @@ struct DeliveryDetailView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                if let d = vm.delivery {
-                    HStack(spacing: 8) {
-                        Image(systemName: "doc.fill")
-                            .foregroundColor(JarvisColor.highlight_gold)
-                        Text(d.filename ?? "تسليم")
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundColor(JarvisColor.text_primary)
-                    }
-                    Text("النوع: \(d.type ?? "—")")
-                        .font(.system(size: 13))
-                        .foregroundColor(JarvisColor.text_secondary)
-                    if let task = d.taskId, !task.isEmpty {
-                        NavigationLink {
-                            TaskDetailView(api: api, taskId: task)
-                        } label: {
-                            Label("فتح المهمة المصدر", systemImage: "hammer")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(JarvisColor.highlight_gold)
+        ZStack {
+            JarvisColor.bg_0.ignoresSafeArea()
+            ScrollView {
+                VStack(alignment: .leading, spacing: JarvisSpacing.md) {
+                    if let d = vm.delivery {
+                        VStack(alignment: .leading, spacing: JarvisSpacing.md) {
+                            HStack(spacing: JarvisSpacing.sm) {
+                                Image(systemName: "doc.fill")
+                                    .foregroundColor(JarvisColor.highlight_gold)
+                                Text(d.filename ?? "تسليم")
+                                    .font(.system(size: 17, weight: .semibold))
+                                    .foregroundColor(JarvisColor.text_primary)
+                            }
+                            Text("النوع: \(d.type ?? "—")")
+                                .font(.system(size: 13))
+                                .foregroundColor(JarvisColor.text_secondary)
+                            if let task = d.taskId, !task.isEmpty {
+                                NavigationLink {
+                                    TaskDetailView(api: api, taskId: task)
+                                } label: {
+                                    Label("فتح المهمة المصدر", systemImage: "hammer")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(JarvisColor.highlight_gold)
+                                }
+                            }
                         }
+                        .padding(JarvisSpacing.lg)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(
+                            RoundedRectangle(cornerRadius: JarvisRadius.card, style: .continuous)
+                                .fill(JarvisColor.bg_1.opacity(0.84))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: JarvisRadius.card, style: .continuous)
+                                .stroke(JarvisColor.primary_gold.opacity(0.16), lineWidth: 1)
+                        )
+                        .shadow(color: JarvisColor.primary_gold.opacity(0.05), radius: 12)
+                    } else if vm.loading {
+                        ProgressView()
+                            .tint(JarvisColor.primary_gold)
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, JarvisSpacing.xl)
+                    } else {
+                        Text("التسليم غير متاح")
+                            .foregroundColor(JarvisColor.text_muted)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(JarvisSpacing.xl)
+                            .background(
+                                RoundedRectangle(cornerRadius: JarvisRadius.card, style: .continuous)
+                                    .fill(JarvisColor.bg_1.opacity(0.72))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: JarvisRadius.card, style: .continuous)
+                                    .stroke(JarvisColor.primary_gold.opacity(0.12), lineWidth: 1)
+                            )
                     }
-                } else if vm.loading {
-                    ProgressView()
-                } else {
-                    Text("التسليم غير متاح")
-                        .foregroundColor(JarvisColor.text_muted)
                 }
+                .padding(JarvisSpacing.lg)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .tint(JarvisColor.highlight_gold)
         .navigationTitle("التسليم")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
