@@ -32,6 +32,7 @@ with open(os.path.join(JARVIS, 'Resources', 'DESIGN-TOKENS.json'), encoding='utf
 
 swift = read('JARVIS/DesignSystem/JarvisTokens.swift')
 home = read('JARVIS/Workspace/HomeEntryView.swift')
+header = read('JARVIS/Home/HeaderView.swift')
 hero = read('JARVIS/Core/JarvisHeroView.swift')
 colors = spec['colors']
 glow = spec['glow']
@@ -55,7 +56,13 @@ check('icon style declares warm cinematic gold', 'warm cinematic gold' in spec['
 check('semantic success preserved', colors.get('success') == '#63D9A0')
 check('semantic danger preserved', colors.get('danger') == '#FF6B6B')
 
-# 4) Migration must not replace production interaction/data paths.
+# 4) The staged Home header now uses explicit gold semantics rather than compatibility aliases.
+check('Header location accent uses primary gold', 'JarvisColor.primary_gold' in header)
+check('Header wordmark uses highlight gold', 'JarvisColor.highlight_gold' in header)
+check('Header no longer uses legacy blue aliases', 'JarvisColor.primary_blue' not in header and 'JarvisColor.highlight_blue' not in header)
+check('Header location/clock behavior is preserved', '@StateObject private var location = LocationManager()' in header and 'location.requestWhenNeeded()' in header and 'LiveClockView()' in header)
+
+# 5) Migration must not replace production interaction/data paths.
 check('Home keeps cinematic hero', 'JarvisHeroView(vm: voiceVM)' in home)
 check('Home keeps real microphone control', 'JarvisMicControl(vm: voiceVM)' in home and 'onMic: { voiceVM.toggleVoice() }' in home)
 check('Home keeps project health monitor', 'projectHealthCard(health)' in home and 'api.getObject("project/health")' in home)
