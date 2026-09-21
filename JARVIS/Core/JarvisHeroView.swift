@@ -70,7 +70,7 @@ struct JarvisWaveformStatusView: View {
     private var statusLine: some View {
         HStack {
             Circle()
-                .fill(JarvisColor.primary_blue)
+                .fill(JarvisColor.primary_gold)
                 .frame(width: 8, height: 8)
             Text(vm.statusText)
                 .font(.system(size: 13))
@@ -90,7 +90,7 @@ private struct ActiveAgentBadge: View {
             Text("ACTIVE AGENT")
                 .font(.system(size: 9, weight: .bold))
                 .kerning(2.5)
-                .foregroundColor(JarvisColor.primary_blue)
+                .foregroundColor(JarvisColor.primary_gold)
             Text(agent.name)
                 .font(.custom("IBMPlexSansArabic-Bold", size: 17))
                 .foregroundColor(JarvisColor.text_primary)
@@ -102,13 +102,13 @@ private struct ActiveAgentBadge: View {
         .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(JarvisColor.primary_blue.opacity(0.10))
+                .fill(JarvisColor.primary_gold.opacity(0.10))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(JarvisColor.primary_blue.opacity(0.45), lineWidth: 1)
+                .stroke(JarvisColor.primary_gold.opacity(0.45), lineWidth: 1)
         )
-        .shadow(color: JarvisColor.primary_blue.opacity(0.25), radius: 10, x: 0, y: 0)
+        .shadow(color: JarvisColor.primary_gold.opacity(0.25), radius: 10, x: 0, y: 0)
     }
 }
 
@@ -171,11 +171,11 @@ struct JarvisMicControl: View {
 
     private var coreColor: Color {
         switch vm.state {
-        case .listening, .speaking, .thinking: return JarvisColor.primary_blue
+        case .listening, .speaking, .thinking: return JarvisColor.primary_gold
         case .executing: return JarvisColor.success
         case .alert: return JarvisColor.danger
         case .approval: return JarvisColor.warning_demo
-        default: return JarvisColor.primary_blue
+        default: return JarvisColor.primary_gold
         }
     }
 
