@@ -90,11 +90,21 @@ check(
 )
 
 check(
-    "single service seam gates before invoking executor",
+    "permission state is sourced by a provider and defaults to deny-all",
+    "protocol MacOperatorPermissionProviding" in SOURCE
+    and "struct DisabledMacOperatorPermissionProvider" in SOURCE
+    and "func grantedPermissions(for request: MacOperatorRequest) async -> Set<MacOperatorPermission>" in SOURCE
+    and "let grantedPermissions = await permissionProvider.grantedPermissions(for: request)" in SOURCE,
+)
+
+check(
+    "single service seam sources permissions, gates, then invokes executor",
     "actor MacOperatorService" in SOURCE
+    and "let grantedPermissions = await permissionProvider.grantedPermissions(for: request)" in SOURCE
     and "let gateResult = await gate.authorize(" in SOURCE
     and "return .execution(await executor.execute(authorization))" in SOURCE
-    and SOURCE.find("let gateResult = await gate.authorize(")
+    and SOURCE.find("let grantedPermissions = await permissionProvider.grantedPermissions(for: request)")
+    < SOURCE.find("let gateResult = await gate.authorize(")
     < SOURCE.find("return .execution(await executor.execute(authorization))"),
 )
 
