@@ -1,4 +1,5 @@
 """Regression checks for truthful Project Health runtime snapshots."""
+from datetime import datetime, timezone
 import sys
 from pathlib import Path
 
@@ -37,6 +38,8 @@ env = {
     "JARVIS_CI_MAC_STATUS": "success",
 }
 
+fixed_now = datetime(2026, 9, 21, 16, 0, tzinfo=timezone.utc)
+
 tasks = [
     {"task_id": "queued-1", "status": "queued"},
     {"task_id": "done-1", "status": "succeeded"},
@@ -68,6 +71,7 @@ snapshot = project_health.build_project_health(
     provider="openai",
     workspace_id="PERSONAL",
     environ=env,
+    now=fixed_now,
 )
 
 check("build and planning metadata are surfaced exactly from injected evidence",
@@ -83,6 +87,10 @@ check("CI run identity and per-job results are surfaced for owner inspection",
       snapshot["ci_branch"] == "chatgpt-overnight-2" and
       snapshot["ci_jobs"] == {"backend_tests": "success", "ios": "failure", "mac": "success"} and
       snapshot["ci"]["metadata_generated_at"] == "2026-09-21T15:20:00Z")
+
+check("fresh CI metadata is explicitly age-grounded",
+      snapshot["ci_metadata_state"] == "fresh" and
+      snapshot["ci_metadata_age_seconds"] == 40 * 60)
 
 check("runtime task counts use worker state when it is more authoritative",
       snapshot["tasks_total"] == 3 and
@@ -108,27 +116,63 @@ check("owner action count stays backward-compatible while sanitized details are 
       }] and "params" not in repr(snapshot["owner_action_items"]) and
       "must-not-leak" not in repr(snapshot["owner_action_items"]))
 
-check("evidence labels distinguish reported build/CI/tests/run/milestones",
+check("evidence labels distinguish reported build/CI/tests/run/freshness/milestones",
       snapshot["evidence"] == {
           "build": "reported", "ci": "reported", "tests": "reported",
-          "ci_run": "reported", "milestones": "reported",
+          "ci_run": "reported", "ci_freshness": "fresh", "milestones": "reported",
       })
+
+stale = project_health.build_project_health(
+    tasks=[], job_state_for=lambda _: None, pending_approvals=[], capability_count=0,
+    kill_switch_engaged=False, provider="openai", workspace_id="PERSONAL",
+    environ={
+        "JARVIS_CI_STATUS": "success",
+        "JARVIS_TESTS_STATUS": "success",
+        "JARVIS_CI_RUN_URL": "https://github.com/example/project/actions/runs/1",
+        "JARVIS_CI_METADATA_GENERATED_AT": "2026-09-19T15:20:00Z",
+        "JARVIS_CI_BACKEND_STATUS": "success",
+        "JARVIS_CI_IOS_STATUS": "success",
+        "JARVIS_CI_MAC_STATUS": "success",
+    },
+    now=fixed_now,
+)
+check("stale CI artifact becomes an explicit blocker instead of current-looking success",
+      stale["ci_metadata_state"] == "stale" and
+      stale["ci_metadata_age_seconds"] > project_health.CI_METADATA_FRESHNESS_SECONDS and
+      stale["blockers"] == 1 and
+      stale["blocker_items"][0]["type"] == "ci_metadata" and
+      stale["blocker_items"][0]["state"] == "stale" and
+      stale["evidence"]["ci_freshness"] == "stale")
+
+future = project_health.build_project_health(
+    tasks=[], job_state_for=lambda _: None, pending_approvals=[], capability_count=0,
+    kill_switch_engaged=False, provider="openai", workspace_id="PERSONAL",
+    environ={"JARVIS_CI_METADATA_GENERATED_AT": "2026-09-22T16:00:00Z"},
+    now=fixed_now,
+)
+check("materially future CI timestamps fail closed to unknown freshness",
+      future["ci_metadata_state"] == "unknown" and
+      future["ci_metadata_age_seconds"] is None and
+      future["blockers"] == 0)
 
 unknown = project_health.build_project_health(
     tasks=[], job_state_for=lambda _: None, pending_approvals=[], capability_count=0,
     kill_switch_engaged=False, provider="openai", workspace_id="PERSONAL", environ={},
+    now=fixed_now,
 )
 check("missing deployment evidence fails closed instead of inventing health",
       unknown["phase"] == "unknown" and unknown["current_milestone"] == "unknown" and
       unknown["next_milestone"] == "unknown" and unknown["ci_status"] == "unknown" and
       unknown["tests_status"] == "unknown" and unknown["ci_run_id"] == "" and
       unknown["ci_run_url"] == "" and unknown["blockers"] == 0 and
+      unknown["ci_metadata_state"] == "unknown" and
+      unknown["evidence"]["ci_freshness"] == "unknown" and
       unknown["evidence"]["milestones"] == "unknown")
 
 legacy_failure = project_health.build_project_health(
     tasks=[], job_state_for=lambda _: None, pending_approvals=[], capability_count=0,
     kill_switch_engaged=False, provider="openai", workspace_id="PERSONAL",
-    environ={"JARVIS_CI_STATUS": "failure"},
+    environ={"JARVIS_CI_STATUS": "failure"}, now=fixed_now,
 )
 check("overall CI failure remains a blocker when legacy metadata lacks job results",
       legacy_failure["blockers"] == 1 and
