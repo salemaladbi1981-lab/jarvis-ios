@@ -1,5 +1,8 @@
 import SwiftUI
 import UniformTypeIdentifiers
+#if os(macOS)
+import AppKit
+#endif
 
 /// macOS Home — approved cinematic desktop direction (three-zone):
 /// Left: nav + Smart Home + Security + Media
@@ -282,6 +285,32 @@ struct MacHomeView: View {
         case "car":     return ("السيارة", JarvisIconResolver.symbol(for: "nav.car"))
         default:        return ("المزيد", JarvisIconResolver.symbol(for: "nav.more"))
         }
+    }
+}
+
+/// Narrow macOS platform executor for the already-authorized Finder reveal action.
+/// It cannot run shell/AppleScript/Accessibility work, cannot mutate the file, and refuses
+/// any execution token that does not carry the one-shot owner-approval identity created by
+/// MacOperatorExecutionGate. It is intentionally not wired into production UI yet.
+struct FinderRevealMacOperatorExecutor: MacOperatorExecuting {
+    func execute(_ authorization: MacOperatorExecutionAuthorization) async -> MacOperatorExecutionResult {
+        let request = authorization.request
+        guard request.action == .revealSelectedItemInFinder else {
+            return .blocked("finder_reveal_action_not_supported")
+        }
+        guard authorization.approvalGrantID != nil else {
+            return .blocked("finder_reveal_owner_approval_missing")
+        }
+
+        let url = URL(fileURLWithPath: request.target).standardizedFileURL
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            return .blocked("finder_reveal_target_missing")
+        }
+
+        await MainActor.run {
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+        }
+        return .completed
     }
 }
 #endif
