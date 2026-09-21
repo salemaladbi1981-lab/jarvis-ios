@@ -60,6 +60,7 @@ check('Home VM publishes authorized meeting targets', '@Published private(set) v
 check('UI refresh can request EventKit permission only from explicit refresh', 'refreshMeetings(requestPermissionIfNeeded: true)' in home)
 check('Background meeting refresh does not silently request permission', 'if access == .notDetermined && requestPermissionIfNeeded' in home_vm)
 check('Home VM exposes revalidated handoff only', 'func meetingHandoffURL(for target: MeetingLaunchTarget) -> URL?' in home_vm and 'calendarProvider.handoffURL(for: target, userInitiated: true)' in home_vm)
+check('Meeting UI injects SwiftUI openURL environment', '@Environment(\\.openURL) private var openURL' in home)
 check('Meeting UI opens only after revalidation', 'guard let url = voiceVM.meetingHandoffURL(for: meeting)' in home and 'openURL(url)' in home)
 check('Meeting UI has explicit open button', 'Button("فتح")' in home and '.accessibilityLabel("فتح اجتماع \\(meeting.title)")' in home)
 check('Meeting UI does not auto-open on discovery', 'onAppear' not in home.split('Label("الاجتماعات القادمة"', 1)[1].split('// نقطة دخول واضحة', 1)[0])
