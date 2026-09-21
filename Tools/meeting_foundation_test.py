@@ -13,6 +13,7 @@ def check(name, ok):
 
 check('Calendar model carries optional meeting URL', 'let meetingURL: URL?' in models and 'meetingURL: URL? = nil' in models)
 check('Meeting target is read-only domain data', 'struct MeetingLaunchTarget: Identifiable, Equatable' in models)
+check('Meeting target keeps event end for stale-link rejection', 'let end: Date' in models and 'end: event.end' in models)
 check('Meeting policy requires HTTPS', 'url.scheme?.lowercased() == "https"' in models)
 check('Meeting policy uses exact/subdomain boundary matching', 'host == domain || host.hasSuffix("." + domain)' in models)
 check('Zoom allowlisted', 'domain: "zoom.us"' in models)
@@ -40,6 +41,17 @@ check('Meeting discovery can retain an in-progress meeting', 'value: -12, to: no
 check('Provider delegates eligibility to pure policy', 'MeetingDiscoveryPolicy.upcomingTargets(from: events, now: now, limit: limit)' in provider)
 check('Meeting foundation does not auto-open URLs', 'UIApplication.shared.open' not in provider and 'UIApplication.shared.open' not in models)
 check('Meeting foundation does not silently request access during discovery', 'upcomingMeetingTargets' in provider and 'guard eventAccess() == .authorized' in provider)
+
+# Explicit handoff must be revalidated against a fresh EventKit read.
+check('Handoff policy requires explicit user initiation', 'enum MeetingHandoffPolicy' in models and 'guard userInitiated' in models)
+check('Handoff policy rejects stale or changed targets', 'target == current' in models)
+check('Handoff policy rejects ended meetings', 'current.end >= now' in models)
+check('Handoff policy revalidates provider allowlist', 'MeetingLinkPolicy.provider(for: current.url) == current.provider' in models)
+check('Provider re-reads EventKit event by identifier before handoff', 'store.event(withIdentifier: target.eventID)' in provider)
+check('Provider handoff requires existing authorization', 'func handoffURL' in provider and 'eventAccess() == .authorized' in provider)
+check('Provider rejects all-day handoff after re-read', 'guard !currentEvent.isAllDay' in provider)
+check('Provider delegates final URL gate to handoff policy', 'MeetingHandoffPolicy.revalidatedURL' in provider)
+check('Provider handoff never requests EventKit permission', 'func handoffURL' in provider and 'requestEvents()' in provider and 'requestEvents()' not in provider.split('func handoffURL', 1)[1].split('func upcomingReminders', 1)[0])
 
 check('Project Health plan identifies Meeting foundation as current milestone', '"current_milestone": "Meeting foundation' in plan)
 check('Project Health plan keeps physical device acceptance as next milestone', '"next_milestone": "Physical device acceptance' in plan)
