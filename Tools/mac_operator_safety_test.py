@@ -90,6 +90,15 @@ check(
 )
 
 check(
+    "single service seam gates before invoking executor",
+    "actor MacOperatorService" in SOURCE
+    and "let gateResult = await gate.authorize(" in SOURCE
+    and "return .execution(await executor.execute(authorization))" in SOURCE
+    and SOURCE.find("let gateResult = await gate.authorize(")
+    < SOURCE.find("return .execution(await executor.execute(authorization))"),
+)
+
+check(
     "default executor is fail-closed",
     "struct DisabledMacOperatorExecutor" in SOURCE
     and '.blocked("mac_operator_executor_not_configured")' in SOURCE,
