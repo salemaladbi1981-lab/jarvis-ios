@@ -22,7 +22,7 @@ struct BottomNavBar: View {
                         Text(item.label)
                             .font(.system(size: 11))
                     }
-                    .foregroundColor(selected == item.id ? JarvisColor.highlight_blue : JarvisColor.text_muted)
+                    .foregroundColor(selected == item.id ? JarvisColor.highlight_gold : JarvisColor.text_muted)
                     .frame(maxWidth: .infinity)
                 }
                 .accessibilityLabel(item.label)
