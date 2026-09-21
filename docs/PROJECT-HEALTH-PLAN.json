@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "phase": "stability-recovery",
-  "current_milestone": "Siri / App Intents + Shortcuts lock-screen foundation",
-  "next_milestone": "Mac Operator foundation — safe local execution + approval gates",
+  "current_milestone": "Mac Operator foundation — safe local execution + approval gates",
+  "next_milestone": "Gold cinematic UI migration — preserve production flows",
   "source": "user-approved priority order",
   "updated_at": "2026-09-21"
 }
