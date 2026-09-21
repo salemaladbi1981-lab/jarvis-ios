@@ -12,7 +12,7 @@ struct HeaderView: View {
                 HStack(spacing: 4) {
                     Image(systemName: JarvisIconResolver.symbol(for: "util.location"))
                         .font(.system(size: 11))
-                        .foregroundColor(JarvisColor.primary_blue)
+                        .foregroundColor(JarvisColor.primary_gold)
                     Text(location.displayCity)
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(JarvisColor.text_primary)
@@ -23,7 +23,7 @@ struct HeaderView: View {
             Text("JARVIS")
                 .font(.custom("CormorantGaramond-SemiBold", size: 22))
                 .tracking(3)
-                .foregroundColor(JarvisColor.highlight_blue)
+                .foregroundColor(JarvisColor.highlight_gold)
         }
         .environment(\.layoutDirection, .leftToRight)
         .onAppear { location.requestWhenNeeded() }
