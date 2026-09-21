@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "phase": "stability-recovery",
-  "current_milestone": "Project Health Monitor — CI/runtime truth hardening",
-  "next_milestone": "Siri / App Intents + Shortcuts lock-screen foundation",
+  "current_milestone": "Siri / App Intents + Shortcuts lock-screen foundation",
+  "next_milestone": "Mac Operator foundation — safe local execution + approval gates",
   "source": "user-approved priority order",
   "updated_at": "2026-09-21"
 }
