@@ -80,6 +80,11 @@ check("navigation shortcut uses App Intents and requires authentication",
       'static var openAppWhenRun: Bool = true' in maps_intent and
       'static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication' in maps_intent)
 
+check("navigation intent is not registered as an App Shortcut with open-ended text parameter",
+      'intent: JarvisNavigateIntent()' not in shortcuts and
+      'intent: JarvisVoiceIntent()' in shortcuts and
+      'intent: JarvisOpenIntent()' in shortcuts)
+
 check("navigation destination is normalized and bounded before handoff",
       'trimmingCharacters(in: .whitespacesAndNewlines)' in maps_intent and
       '!normalized.isEmpty' in maps_intent and
