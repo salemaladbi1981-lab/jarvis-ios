@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Generate fail-closed Project Health metadata from completed CI job results."""
 import argparse
+from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
@@ -54,12 +55,22 @@ def _planning_value(env, env_key, plan, plan_key):
     return "unknown", "unknown"
 
 
-def build_metadata(env=None, plan_path=DEFAULT_PLAN_PATH):
+def _run_url(env):
+    server = _value(env, "GITHUB_SERVER_URL", default="")
+    repository = _value(env, "GITHUB_REPOSITORY", default="")
+    run_id = _value(env, "GITHUB_RUN_ID", default="")
+    if server and repository and run_id:
+        return f"{server.rstrip('/')}/{repository}/actions/runs/{run_id}"
+    return ""
+
+
+def build_metadata(env=None, plan_path=DEFAULT_PLAN_PATH, generated_at=None):
     """Return truthful CI metadata; absent evidence stays unknown.
 
     Repository variables remain authoritative. When they are not configured,
-    milestone labels fall back to the reviewed version-controlled project plan
-    so CI artifacts do not silently degrade to unknown.
+    milestone labels fall back to the reviewed version-controlled project plan.
+    GitHub run/job fields are copied from GitHub-provided environment values;
+    missing values remain empty/unknown rather than being guessed.
     """
     env = os.environ if env is None else env
     jobs = {
@@ -87,6 +98,11 @@ def build_metadata(env=None, plan_path=DEFAULT_PLAN_PATH):
     else:
         milestone_source = "mixed"
 
+    generated_at = generated_at or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    run_id = _value(env, "GITHUB_RUN_ID", default="")
+    run_number = _value(env, "GITHUB_RUN_NUMBER", default="")
+    branch = _value(env, "GITHUB_REF_NAME", default="")
+
     return {
         "build_sha": build_sha,
         "ci_status": _aggregate(jobs.values()),
@@ -94,18 +110,25 @@ def build_metadata(env=None, plan_path=DEFAULT_PLAN_PATH):
         "phase": phase,
         "current_milestone": current_milestone,
         "next_milestone": next_milestone,
+        "ci_run_id": run_id,
+        "ci_run_number": run_number,
+        "ci_run_url": _run_url(env),
+        "ci_branch": branch,
+        "metadata_generated_at": generated_at,
         "jobs": jobs,
         "evidence": {
             "build": "github_actions" if build_sha else "unknown",
             "ci": "github_actions",
             "tests": "github_actions",
             "milestones": milestone_source,
+            "run": "github_actions" if run_id else "unknown",
         },
     }
 
 
 def _write_env(path, metadata):
-    """Write the exact environment keys consumed by GET /project/health."""
+    """Write the exact secret-free environment keys consumed by GET /project/health."""
+    jobs = metadata.get("jobs") or {}
     lines = [
         f"JARVIS_BUILD_SHA={metadata['build_sha']}",
         f"JARVIS_CI_STATUS={metadata['ci_status']}",
@@ -113,6 +136,14 @@ def _write_env(path, metadata):
         f"JARVIS_CURRENT_PHASE={metadata['phase']}",
         f"JARVIS_CURRENT_MILESTONE={metadata['current_milestone']}",
         f"JARVIS_NEXT_MILESTONE={metadata['next_milestone']}",
+        f"JARVIS_CI_RUN_ID={metadata.get('ci_run_id', '')}",
+        f"JARVIS_CI_RUN_NUMBER={metadata.get('ci_run_number', '')}",
+        f"JARVIS_CI_RUN_URL={metadata.get('ci_run_url', '')}",
+        f"JARVIS_CI_BRANCH={metadata.get('ci_branch', '')}",
+        f"JARVIS_CI_METADATA_GENERATED_AT={metadata.get('metadata_generated_at', '')}",
+        f"JARVIS_CI_BACKEND_STATUS={jobs.get('backend_tests', 'unknown')}",
+        f"JARVIS_CI_IOS_STATUS={jobs.get('ios', 'unknown')}",
+        f"JARVIS_CI_MAC_STATUS={jobs.get('mac', 'unknown')}",
     ]
     Path(path).write_text("\n".join(lines) + "\n", encoding="utf-8")
 
