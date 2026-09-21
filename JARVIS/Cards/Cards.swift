@@ -7,7 +7,8 @@ struct JarvisCard<Content: View>: View {
         content
             .padding(JarvisSpacing.lg)
             .background(RoundedRectangle(cornerRadius: JarvisRadius.card).fill(JarvisColor.bg_1.opacity(0.45)))
-            .overlay(RoundedRectangle(cornerRadius: JarvisRadius.card).stroke(JarvisColor.primary_blue.opacity(0.16), lineWidth: 1))
+            .overlay(RoundedRectangle(cornerRadius: JarvisRadius.card).stroke(JarvisColor.primary_gold.opacity(0.18), lineWidth: 1))
+            .shadow(color: JarvisColor.primary_gold.opacity(0.05), radius: 10, x: 0, y: 0)
     }
 }
 
@@ -82,7 +83,7 @@ struct SecurityCard: View {
         HStack(spacing: 6) {
             Image(systemName: JarvisIconResolver.symbol(for: icon))
                 .font(.system(size: 13))
-                .foregroundColor(JarvisColor.primary_blue)
+                .foregroundColor(JarvisColor.primary_gold)
             Text(label)
                 .font(.system(size: 12))
                 .foregroundColor(JarvisColor.text_secondary)
@@ -99,7 +100,7 @@ struct MediaCard: View {
                 HStack { DemoBadge(); Spacer() }
                 HStack(spacing: JarvisSpacing.md) {
                     RoundedRectangle(cornerRadius: JarvisRadius.control)
-                        .fill(LinearGradient(colors: [JarvisColor.primary_blue, JarvisColor.bg_1], startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .fill(LinearGradient(colors: [JarvisColor.primary_gold, JarvisColor.bg_1], startPoint: .topLeading, endPoint: .bottomTrailing))
                         .frame(width: 56, height: 56)
                         .overlay(Text("BL").font(.system(size: 20, weight: .bold)).foregroundColor(.white.opacity(0.9)))
                     VStack(alignment: .leading, spacing: 2) {
@@ -117,8 +118,8 @@ struct MediaCard: View {
                 }
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
-                        Capsule().fill(JarvisColor.primary_blue.opacity(0.15)).frame(height: 4)
-                        Capsule().fill(JarvisColor.primary_blue).frame(width: geo.size.width * 0.6, height: 4)
+                        Capsule().fill(JarvisColor.primary_gold.opacity(0.15)).frame(height: 4)
+                        Capsule().fill(JarvisColor.primary_gold).frame(width: geo.size.width * 0.6, height: 4)
                     }
                 }
                 .frame(height: 4)
