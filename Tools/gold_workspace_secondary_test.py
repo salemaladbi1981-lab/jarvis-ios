@@ -43,6 +43,9 @@ check('Deliveries has no legacy blue aliases', 'JarvisColor.primary_blue' not in
 
 # Task/delivery details: gold navigation accents, polling and semantic statuses intact.
 check('Task detail accents are explicit gold', details.count('JarvisColor.highlight_gold') >= 4)
+check('Detail screens use cinematic dark background', details.count('JarvisColor.bg_0.ignoresSafeArea()') >= 2)
+check('Detail cards use restrained gold border and glow', details.count('stroke(JarvisColor.primary_gold.opacity(0.16)') >= 2 and details.count('shadow(color: JarvisColor.primary_gold.opacity(0.05)') >= 2)
+check('Detail loading indicators use primary gold', details.count('.tint(JarvisColor.primary_gold)') >= 2)
 check('Detail views have no legacy blue aliases', 'JarvisColor.primary_blue' not in details and 'JarvisColor.highlight_blue' not in details)
 check('Task polling remains wired', 'vm.startPolling(taskId)' in details and 'vm.stopPolling()' in details)
 check('Task polling still uses backend reload', 'do { task = try await api.getObject("tasks/\\(id)") }' in details)
