@@ -66,7 +66,17 @@ check('Bottom navigation active state uses highlight gold', 'selected == item.id
 check('Bottom navigation no longer uses legacy blue aliases', 'JarvisColor.primary_blue' not in bottom_nav and 'JarvisColor.highlight_blue' not in bottom_nav)
 check('Bottom navigation keeps four production destinations', all(token in bottom_nav for token in ['("home", "الرئيسية"', '("devices", "الأجهزة"', '("car", "السيارة"', '("more", "المزيد"']))
 
-# 5) Migration must not replace production interaction/data paths.
+# 5) Voice-facing hero chrome is explicitly gold while behavior/status semantics stay intact.
+check('Waveform status indicator uses primary gold', '.fill(JarvisColor.primary_gold)' in hero)
+check('Active agent badge uses explicit primary gold', 'Text("ACTIVE AGENT")' in hero and 'JarvisColor.primary_gold.opacity(0.45)' in hero)
+check('Mic listening/speaking/thinking states use primary gold', 'case .listening, .speaking, .thinking: return JarvisColor.primary_gold' in hero)
+check('Mic idle state uses primary gold', 'default: return JarvisColor.primary_gold' in hero)
+check('Hero no longer uses legacy blue alias', 'JarvisColor.primary_blue' not in hero and 'JarvisColor.highlight_blue' not in hero)
+check('Mic interaction remains manual toggleVoice', 'Button(action: { vm.toggleVoice() })' in hero)
+check('Mic state labels preserve interruption behavior', 'case .speaking: return "اضغط للمقاطعة"' in hero and 'case .listening: return "أنا أسمعك…"' in hero)
+check('Semantic execution/error/approval colors stay distinct', 'case .executing: return JarvisColor.success' in hero and 'case .alert: return JarvisColor.danger' in hero and 'case .approval: return JarvisColor.warning_demo' in hero)
+
+# 6) Migration must not replace production interaction/data paths.
 check('Home keeps cinematic hero', 'JarvisHeroView(vm: voiceVM)' in home)
 check('Home keeps real microphone control', 'JarvisMicControl(vm: voiceVM)' in home and 'onMic: { voiceVM.toggleVoice() }' in home)
 check('Home keeps project health monitor', 'projectHealthCard(health)' in home and 'api.getObject("project/health")' in home)
