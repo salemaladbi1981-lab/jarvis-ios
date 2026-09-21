@@ -30,17 +30,6 @@ struct JarvisShortcuts: AppShortcutsProvider {
             systemImageName: "app.fill"
         )
 
-        AppShortcut(
-            intent: JarvisNavigateIntent(),
-            phrases: [
-                "Navigate with \(.applicationName)",
-                "Directions with \(.applicationName)",
-                "وديني عبر \(.applicationName)",
-                "خذني عبر \(.applicationName)"
-            ],
-            shortTitle: "Navigate",
-            systemImageName: "location.fill"
-        )
     }
 }
 #endif
