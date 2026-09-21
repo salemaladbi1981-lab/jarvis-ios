@@ -11,6 +11,7 @@ def check(name, cond):
     else: FAIL += 1
 
 main = open(os.path.join(ROOT, 'phase3', 'backend', 'main.py'), encoding='utf-8').read()
+health_snapshot = open(os.path.join(ROOT, 'phase3', 'backend', 'project_health.py'), encoding='utf-8').read()
 config = open(os.path.join(ROOT, 'phase3', 'backend', 'config.py'), encoding='utf-8').read()
 home = open(os.path.join(ROOT, 'JARVIS', 'Workspace', 'HomeEntryView.swift'), encoding='utf-8').read()
 models = open(os.path.join(ROOT, 'JARVIS', 'Workspace', 'WorkspaceModels.swift'), encoding='utf-8').read()
@@ -22,15 +23,19 @@ check("authenticated project health endpoint exists",
       'Depends(get_workspace)' in main)
 
 check("health does not fabricate CI/build/test evidence",
-      'JARVIS_BUILD_SHA' in main and
-      '"ci_status": os.getenv("JARVIS_CI_STATUS", "unknown")' in main and
-      '"tests_status": os.getenv("JARVIS_TESTS_STATUS", "unknown")' in main)
+      'project_health_mod.build_project_health(' in main and
+      '"build_sha": build_sha' in health_snapshot and
+      '"ci_status": ci["status"]' in health_snapshot and
+      '"tests_status": ci["tests_status"]' in health_snapshot and
+      '_text(env, "JARVIS_CURRENT_MILESTONE", "unknown")' in health_snapshot)
 
 check("health reports real runtime blockers and approvals",
       'approval_store.list_pending(workspace_id)' in main and
       'kill_switch.engaged()' in main and
-      '"tasks_failed": failed' in main and
-      '"owner_actions": pending_approvals' in main)
+      '"task_failure"' in health_snapshot and
+      '"ci_job"' in health_snapshot and
+      '"owner_actions": len(owner_action_items)' in health_snapshot and
+      '"blocker_items": blocker_items' in health_snapshot)
 
 check("health model is compiled through existing shared workspace source",
       'struct ProjectHealth: Codable' in models and
