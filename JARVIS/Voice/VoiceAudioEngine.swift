@@ -80,20 +80,26 @@ final class VoiceAudioEngine {
         #if os(iOS)
         let session = AVAudioSession.sharedInstance()
         // Voice-processing mode (AEC عبر VPIO داخل AVAudioEngine).
-        do {
-            try session.setCategory(.playAndRecord, mode: .voiceChat,
-                                    options: [.allowBluetooth, .defaultToSpeaker])
-            onDiagnostics?("start: setCategory OK")
-        } catch {
-            onDiagnostics?("start FAILED at setCategory: \(error.localizedDescription)")
-            throw error
+        // NOTE: start() is invoked from a @MainActor view-model path on device.
+        // Keep AVAudioSession activation off the main thread to avoid UI stalls/route churn.
+        var sessionError: Error?
+        let sem = DispatchSemaphore(value: 0)
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            do {
+                try session.setCategory(.playAndRecord, mode: .voiceChat,
+                                        options: [.allowBluetooth, .defaultToSpeaker])
+                self?.onDiagnostics?("start: setCategory OK")
+                try session.setActive(true, options: [])
+                self?.onDiagnostics?("start: setActive OK")
+            } catch {
+                sessionError = error
+            }
+            sem.signal()
         }
-        do {
-            try session.setActive(true, options: [])
-            onDiagnostics?("start: setActive OK")
-        } catch {
-            onDiagnostics?("start FAILED at setActive: \(error.localizedDescription)")
-            throw error
+        sem.wait()
+        if let sessionError {
+            onDiagnostics?("start FAILED at AVAudioSession activation: \(sessionError.localizedDescription)")
+            throw sessionError
         }
         #endif
 
@@ -202,8 +208,23 @@ final class VoiceAudioEngine {
 
     private func resumeAfterInterruption() {
         #if os(iOS)
-        try? AVAudioSession.sharedInstance().setActive(true, options: [])
-        #endif
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
+            do {
+                try AVAudioSession.sharedInstance().setActive(true, options: [])
+            } catch {
+                self.onDiagnostics?("resume setActive FAILED: \(error.localizedDescription)")
+            }
+            self.workQueue.async {
+                self.interrupted = false
+                if self.started && !self.engine.isRunning {
+                    do { try self.engine.start() }
+                    catch { self.onDiagnostics?("resume engine.start FAILED: \(error.localizedDescription)") }
+                }
+                self.player.play()
+            }
+        }
+        #else
         workQueue.async { [weak self] in
             guard let self else { return }
             self.interrupted = false
@@ -213,6 +234,7 @@ final class VoiceAudioEngine {
             }
             self.player.play()
         }
+        #endif
     }
 
     // MARK: - Playback (continuous schedule-ahead, thread-safe)
@@ -374,7 +396,14 @@ final class VoiceAudioEngine {
         engine.stop()
         started = false
         #if os(iOS)
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            do {
+                try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+                self?.onDiagnostics?("stop: setActive(false) OK")
+            } catch {
+                self?.onDiagnostics?("stop: setActive(false) FAILED: \(error.localizedDescription)")
+            }
+        }
         #endif
     }
 
