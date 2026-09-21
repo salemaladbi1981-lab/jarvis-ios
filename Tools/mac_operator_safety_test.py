@@ -9,6 +9,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = (ROOT / "JARVIS" / "App" / "DeepLinkTarget.swift").read_text(encoding="utf-8")
+MAC_UI = (ROOT / "JARVIS" / "macOS" / "MacHomeView.swift").read_text(encoding="utf-8")
 
 PASS = 0
 FAIL = 0
@@ -148,3 +149,23 @@ check(
 
 print(f"\n== RESULT: {PASS} PASS / {FAIL} FAIL ==")
 sys.exit(1 if FAIL else 0)
+
+check(
+    "Mac UI readiness uses passive system permission provider",
+    "SystemMacOperatorPermissionProvider()" in MAC_UI
+    and "grantedPermissions(for: accessibilityRequest)" in MAC_UI
+    and "grantedPermissions(for: automationRequest)" in MAC_UI,
+)
+
+check(
+    "Mac UI readiness does not invoke executor or request permission",
+    "MacOperatorService(" not in MAC_UI
+    and "perform(" not in MAC_UI
+    and "AXIsProcessTrustedWithOptions" not in MAC_UI
+    and "AEDeterminePermissionToAutomateTarget" not in MAC_UI,
+)
+
+check(
+    "Mac UI keeps user-selected files fail-closed",
+    "الملفات: يتطلب اختيارًا صريحًا" in MAC_UI,
+)
