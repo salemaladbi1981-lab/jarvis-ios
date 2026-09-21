@@ -169,3 +169,34 @@ check(
     "Mac UI keeps user-selected files fail-closed",
     "الملفات: يتطلب اختيارًا صريحًا" in MAC_UI,
 )
+
+check(
+    "explicitly selected file adapter grants only exact registered paths",
+    "actor UserSelectedFileMacOperatorAdapter" in SOURCE
+    and "selectedPaths.contains(path)" in SOURCE
+    and "selectedPaths.insert(url.standardizedFileURL.path)" in SOURCE
+    and "hasPrefix" not in SOURCE.split("actor UserSelectedFileMacOperatorAdapter", 1)[1].split("/// Permission state", 1)[0],
+)
+
+check(
+    "selected file executor remains read-only metadata only",
+    'request.action == .inspectSelectedItemMetadata' in SOURCE
+    and 'selected_item_adapter_read_only' in SOURCE
+    and "FileManager.default.removeItem" not in SOURCE
+    and "FileManager.default.moveItem" not in SOURCE
+    and "FileManager.default.copyItem" not in SOURCE,
+)
+
+check(
+    "selected file adapter uses security scoped access",
+    "startAccessingSecurityScopedResource()" in SOURCE
+    and "stopAccessingSecurityScopedResource()" in SOURCE,
+)
+
+check(
+    "Mac UI requires explicit fileImporter selection before metadata inspection",
+    ".fileImporter(" in MAC_UI
+    and "allowedContentTypes: [.item]" in MAC_UI
+    and "registerUserSelectedURL(url)" in MAC_UI
+    and "action: .inspectSelectedItemMetadata" in MAC_UI,
+)
