@@ -1,6 +1,6 @@
 """Regression guards for Gold cinematic migration on secondary workspace screens.
 
-The assertions intentionally protect production delivery/task/attachment flows while
+The assertions intentionally protect production delivery/task/attachment/inbox flows while
 requiring the remaining secondary workspace chrome to use explicit gold tokens.
 """
 import os
@@ -28,6 +28,7 @@ deliveries = read('JARVIS/Workspace/DeliveriesView.swift')
 details = read('JARVIS/Workspace/DetailViews.swift')
 preview = read('JARVIS/Workspace/AttachmentPreviewBar.swift')
 menu = read('JARVIS/Workspace/AttachmentMenu.swift')
+inbox = read('JARVIS/Workspace/InboxView.swift')
 
 # Deliveries: gold accents, real API/download/share path unchanged.
 check('Deliveries icon uses primary gold', 'foregroundColor(JarvisColor.primary_gold)' in deliveries)
@@ -66,6 +67,22 @@ check('Attachment menu preserves all callbacks', all(x in menu for x in [
     'onCameraVideo', 'onScanDocument', 'onRecordAudio'
 ]))
 check('Attachment menu preserves seven entry points', menu.count('attachItem(') == 8)  # declaration + 7 calls
+
+# Inbox: migrate only interaction chrome; keep semantic attention colors and real navigation/API paths.
+check('Inbox loading indicator uses primary gold', 'ProgressView()' in inbox and '.tint(JarvisColor.primary_gold)' in inbox)
+check('Inbox navigation tint uses highlight gold', '.tint(JarvisColor.highlight_gold)' in inbox)
+check('Inbox has no legacy blue aliases', 'JarvisColor.primary_blue' not in inbox and 'JarvisColor.highlight_blue' not in inbox)
+check('Inbox semantic approval/failure/completion colors preserved', all(x in inbox for x in [
+    'case .approval, .action: return JarvisColor.warning_demo',
+    'case .failed: return JarvisColor.danger',
+    'case .completed, .delivery: return JarvisColor.success'
+]))
+check('Inbox keeps real backend load', 'items = try await api.getArray("inbox")' in inbox)
+check('Inbox keeps task/delivery/conversation navigation', all(x in inbox for x in [
+    'TaskDetailView(api: api, taskId: taskId)',
+    'DeliveryDetailView(api: api, deliveryId: deliveryId)',
+    'ConversationView(api: api, conversationId: convId)'
+]))
 
 print(f"\n== RESULT: {PASS} PASS / {FAIL} FAIL ==")
 sys.exit(1 if FAIL else 0)
