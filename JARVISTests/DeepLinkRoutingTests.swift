@@ -13,6 +13,14 @@ private actor RecordingMacOperatorExecutor: MacOperatorExecuting {
     }
 }
 
+private struct FixedMacOperatorPermissionProvider: MacOperatorPermissionProviding {
+    let permissions: Set<MacOperatorPermission>
+
+    func grantedPermissions(for request: MacOperatorRequest) async -> Set<MacOperatorPermission> {
+        permissions
+    }
+}
+
 /// اختبار توجيه الإشعار/deep-link: parse + url round-trip + حالات الرفض.
 final class DeepLinkRoutingTests: XCTestCase {
 
@@ -314,14 +322,13 @@ final class DeepLinkRoutingTests: XCTestCase {
         XCTAssertEqual(result, .blocked("mac_operator_executor_not_configured"))
     }
 
-    func testMacOperatorServiceNeverInvokesExecutorWhenAuthorizationIsBlocked() async {
+    func testMacOperatorServiceDefaultPermissionProviderFailsClosedAndNeverInvokesExecutor() async {
         let executor = RecordingMacOperatorExecutor()
         let service = MacOperatorService(executor: executor)
         let request = MacOperatorRequest(action: .inspectSelectedItemMetadata, target: "/selected/item")
 
         let result = await service.perform(
             request,
-            grantedPermissions: [],
             ownerApproval: nil,
             now: now
         )
@@ -331,15 +338,15 @@ final class DeepLinkRoutingTests: XCTestCase {
         XCTAssertEqual(count, 0)
     }
 
-    func testMacOperatorServiceInvokesExecutorOnlyAfterGateAndRejectsApprovalReplay() async {
+    func testMacOperatorServiceInvokesExecutorOnlyAfterPermissionProviderAndGateThenRejectsApprovalReplay() async {
         let executor = RecordingMacOperatorExecutor()
-        let service = MacOperatorService(executor: executor)
+        let permissions = FixedMacOperatorPermissionProvider(permissions: [.userSelectedFiles])
+        let service = MacOperatorService(permissionProvider: permissions, executor: executor)
         let request = MacOperatorRequest(action: .revealSelectedItemInFinder, target: "/selected/item")
         let approval = grant(for: request)
 
         let first = await service.perform(
             request,
-            grantedPermissions: [.userSelectedFiles],
             ownerApproval: approval,
             now: now
         )
@@ -347,7 +354,6 @@ final class DeepLinkRoutingTests: XCTestCase {
 
         let replay = await service.perform(
             request,
-            grantedPermissions: [.userSelectedFiles],
             ownerApproval: approval,
             now: now
         )
@@ -355,5 +361,22 @@ final class DeepLinkRoutingTests: XCTestCase {
 
         let count = await executor.executionCount()
         XCTAssertEqual(count, 1)
+    }
+
+    func testMacOperatorPermissionProviderCannotBypassOwnerApproval() async {
+        let executor = RecordingMacOperatorExecutor()
+        let permissions = FixedMacOperatorPermissionProvider(permissions: [.automation])
+        let service = MacOperatorService(permissionProvider: permissions, executor: executor)
+        let request = MacOperatorRequest(action: .appleEventAutomation, target: "com.apple.Finder")
+
+        let result = await service.perform(
+            request,
+            ownerApproval: nil,
+            now: now
+        )
+
+        XCTAssertEqual(result, .authorizationBlocked(.ownerApprovalRequired))
+        let count = await executor.executionCount()
+        XCTAssertEqual(count, 0)
     }
 }
