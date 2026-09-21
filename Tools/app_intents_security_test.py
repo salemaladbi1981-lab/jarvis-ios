@@ -76,10 +76,19 @@ check("navigation intent does not request hidden location or microphone access",
       'AVAudio' not in maps_intent and
       'AudioCapture' not in maps_intent)
 
-check("production home consumes the one-shot intent request",
+check("production home consumes the one-shot intent request on cold launch",
+      '.task {' in home and
       'voiceVM.handleAppIntentStart()' in home and
       'guard AppBridge.pendingStartVoice else { return }' in home_vm and
       'AppBridge.pendingStartVoice = false' in home_vm)
+
+check("warm-resume path re-checks the one-shot Siri handoff when scene becomes active",
+      'else if phase == .active' in home and
+      'voiceVM.handleAppIntentStart()' in home[home.find('.onChange(of: scenePhase)'):])
+
+check("a new shortcut request cannot toggle off an already active voice session",
+      'guard !isVoiceActive, !isVoiceStarting else { return }' in home_vm and
+      home_vm.find('guard !isVoiceActive, !isVoiceStarting else { return }') < home_vm.find('toggleVoice()', home_vm.find('func handleAppIntentStart')))
 
 check("microphone still goes through normal permission gate",
       'AudioCapture.micPermission()' in home_vm and
