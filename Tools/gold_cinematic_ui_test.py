@@ -144,11 +144,12 @@ check('Home keeps App Intent voice handoff', 'voiceVM.handleAppIntentStart()' in
 check('Home keeps background lifecycle guard', 'voiceVM.handleAppBackgrounded()' in home)
 check('Hero behavior remains state-driven', 'vm.toggleVoice()' in hero and 'switch vm.state' in hero)
 
-print(f"\n== RESULT: {PASS} PASS / {FAIL} FAIL ==")
-sys.exit(1 if FAIL else 0)
-
+# 12) macOS migration guard must run too; it previously sat after sys.exit and was dead code.
 check("Mac home uses gold desktop chrome",
       "JarvisColor.highlight_gold" in mac_home
       and "JarvisColor.primary_gold" in mac_home
       and "JarvisColor.highlight_blue" not in mac_home
       and "JarvisColor.primary_blue" not in mac_home)
+
+print(f"\n== RESULT: {PASS} PASS / {FAIL} FAIL ==")
+sys.exit(1 if FAIL else 0)
