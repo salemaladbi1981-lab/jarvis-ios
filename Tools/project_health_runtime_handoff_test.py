@@ -15,6 +15,14 @@ HEALTH_KEYS = (
     "JARVIS_CURRENT_PHASE",
     "JARVIS_CURRENT_MILESTONE",
     "JARVIS_NEXT_MILESTONE",
+    "JARVIS_CI_RUN_ID",
+    "JARVIS_CI_RUN_NUMBER",
+    "JARVIS_CI_RUN_URL",
+    "JARVIS_CI_BRANCH",
+    "JARVIS_CI_METADATA_GENERATED_AT",
+    "JARVIS_CI_BACKEND_STATUS",
+    "JARVIS_CI_IOS_STATUS",
+    "JARVIS_CI_MAC_STATUS",
 )
 
 
@@ -50,6 +58,13 @@ check(
     "runtime loader allow-lists Project Health keys",
     "HEALTH_KEYS" in loader_source and "env.setdefault(key, value)" in loader_source,
 )
+check(
+    "runtime loader validates CI identity fields",
+    "JARVIS_CI_RUN_ID" in loader_source
+    and "JARVIS_CI_RUN_URL" in loader_source
+    and "urlparse" in loader_source
+    and "_DIGITS_RE" in loader_source,
+)
 
 with tempfile.TemporaryDirectory() as td:
     handoff = Path(td) / "project-health.env"
@@ -58,8 +73,16 @@ with tempfile.TemporaryDirectory() as td:
         "JARVIS_CI_STATUS=success\n"
         "JARVIS_TESTS_STATUS=success\n"
         "JARVIS_CURRENT_PHASE=4\n"
-        "JARVIS_CURRENT_MILESTONE=Siri / App Intents foundation\n"
-        "JARVIS_NEXT_MILESTONE=Mac Operator foundation\n"
+        "JARVIS_CURRENT_MILESTONE=Project Health Monitor\n"
+        "JARVIS_NEXT_MILESTONE=Siri / App Intents foundation\n"
+        "JARVIS_CI_RUN_ID=35603375966\n"
+        "JARVIS_CI_RUN_NUMBER=277\n"
+        "JARVIS_CI_RUN_URL=https://github.com/salemaladbi1981-lab/jarvis-ios/actions/runs/35603375966\n"
+        "JARVIS_CI_BRANCH=chatgpt-overnight-2\n"
+        "JARVIS_CI_METADATA_GENERATED_AT=2026-09-21T13:10:00Z\n"
+        "JARVIS_CI_BACKEND_STATUS=success\n"
+        "JARVIS_CI_IOS_STATUS=success\n"
+        "JARVIS_CI_MAC_STATUS=success\n"
         "OPENAI_API_KEY=must-not-be-injected\n",
         encoding="utf-8",
     )
@@ -69,12 +92,19 @@ with tempfile.TemporaryDirectory() as td:
         clean.pop(key, None)
     clean["JARVIS_PROJECT_HEALTH_METADATA_PATH"] = str(handoff)
     values, secret = probe(clean)
+    parts = values.split("|")
     check(
-        "generated handoff can populate build CI tests and milestone metadata",
-        values == (
-            "ab57842584e1606142fb72a9fcfee745617c3d28|success|success|4|"
-            "Siri / App Intents foundation|Mac Operator foundation"
-        ),
+        "generated handoff can populate build CI tests milestones and run identity",
+        parts[:6] == [
+            "ab57842584e1606142fb72a9fcfee745617c3d28", "success", "success", "4",
+            "Project Health Monitor", "Siri / App Intents foundation",
+        ]
+        and parts[6:10] == [
+            "35603375966", "277",
+            "https://github.com/salemaladbi1981-lab/jarvis-ios/actions/runs/35603375966",
+            "chatgpt-overnight-2",
+        ]
+        and parts[10:] == ["2026-09-21T13:10:00Z", "success", "success", "success"],
     )
     check("metadata handoff cannot inject non-health secrets", secret != "must-not-be-injected")
 
@@ -92,7 +122,10 @@ with tempfile.TemporaryDirectory() as td:
     bad.write_text(
         "JARVIS_BUILD_SHA=not-a-sha\n"
         "JARVIS_CI_STATUS=definitely-green\n"
-        "JARVIS_TESTS_STATUS=success\n",
+        "JARVIS_TESTS_STATUS=success\n"
+        "JARVIS_CI_RUN_ID=not-numeric\n"
+        "JARVIS_CI_RUN_URL=http://not-https.example/run\n"
+        "JARVIS_CI_BACKEND_STATUS=maybe\n",
         encoding="utf-8",
     )
     invalid = os.environ.copy()
@@ -100,10 +133,12 @@ with tempfile.TemporaryDirectory() as td:
         invalid.pop(key, None)
     invalid["JARVIS_PROJECT_HEALTH_METADATA_PATH"] = str(bad)
     invalid_values, _ = probe(invalid)
-    parts = invalid_values.split("|")
-    check("invalid SHA is rejected instead of reported", parts[0] == "")
-    check("invalid CI status is rejected instead of reported", parts[1] == "")
-    check("valid fields from a partially malformed handoff remain usable", parts[2] == "success")
+    invalid_parts = invalid_values.split("|")
+    check("invalid SHA is rejected instead of reported", invalid_parts[0] == "")
+    check("invalid CI status is rejected instead of reported", invalid_parts[1] == "")
+    check("valid fields from a partially malformed handoff remain usable", invalid_parts[2] == "success")
+    check("invalid CI run identity is rejected", invalid_parts[6] == "" and invalid_parts[8] == "")
+    check("invalid per-job status is rejected", invalid_parts[11] == "")
 
 missing = os.environ.copy()
 for key in HEALTH_KEYS:
@@ -113,7 +148,7 @@ missing_values, _ = probe(missing)
 missing_parts = missing_values.split("|")
 check(
     "missing handoff fails closed without startup failure",
-    missing_parts[:3] == ["", "", ""] and missing_parts[3:] == ["unknown", "unknown", "unknown"],
+    missing_parts[:3] == ["", "", ""] and missing_parts[3:6] == ["unknown", "unknown", "unknown"],
 )
 
 print(f"\n== RESULT: {PASS} PASS / {FAIL} FAIL ==")
