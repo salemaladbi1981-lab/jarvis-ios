@@ -9,7 +9,7 @@ struct TasksView: View {
         NavigationStack {
             Group {
                 if vm.loading {
-                    ProgressView().tint(JarvisColor.highlight_blue)
+                    ProgressView().tint(JarvisColor.primary_gold)
                 } else if vm.items.isEmpty {
                     Text("لا مهام بعد")
                         .font(.system(size: 15))
@@ -26,6 +26,7 @@ struct TasksView: View {
                 }
             }
             .navigationTitle("المهام")
+            .tint(JarvisColor.highlight_gold)
         }
         .task { await vm.load() }
     }
@@ -54,7 +55,11 @@ private struct TaskCard: View {
         .padding(JarvisSpacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(JarvisColor.card)
-        .overlay(RoundedRectangle(cornerRadius: JarvisRadius.card).stroke(JarvisColor.border, lineWidth: 1))
+        .overlay(
+            RoundedRectangle(cornerRadius: JarvisRadius.card)
+                .stroke(JarvisColor.primary_gold.opacity(0.14), lineWidth: 1)
+        )
+        .shadow(color: JarvisColor.primary_gold.opacity(0.04), radius: 10, y: 4)
         .clipShape(RoundedRectangle(cornerRadius: JarvisRadius.card))
     }
 
