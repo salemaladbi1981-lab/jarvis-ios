@@ -4,7 +4,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 models = (ROOT / 'JARVIS/Integrations/EventKitModels.swift').read_text()
 provider = (ROOT / 'JARVIS/Integrations/AppleEventKitProvider.swift').read_text()
-plan = (ROOT / 'docs/PROJECT-HEALTH-PLAN.json').read_text()
 
 checks = []
 def check(name, ok):
@@ -53,8 +52,8 @@ check('Provider rejects all-day handoff after re-read', 'guard !currentEvent.isA
 check('Provider delegates final URL gate to handoff policy', 'MeetingHandoffPolicy.revalidatedURL' in provider)
 check('Provider handoff never requests EventKit permission', 'func handoffURL' in provider and 'requestEvents()' in provider and 'requestEvents()' not in provider.split('func handoffURL', 1)[1].split('func upcomingReminders', 1)[0])
 
-check('Project Health plan identifies Meeting foundation as current milestone', '"current_milestone": "Meeting foundation' in plan)
-check('Project Health plan keeps physical device acceptance as next milestone', '"next_milestone": "Physical device acceptance' in plan)
+# Milestone ownership intentionally lives in Project Health tests. Meeting regression
+# must not pin the global roadmap to this already-built foundation.
 
 failed = [name for name, ok in checks if not ok]
 print(f'\nmeeting foundation: {len(checks)-len(failed)}/{len(checks)} checks passed')
