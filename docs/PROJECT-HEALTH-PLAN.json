@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
-  "phase": "stability-recovery",
-  "current_milestone": "Gold cinematic UI migration — approved concept without breaking production flows",
-  "next_milestone": "Meeting foundation — official/authorized platform mechanisms only",
+  "phase": "device-validation",
+  "current_milestone": "Device-only validation & final stabilization — Siri lock-screen, AirPods/Shokz, Mac permissions",
+  "next_milestone": "Release readiness — merge/TestFlight only with explicit user approval",
   "source": "user-approved priority order",
-  "updated_at": "2026-09-21"
+  "updated_at": "2026-09-22"
 }
