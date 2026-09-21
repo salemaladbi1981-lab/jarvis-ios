@@ -79,6 +79,7 @@ struct MeetingLaunchTarget: Identifiable, Equatable {
     let eventID: String
     let title: String
     let start: Date
+    let end: Date
     let url: URL
     let provider: MeetingProvider
 
@@ -94,6 +95,7 @@ enum MeetingLinkPolicy {
         return MeetingLaunchTarget(eventID: event.id,
                                    title: event.title,
                                    start: event.start,
+                                   end: event.end,
                                    url: url,
                                    provider: provider)
     }
@@ -112,6 +114,24 @@ enum MeetingLinkPolicy {
 
     private static func matches(_ host: String, domain: String) -> Bool {
         host == domain || host.hasSuffix("." + domain)
+    }
+}
+
+/// Last-mile gate used immediately before the UI hands a URL to the operating system.
+/// It never opens a URL itself. A caller must prove the action was initiated by the
+/// user, and the target must still exactly match a freshly re-read EventKit event.
+enum MeetingHandoffPolicy {
+    static func revalidatedURL(for target: MeetingLaunchTarget,
+                               current: MeetingLaunchTarget,
+                               now: Date = Date(),
+                               userInitiated: Bool) -> URL? {
+        guard userInitiated,
+              target == current,
+              current.end >= now,
+              MeetingLinkPolicy.provider(for: current.url) == current.provider else {
+            return nil
+        }
+        return current.url
     }
 }
 
