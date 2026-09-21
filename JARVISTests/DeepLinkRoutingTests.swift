@@ -1,5 +1,18 @@
 import XCTest
 
+private actor RecordingMacOperatorExecutor: MacOperatorExecuting {
+    private var count = 0
+
+    func execute(_ authorization: MacOperatorExecutionAuthorization) async -> MacOperatorExecutionResult {
+        count += 1
+        return .completed
+    }
+
+    func executionCount() -> Int {
+        count
+    }
+}
+
 /// اختبار توجيه الإشعار/deep-link: parse + url round-trip + حالات الرفض.
 final class DeepLinkRoutingTests: XCTestCase {
 
@@ -299,5 +312,48 @@ final class DeepLinkRoutingTests: XCTestCase {
         }
         let result = await executor.execute(authorization)
         XCTAssertEqual(result, .blocked("mac_operator_executor_not_configured"))
+    }
+
+    func testMacOperatorServiceNeverInvokesExecutorWhenAuthorizationIsBlocked() async {
+        let executor = RecordingMacOperatorExecutor()
+        let service = MacOperatorService(executor: executor)
+        let request = MacOperatorRequest(action: .inspectSelectedItemMetadata, target: "/selected/item")
+
+        let result = await service.perform(
+            request,
+            grantedPermissions: [],
+            ownerApproval: nil,
+            now: now
+        )
+
+        XCTAssertEqual(result, .authorizationBlocked(.permissionRequired(.userSelectedFiles)))
+        let count = await executor.executionCount()
+        XCTAssertEqual(count, 0)
+    }
+
+    func testMacOperatorServiceInvokesExecutorOnlyAfterGateAndRejectsApprovalReplay() async {
+        let executor = RecordingMacOperatorExecutor()
+        let service = MacOperatorService(executor: executor)
+        let request = MacOperatorRequest(action: .revealSelectedItemInFinder, target: "/selected/item")
+        let approval = grant(for: request)
+
+        let first = await service.perform(
+            request,
+            grantedPermissions: [.userSelectedFiles],
+            ownerApproval: approval,
+            now: now
+        )
+        XCTAssertEqual(first, .execution(.completed))
+
+        let replay = await service.perform(
+            request,
+            grantedPermissions: [.userSelectedFiles],
+            ownerApproval: approval,
+            now: now
+        )
+        XCTAssertEqual(replay, .authorizationBlocked(.ownerApprovalRequired))
+
+        let count = await executor.executionCount()
+        XCTAssertEqual(count, 1)
     }
 }
