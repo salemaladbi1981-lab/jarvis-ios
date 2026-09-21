@@ -75,6 +75,28 @@ final class AppleEventKitProvider {
             .map { JarvisCalendarEvent(ek: $0) }
     }
 
+    /// Read-only discovery for joinable meetings already present in Apple Calendar.
+    /// This method never prompts for permission and never opens/joins a meeting. It
+    /// fails closed to an empty list unless EventKit full read access already exists.
+    func upcomingMeetingTargets(now: Date = Date(),
+                                horizonDays: Int = 7,
+                                limit: Int = 10) async throws -> [MeetingLaunchTarget] {
+        guard eventAccess() == .authorized else { return [] }
+
+        let cal = Calendar.current
+        let safeDays = min(max(horizonDays, 1), 30)
+        guard let windowStart = cal.date(byAdding: .hour, value: -12, to: now),
+              let windowEnd = cal.date(byAdding: .day, value: safeDays, to: now) else { return [] }
+
+        // Include meetings that started recently but are still in progress. The pure
+        // discovery policy filters out events that have already ended and all-day items.
+        let predicate = store.predicateForEvents(withStart: windowStart,
+                                                  end: windowEnd,
+                                                  calendars: nil)
+        let events = store.events(matching: predicate).map { JarvisCalendarEvent(ek: $0) }
+        return MeetingDiscoveryPolicy.upcomingTargets(from: events, now: now, limit: limit)
+    }
+
     func upcomingReminders(limit: Int = 20) async throws -> [JarvisReminderItem] {
         let predicate = store.predicateForIncompleteReminders(withDueDateStarting: nil,
                                                               ending: nil, calendars: nil)
