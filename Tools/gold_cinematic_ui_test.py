@@ -36,6 +36,7 @@ header = read('JARVIS/Home/HeaderView.swift')
 bottom_nav = read('JARVIS/Home/BottomNavBar.swift')
 quick_suggestions = read('JARVIS/Home/QuickSuggestions.swift')
 cards = read('JARVIS/Cards/Cards.swift')
+composer = read('JARVIS/Workspace/WorkspaceComposerView.swift')
 hero = read('JARVIS/Core/JarvisHeroView.swift')
 colors = spec['colors']
 glow = spec['glow']
@@ -96,7 +97,17 @@ check('Demo badge warning semantics preserved', '.foregroundColor(JarvisColor.wa
 check('Security success semantics preserved', '.foregroundColor(JarvisColor.success)' in cards)
 check('Card production models preserved', 'let devices: [SmartDevice]' in cards and 'let status: SecurityStatus' in cards and 'let track: MediaTrack' in cards)
 
-# 8) Migration must not replace production interaction/data paths.
+# 8) Workspace composer adopts gold shell without changing send/attachment/mic wiring.
+check('Composer attach and mic accents use primary gold', 'Image(systemName: "plus.circle.fill")' in composer and 'Image(systemName: "mic.fill")' in composer and composer.count('JarvisColor.primary_gold') >= 4)
+check('Composer send-ready accent uses highlight gold', 'canSend ? JarvisColor.highlight_gold : JarvisColor.text_muted' in composer)
+check('Composer text field tint uses highlight gold', '.tint(JarvisColor.highlight_gold)' in composer)
+check('Composer shell uses gold border and glow', 'stroke(JarvisColor.primary_gold.opacity(0.18)' in composer and 'shadow(color: JarvisColor.primary_gold.opacity(0.06)' in composer)
+check('Composer preserves send callback paths', 'Button(action: onSend)' in composer and '.onSubmit(onSend)' in composer)
+check('Composer preserves attachment and mic callbacks', 'Button(action: onAttach)' in composer and 'Button(action: onMic)' in composer)
+check('Composer send gating preserves text-or-attachment rule', '!text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || hasAttachments' in composer and '.disabled(!canSend)' in composer)
+check('Composer no longer depends on legacy blue aliases', 'JarvisColor.primary_blue' not in composer and 'JarvisColor.highlight_blue' not in composer)
+
+# 9) Migration must not replace production interaction/data paths.
 check('Home keeps cinematic hero', 'JarvisHeroView(vm: voiceVM)' in home)
 check('Home keeps real microphone control', 'JarvisMicControl(vm: voiceVM)' in home and 'onMic: { voiceVM.toggleVoice() }' in home)
 check('Home keeps project health monitor', 'projectHealthCard(health)' in home and 'api.getObject("project/health")' in home)
