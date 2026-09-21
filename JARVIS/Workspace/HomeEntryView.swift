@@ -1,6 +1,9 @@
 import SwiftUI
 import PhotosUI
 import UniformTypeIdentifiers
+#if os(iOS)
+import AppIntents
+#endif
 
 /// الشاشة الرئيسية (Concept 2) — نواة سينمائية + زر مايك بارز + محادثات/مهام/تسليمات + شريط إدخال سفلي.
 /// تبقى الجذر الإنتاجي للواجهة (RootView.tabs → HomeEntryView)، ولا نرجع إلى HomeView القديم.
@@ -115,6 +118,33 @@ struct HomeEntryView: View {
                             .stroke(JarvisColor.primary_gold.opacity(0.16), lineWidth: 1)
                     )
                     .shadow(color: JarvisColor.primary_gold.opacity(0.04), radius: 10)
+
+                    #if os(iOS)
+                    VStack(alignment: .leading, spacing: JarvisSpacing.sm) {
+                        HStack {
+                            Label("Siri والاختصارات", systemImage: "waveform.badge.mic")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(JarvisColor.text_primary)
+                            Spacer()
+                            Button("تحديث اختصارات Siri") {
+                                JarvisShortcuts.updateAppShortcutParameters()
+                            }
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(JarvisColor.highlight_gold)
+                        }
+
+                        ShortcutsLink()
+                    }
+                    .padding(JarvisSpacing.md)
+                    .background(
+                        RoundedRectangle(cornerRadius: JarvisRadius.card, style: .continuous)
+                            .fill(JarvisColor.bg_1.opacity(0.62))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: JarvisRadius.card, style: .continuous)
+                            .stroke(JarvisColor.primary_gold.opacity(0.16), lineWidth: 1)
+                    )
+                    #endif
 
                     // نقطة دخول واضحة لبدء محادثة جديدة
                     Button {
