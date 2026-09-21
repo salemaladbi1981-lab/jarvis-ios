@@ -97,6 +97,27 @@ final class AppleEventKitProvider {
         return MeetingDiscoveryPolicy.upcomingTargets(from: events, now: now, limit: limit)
     }
 
+    /// Re-read the exact EventKit event immediately before an explicit UI handoff.
+    /// No permission prompt and no URL opening happen here. If the event/link/time was
+    /// changed after discovery, or if the meeting ended, the handoff fails closed so
+    /// the UI must refresh instead of opening stale calendar data.
+    func handoffURL(for target: MeetingLaunchTarget,
+                    now: Date = Date(),
+                    userInitiated: Bool) -> URL? {
+        guard userInitiated,
+              eventAccess() == .authorized,
+              let event = store.event(withIdentifier: target.eventID) else { return nil }
+
+        let currentEvent = JarvisCalendarEvent(ek: event)
+        guard !currentEvent.isAllDay,
+              let currentTarget = currentEvent.meetingTarget else { return nil }
+
+        return MeetingHandoffPolicy.revalidatedURL(for: target,
+                                                    current: currentTarget,
+                                                    now: now,
+                                                    userInitiated: true)
+    }
+
     func upcomingReminders(limit: Int = 20) async throws -> [JarvisReminderItem] {
         let predicate = store.predicateForIncompleteReminders(withDueDateStarting: nil,
                                                               ending: nil, calendars: nil)
