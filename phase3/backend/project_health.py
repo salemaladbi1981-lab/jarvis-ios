@@ -6,6 +6,7 @@ GitHub, changes state, or exposes approval params/secrets.
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import os
 
 ACTIVE_TASK_STATES = frozenset({"QUEUED", "RUNNING", "PROCESSING"})
@@ -16,6 +17,8 @@ CI_JOB_ENV = {
     "mac": "JARVIS_CI_MAC_STATUS",
 }
 VALID_STATUSES = frozenset({"success", "failure", "unknown"})
+CI_METADATA_FRESHNESS_SECONDS = 24 * 60 * 60
+CI_METADATA_FUTURE_SKEW_SECONDS = 5 * 60
 
 
 def _text(env, key, default=""):
@@ -40,6 +43,47 @@ def _planning_evidence(phase, current_milestone, next_milestone):
     if known:
         return "partial"
     return "unknown"
+
+
+def _parse_timestamp(value):
+    value = str(value or "").strip()
+    if not value:
+        return None
+    try:
+        normalized = value[:-1] + "+00:00" if value.endswith("Z") else value
+        parsed = datetime.fromisoformat(normalized)
+    except (TypeError, ValueError):
+        return None
+    if parsed.tzinfo is None:
+        return None
+    return parsed.astimezone(timezone.utc)
+
+
+def _ci_metadata_freshness(generated_at, now=None):
+    """Return freshness of the CI artifact without making a network request.
+
+    A mounted Project Health artifact can remain present after it stops being
+    representative of the current build. Treat metadata older than 24 hours as
+    stale and reject timestamps materially in the future. Small clock skew is
+    tolerated and clamped to age zero.
+    """
+    generated = _parse_timestamp(generated_at)
+    if generated is None:
+        return {"state": "unknown", "age_seconds": None}
+
+    current = now or datetime.now(timezone.utc)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=timezone.utc)
+    else:
+        current = current.astimezone(timezone.utc)
+
+    age = (current - generated).total_seconds()
+    if age < -CI_METADATA_FUTURE_SKEW_SECONDS:
+        return {"state": "unknown", "age_seconds": None}
+
+    age_seconds = max(0, int(age))
+    state = "fresh" if age_seconds <= CI_METADATA_FRESHNESS_SECONDS else "stale"
+    return {"state": state, "age_seconds": age_seconds}
 
 
 def _ci_snapshot(env):
@@ -81,6 +125,7 @@ def build_project_health(
     provider,
     workspace_id,
     environ=None,
+    now=None,
 ):
     """Build a backward-compatible, evidence-rich Project Health response."""
     env = os.environ if environ is None else environ
@@ -106,6 +151,7 @@ def build_project_health(
             blocker_items.append(blocker)
 
     ci = _ci_snapshot(env)
+    freshness = _ci_metadata_freshness(ci["metadata_generated_at"], now=now)
     failed_ci_jobs = []
     for job, status in ci["jobs"].items():
         if status == "failure":
@@ -118,6 +164,19 @@ def build_project_health(
     # Preserve an overall failure even if older metadata lacks per-job results.
     if ci["status"] == "failure" and not failed_ci_jobs:
         blocker = {"type": "ci", "status": "failure"}
+        if ci["run_url"]:
+            blocker["run_url"] = ci["run_url"]
+        blocker_items.append(blocker)
+
+    # A previously successful artifact is not current evidence forever. Surface
+    # staleness as an explicit owner-safe blocker instead of silently presenting
+    # old CI as if it were current.
+    if freshness["state"] == "stale":
+        blocker = {
+            "type": "ci_metadata",
+            "state": "stale",
+            "age_seconds": freshness["age_seconds"],
+        }
         if ci["run_url"]:
             blocker["run_url"] = ci["run_url"]
         blocker_items.append(blocker)
@@ -144,6 +203,8 @@ def build_project_health(
         "ci_run_url": ci["run_url"],
         "ci_branch": ci["branch"],
         "ci_metadata_generated_at": ci["metadata_generated_at"],
+        "ci_metadata_state": freshness["state"],
+        "ci_metadata_age_seconds": freshness["age_seconds"],
         "ci_jobs": ci["jobs"],
         "ci": ci,
         "provider": provider,
@@ -165,6 +226,7 @@ def build_project_health(
             "ci": _reported(ci["status"]),
             "tests": _reported(ci["tests_status"]),
             "ci_run": "reported" if ci["run_id"] and ci["run_url"] else "unknown",
+            "ci_freshness": freshness["state"],
             "milestones": _planning_evidence(phase, current_milestone, next_milestone),
         },
     }
