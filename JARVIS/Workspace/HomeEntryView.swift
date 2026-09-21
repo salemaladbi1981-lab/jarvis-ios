@@ -25,6 +25,7 @@ struct HomeEntryView: View {
     @State private var retryText = ""
     @State private var isSending = false
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.openURL) private var openURL
     private let api: JarvisAPI
 
     init(api: JarvisAPI) {
