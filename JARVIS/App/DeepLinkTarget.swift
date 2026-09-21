@@ -256,3 +256,48 @@ struct DisabledMacOperatorExecutor: MacOperatorExecuting {
         .blocked("mac_operator_executor_not_configured")
     }
 }
+
+/// Public operation result keeps authorization failures distinct from executor outcomes.
+/// A caller can render a permission/approval request without accidentally invoking a local adapter.
+enum MacOperatorOperationResult: Equatable {
+    case authorizationBlocked(MacOperatorAuthorizationDecision)
+    case execution(MacOperatorExecutionResult)
+}
+
+/// Single safe orchestration seam for future Mac Operator call sites.
+/// Every execution must pass target validation, official permission state, and (where required)
+/// a request-bound one-shot owner approval before an executor can be invoked. The default executor
+/// remains disabled, so adding this service does not grant any local-control capability by itself.
+actor MacOperatorService {
+    private let gate: MacOperatorExecutionGate
+    private let executor: any MacOperatorExecuting
+
+    init(
+        gate: MacOperatorExecutionGate = MacOperatorExecutionGate(),
+        executor: any MacOperatorExecuting = DisabledMacOperatorExecutor()
+    ) {
+        self.gate = gate
+        self.executor = executor
+    }
+
+    func perform(
+        _ request: MacOperatorRequest,
+        grantedPermissions: Set<MacOperatorPermission>,
+        ownerApproval: MacOperatorApprovalGrant?,
+        now: Date = Date()
+    ) async -> MacOperatorOperationResult {
+        let gateResult = await gate.authorize(
+            request,
+            grantedPermissions: grantedPermissions,
+            ownerApproval: ownerApproval,
+            now: now
+        )
+
+        switch gateResult {
+        case .blocked(let decision):
+            return .authorizationBlocked(decision)
+        case .authorized(let authorization):
+            return .execution(await executor.execute(authorization))
+        }
+    }
+}
