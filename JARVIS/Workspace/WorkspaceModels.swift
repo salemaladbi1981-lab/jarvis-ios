@@ -167,6 +167,35 @@ struct FileItem: Codable, Identifiable {
     var hasPreview: Bool { derivatives?["preview"]?.status == "GENERATED" }
 }
 
+/// Sanitized blocker returned by GET /project/health. The backend deliberately
+/// omits internal errors/payloads; the client mirrors only the owner-safe fields.
+struct ProjectHealthBlocker: Codable, Identifiable {
+    var id: String {
+        [type, taskId, job, state, status]
+            .compactMap { $0 }
+            .joined(separator: ":")
+    }
+
+    let type: String?
+    let state: String?
+    let taskId: String?
+    let job: String?
+    let status: String?
+    let runUrl: String?
+}
+
+/// Sanitized owner action. Approval params are intentionally not represented on
+/// device so Project Health cannot become a side channel for sensitive payloads.
+struct ProjectHealthOwnerAction: Codable, Identifiable {
+    var id: String { approvalId ?? [type, agent, action, taskId].compactMap { $0 }.joined(separator: ":") }
+
+    let type: String?
+    let approvalId: String?
+    let agent: String?
+    let action: String?
+    let taskId: String?
+}
+
 /// Snapshot from GET /project/health. Kept in WorkspaceModels.swift because this file
 /// is already part of both iOS and macOS targets; health UI must not depend on an
 /// unregistered source file in the generated Xcode project.
@@ -178,22 +207,44 @@ struct ProjectHealth: Codable {
     let buildSha: String?
     let ciStatus: String?
     let testsStatus: String?
+    let ciRunId: String?
+    let ciRunNumber: String?
+    let ciRunUrl: String?
+    let ciBranch: String?
+    let ciMetadataGeneratedAt: String?
+    let ciJobs: [String: String]?
     let provider: String?
     let killSwitch: Bool?
     let workspaceId: String?
     let tasksTotal: Int?
     let tasksActive: Int?
     let tasksFailed: Int?
+    let taskStates: [String: Int]?
     let pendingApprovals: Int?
     let ownerActions: Int?
+    let ownerActionItems: [ProjectHealthOwnerAction]?
     let capabilityCount: Int?
     let blockers: Int?
+    let blockerItems: [ProjectHealthBlocker]?
+    let evidence: [String: String]?
+
+    var failedCIJobs: [String] {
+        (ciJobs ?? [:])
+            .filter { $0.value.lowercased() == "failure" }
+            .map(\.key)
+            .sorted()
+    }
 
     var ciDisplay: String {
+        let run = (ciRunNumber?.isEmpty == false) ? " #\(ciRunNumber!)" : ""
         switch (ciStatus ?? "unknown").lowercased() {
-        case "success", "passed", "green": return "CI أخضر"
-        case "failed", "failure", "red": return "CI فاشل"
-        case "running", "in_progress": return "CI يعمل"
+        case "success", "passed", "green": return "CI أخضر\(run)"
+        case "failed", "failure", "red":
+            if let failedJob = failedCIJobs.first {
+                return "CI فاشل\(run) • \(failedJob)"
+            }
+            return "CI فاشل\(run)"
+        case "running", "in_progress": return "CI يعمل\(run)"
         default: return "CI غير متاح"
         }
     }
@@ -205,6 +256,15 @@ struct ProjectHealth: Codable {
         case "running", "in_progress": return "الاختبارات تعمل"
         default: return "حالة الاختبارات غير متاحة"
         }
+    }
+
+    var buildDisplay: String? {
+        guard let buildSha, !buildSha.isEmpty else { return nil }
+        let short = String(buildSha.prefix(8))
+        if let ciBranch, !ciBranch.isEmpty {
+            return "\(ciBranch) • \(short)"
+        }
+        return short
     }
 }
 
