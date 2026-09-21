@@ -19,6 +19,8 @@ final class HomeViewModel: ObservableObject {
     @Published private(set) var mediaTrack: MediaTrack?
     @Published private(set) var isListening = false
     @Published var calendarMessage: String?
+    @Published private(set) var meetingTargets: [MeetingLaunchTarget] = []
+    @Published private(set) var meetingAccessState: CalendarPermissionState = .notDetermined
     private var isVoiceStarting = false
 
     // V1 Visual: audio level (read-only) + agent orbit activity
