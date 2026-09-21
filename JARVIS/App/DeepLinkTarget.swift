@@ -257,6 +257,20 @@ struct DisabledMacOperatorExecutor: MacOperatorExecuting {
     }
 }
 
+/// Permission state is obtained by the service rather than accepted as caller-supplied truth.
+/// A future macOS adapter can implement this protocol with official system APIs only.
+protocol MacOperatorPermissionProviding {
+    func grantedPermissions(for request: MacOperatorRequest) async -> Set<MacOperatorPermission>
+}
+
+/// Production-safe default: no local permission is assumed until an official platform adapter
+/// explicitly verifies it. This keeps the service fail-closed even if a caller supplies approval.
+struct DisabledMacOperatorPermissionProvider: MacOperatorPermissionProviding {
+    func grantedPermissions(for request: MacOperatorRequest) async -> Set<MacOperatorPermission> {
+        []
+    }
+}
+
 /// Public operation result keeps authorization failures distinct from executor outcomes.
 /// A caller can render a permission/approval request without accidentally invoking a local adapter.
 enum MacOperatorOperationResult: Equatable {
@@ -265,27 +279,31 @@ enum MacOperatorOperationResult: Equatable {
 }
 
 /// Single safe orchestration seam for future Mac Operator call sites.
-/// Every execution must pass target validation, official permission state, and (where required)
-/// a request-bound one-shot owner approval before an executor can be invoked. The default executor
-/// remains disabled, so adding this service does not grant any local-control capability by itself.
+/// Every execution must obtain verified permission state, then pass target validation and (where
+/// required) a request-bound one-shot owner approval before an executor can be invoked. Both the
+/// default permission provider and default executor are fail-closed, so adding this service does
+/// not grant any local-control capability by itself.
 actor MacOperatorService {
     private let gate: MacOperatorExecutionGate
+    private let permissionProvider: any MacOperatorPermissionProviding
     private let executor: any MacOperatorExecuting
 
     init(
         gate: MacOperatorExecutionGate = MacOperatorExecutionGate(),
+        permissionProvider: any MacOperatorPermissionProviding = DisabledMacOperatorPermissionProvider(),
         executor: any MacOperatorExecuting = DisabledMacOperatorExecutor()
     ) {
         self.gate = gate
+        self.permissionProvider = permissionProvider
         self.executor = executor
     }
 
     func perform(
         _ request: MacOperatorRequest,
-        grantedPermissions: Set<MacOperatorPermission>,
         ownerApproval: MacOperatorApprovalGrant?,
         now: Date = Date()
     ) async -> MacOperatorOperationResult {
+        let grantedPermissions = await permissionProvider.grantedPermissions(for: request)
         let gateResult = await gate.authorize(
             request,
             grantedPermissions: grantedPermissions,
