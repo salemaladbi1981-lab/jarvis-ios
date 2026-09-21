@@ -242,8 +242,16 @@ actor MacOperatorExecutionGate {
     }
 }
 
+struct MacOperatorItemMetadata: Equatable {
+    let path: String
+    let sizeBytes: Int64?
+    let modifiedAt: Date?
+    let isDirectory: Bool
+}
+
 enum MacOperatorExecutionResult: Equatable {
     case completed
+    case metadata(MacOperatorItemMetadata)
     case blocked(String)
 }
 
@@ -258,6 +266,60 @@ protocol MacOperatorExecuting {
 struct DisabledMacOperatorExecutor: MacOperatorExecuting {
     func execute(_ authorization: MacOperatorExecutionAuthorization) async -> MacOperatorExecutionResult {
         .blocked("mac_operator_executor_not_configured")
+    }
+}
+
+/// Session-scoped proof that a path came from an explicit user selection.
+/// Exact standardized paths only; no parent-directory inheritance and no string-prefix trust.
+actor UserSelectedFileMacOperatorAdapter: MacOperatorPermissionProviding, MacOperatorExecuting {
+    private var selectedPaths: Set<String> = []
+
+    func registerUserSelectedURL(_ url: URL) {
+        selectedPaths.insert(url.standardizedFileURL.path)
+    }
+
+    func revokeAllSelections() {
+        selectedPaths.removeAll()
+    }
+
+    func grantedPermissions(for request: MacOperatorRequest) async -> Set<MacOperatorPermission> {
+        guard request.action.requiredPermission == .userSelectedFiles else { return [] }
+        let path = URL(fileURLWithPath: request.target).standardizedFileURL.path
+        return selectedPaths.contains(path) ? [.userSelectedFiles] : []
+    }
+
+    func execute(_ authorization: MacOperatorExecutionAuthorization) async -> MacOperatorExecutionResult {
+        let request = authorization.request
+        guard request.action == .inspectSelectedItemMetadata else {
+            return .blocked("selected_item_adapter_read_only")
+        }
+
+        let url = URL(fileURLWithPath: request.target).standardizedFileURL
+        guard selectedPaths.contains(url.path) else {
+            return .blocked("selected_item_not_registered")
+        }
+
+        let didAccess = url.startAccessingSecurityScopedResource()
+        defer {
+            if didAccess { url.stopAccessingSecurityScopedResource() }
+        }
+
+        do {
+            let values = try url.resourceValues(forKeys: [
+                .fileSizeKey,
+                .contentModificationDateKey,
+                .isDirectoryKey
+            ])
+            let metadata = MacOperatorItemMetadata(
+                path: url.path,
+                sizeBytes: values.fileSize.map(Int64.init),
+                modifiedAt: values.contentModificationDate,
+                isDirectory: values.isDirectory ?? false
+            )
+            return .metadata(metadata)
+        } catch {
+            return .blocked("selected_item_metadata_unavailable")
+        }
     }
 }
 
