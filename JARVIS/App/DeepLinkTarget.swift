@@ -271,15 +271,20 @@ struct DisabledMacOperatorExecutor: MacOperatorExecuting {
 
 /// Session-scoped proof that a path came from an explicit user selection.
 /// Exact standardized paths only; no parent-directory inheritance and no string-prefix trust.
+/// The original picker URL is retained so security-scoped provenance is not discarded by
+/// reconstructing a plain file URL from a path later during execution.
 actor UserSelectedFileMacOperatorAdapter: MacOperatorPermissionProviding, MacOperatorExecuting {
     private var selectedPaths: Set<String> = []
+    private var selectedURLsByPath: [String: URL] = [:]
 
     func registerUserSelectedURL(_ url: URL) {
         selectedPaths.insert(url.standardizedFileURL.path)
+        selectedURLsByPath[url.standardizedFileURL.path] = url
     }
 
     func revokeAllSelections() {
         selectedPaths.removeAll()
+        selectedURLsByPath.removeAll()
     }
 
     func grantedPermissions(for request: MacOperatorRequest) async -> Set<MacOperatorPermission> {
@@ -294,24 +299,24 @@ actor UserSelectedFileMacOperatorAdapter: MacOperatorPermissionProviding, MacOpe
             return .blocked("selected_item_adapter_read_only")
         }
 
-        let url = URL(fileURLWithPath: request.target).standardizedFileURL
-        guard selectedPaths.contains(url.path) else {
+        let path = URL(fileURLWithPath: request.target).standardizedFileURL.path
+        guard selectedPaths.contains(path), let selectedURL = selectedURLsByPath[path] else {
             return .blocked("selected_item_not_registered")
         }
 
-        let didAccess = url.startAccessingSecurityScopedResource()
+        let didAccess = selectedURL.startAccessingSecurityScopedResource()
         defer {
-            if didAccess { url.stopAccessingSecurityScopedResource() }
+            if didAccess { selectedURL.stopAccessingSecurityScopedResource() }
         }
 
         do {
-            let values = try url.resourceValues(forKeys: [
+            let values = try selectedURL.resourceValues(forKeys: [
                 .fileSizeKey,
                 .contentModificationDateKey,
                 .isDirectoryKey
             ])
             let metadata = MacOperatorItemMetadata(
-                path: url.path,
+                path: path,
                 sizeBytes: values.fileSize.map(Int64.init),
                 modifiedAt: values.contentModificationDate,
                 isDirectory: values.isDirectory ?? false
