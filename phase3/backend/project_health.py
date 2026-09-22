@@ -7,6 +7,7 @@ GitHub, changes state, or exposes approval params/secrets.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import json
 import os
 
 ACTIVE_TASK_STATES = frozenset({"QUEUED", "RUNNING", "PROCESSING"})
@@ -19,6 +20,9 @@ CI_JOB_ENV = {
 VALID_STATUSES = frozenset({"success", "failure", "unknown"})
 CI_METADATA_FRESHNESS_SECONDS = 24 * 60 * 60
 CI_METADATA_FUTURE_SKEW_SECONDS = 5 * 60
+_OWNER_ACTION_FIELDS = ("type", "action", "agent", "task_id")
+_MAX_OWNER_ACTIONS = 20
+_MAX_OWNER_ACTION_FIELD_LENGTH = 240
 
 
 def _text(env, key, default=""):
@@ -115,6 +119,42 @@ def _owner_action_items(pending_approvals):
     return items
 
 
+def _planned_owner_action_items(env):
+    """Decode reviewed device/project actions from the Project Health artifact.
+
+    The runtime accepts only a bounded, owner-safe schema. Invalid JSON or any
+    unexpected/oversized values fail closed to an empty list; plan actions can
+    never impersonate an approval because approval identifiers are not accepted.
+    """
+    raw = _text(env, "JARVIS_OWNER_ACTIONS_JSON")
+    if not raw:
+        return []
+    try:
+        value = json.loads(raw)
+    except (TypeError, ValueError):
+        return []
+    if not isinstance(value, list):
+        return []
+
+    items = []
+    for candidate in value[:_MAX_OWNER_ACTIONS]:
+        if not isinstance(candidate, dict):
+            continue
+        item = {}
+        for key in _OWNER_ACTION_FIELDS:
+            field = candidate.get(key)
+            if not isinstance(field, str):
+                continue
+            field = field.strip()
+            if not field or "\n" in field or "\r" in field or len(field) > _MAX_OWNER_ACTION_FIELD_LENGTH:
+                continue
+            item[key] = field
+        if item.get("action"):
+            item.setdefault("type", "project_action")
+            items.append(item)
+    return items
+
+
 def build_project_health(
     *,
     tasks,
@@ -184,7 +224,9 @@ def build_project_health(
     if kill_switch_engaged:
         blocker_items.append({"type": "kill_switch", "state": "engaged"})
 
-    owner_action_items = _owner_action_items(pending_approvals)
+    approval_action_items = _owner_action_items(pending_approvals)
+    planned_action_items = _planned_owner_action_items(env)
+    owner_action_items = approval_action_items + planned_action_items
     phase = _text(env, "JARVIS_CURRENT_PHASE", "unknown")
     current_milestone = _text(env, "JARVIS_CURRENT_MILESTONE", "unknown")
     next_milestone = _text(env, "JARVIS_NEXT_MILESTONE", "unknown")
@@ -214,7 +256,7 @@ def build_project_health(
         "tasks_active": active,
         "tasks_failed": failed,
         "task_states": state_counts,
-        "pending_approvals": len(owner_action_items),
+        "pending_approvals": len(approval_action_items),
         # Keep numeric legacy fields for existing clients, add detailed arrays beside them.
         "owner_actions": len(owner_action_items),
         "owner_action_items": owner_action_items,
