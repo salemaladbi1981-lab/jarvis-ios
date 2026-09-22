@@ -100,6 +100,51 @@ check(
     and "must-not-leak" not in repr(snapshot["owner_action_items"]),
 )
 
+malformed_pending = project_health.build_project_health(
+    tasks=[],
+    job_state_for=lambda _task_id: None,
+    pending_approvals=[
+        {
+            "approval_id": {"not": "a-string"},
+            "agent": "core_operator",
+            "action": "must be skipped with invalid id",
+        },
+        {
+            "approval_id": "approval-bad\ninjected",
+            "agent": "core_operator",
+            "action": "must also be skipped",
+        },
+        {
+            "approval_id": "approval-2",
+            "agent": "bad\nagent",
+            "action": 42,
+            "task_id": "x" * 241,
+            "expires": {"secret": "must-not-leak"},
+            "params": {"secret": "must-not-leak"},
+        },
+    ],
+    capability_count=22,
+    kill_switch_engaged=False,
+    provider="openai",
+    workspace_id="PERSONAL",
+    environ={},
+)
+
+check(
+    "runtime fail-closes malformed pending approval fields while preserving a valid approval id",
+    malformed_pending["pending_approvals"] == 1
+    and malformed_pending["owner_actions"] == 1
+    and malformed_pending["owner_action_items"] == [
+        {"type": "approval", "approval_id": "approval-2"}
+    ],
+)
+check(
+    "malformed pending approvals cannot inject structured, multiline, or oversized owner-action data",
+    "must-not-leak" not in repr(malformed_pending["owner_action_items"])
+    and "injected" not in repr(malformed_pending["owner_action_items"])
+    and "bad\nagent" not in repr(malformed_pending["owner_action_items"]),
+)
+
 with tempfile.TemporaryDirectory() as td:
     malicious_path = Path(td) / "malicious.env"
     malicious_path.write_text(
