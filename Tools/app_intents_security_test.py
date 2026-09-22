@@ -110,8 +110,11 @@ check("navigation intent does not request hidden location or microphone access",
 check("production home consumes the one-shot intent request on cold launch",
       '.task {' in home and
       'voiceVM.handleAppIntentStart()' in home and
-      'guard AppBridge.pendingStartVoice else { return }' in home_vm and
-      'AppBridge.pendingStartVoice = false' in home_vm)
+      'guard AppBridge.consumePendingStartVoice() else { return }' in home_vm)
+
+check("cold launch consumes Siri handoff before network loading",
+      home.find('voiceVM.handleAppIntentStart()') < home.find('await vm.load()') and
+      home.find('voiceVM.handleAppIntentStart()') < home.find('await voiceVM.load()'))
 
 check("warm-resume path re-checks the one-shot Siri handoff when scene becomes active",
       'else if phase == .active' in home and
