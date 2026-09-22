@@ -17,6 +17,7 @@ HEALTH_KEYS = {
     "JARVIS_CURRENT_PHASE",
     "JARVIS_CURRENT_MILESTONE",
     "JARVIS_NEXT_MILESTONE",
+    "JARVIS_OWNER_ACTIONS_JSON",
     "JARVIS_CI_RUN_ID",
     "JARVIS_CI_RUN_NUMBER",
     "JARVIS_CI_RUN_URL",
@@ -36,6 +37,36 @@ STATUS_KEYS = {
 VALID_STATUSES = {"success", "failure", "unknown"}
 _SHA_RE = re.compile(r"^[0-9a-fA-F]{7,40}$")
 _DIGITS_RE = re.compile(r"^[0-9]+$")
+_OWNER_ACTION_FIELDS = {"type", "action", "agent", "task_id"}
+_MAX_OWNER_ACTIONS = 20
+_MAX_OWNER_ACTION_FIELD_LENGTH = 240
+_MAX_OWNER_ACTIONS_JSON_LENGTH = 8192
+
+
+def _valid_owner_actions_json(value):
+    if not value:
+        return True
+    if len(value) > _MAX_OWNER_ACTIONS_JSON_LENGTH:
+        return False
+    try:
+        data = json.loads(value)
+    except (ValueError, TypeError):
+        return False
+    if not isinstance(data, list) or len(data) > _MAX_OWNER_ACTIONS:
+        return False
+    for item in data:
+        if not isinstance(item, dict) or not item or not item.keys() <= _OWNER_ACTION_FIELDS:
+            return False
+        if not isinstance(item.get("action"), str) or not item["action"].strip():
+            return False
+        for field_value in item.values():
+            if not isinstance(field_value, str):
+                return False
+            if not field_value.strip() or len(field_value) > _MAX_OWNER_ACTION_FIELD_LENGTH:
+                return False
+            if "\n" in field_value or "\r" in field_value:
+                return False
+    return True
 
 
 def _valid_value(key, value):
@@ -54,6 +85,8 @@ def _valid_value(key, value):
         return not value or ("T" in value and value.endswith("Z"))
     if key == "JARVIS_CI_BRANCH":
         return "\n" not in value and "\r" not in value and len(value) <= 200
+    if key == "JARVIS_OWNER_ACTIONS_JSON":
+        return _valid_owner_actions_json(value)
     return True
 
 
