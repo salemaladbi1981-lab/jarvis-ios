@@ -1,0 +1,118 @@
+#!/usr/bin/env python3
+"""Offline, secret-free Project Health deployment preflight.
+
+Validates a CI handoff artifact against the exact build/branch intended for a
+candidate deployment. It performs no network calls and mutates no production
+state, so it can run on a staging host before any origin/tunnel cutover.
+"""
+import argparse
+from datetime import datetime, timezone
+import json
+from pathlib import Path
+import sys
+
+ROOT = Path(__file__).resolve().parent.parent
+BACKEND = ROOT / "phase3" / "backend"
+if str(BACKEND) not in sys.path:
+    sys.path.insert(0, str(BACKEND))
+
+from project_health import build_project_health  # noqa: E402
+from project_health_metadata import load_health_metadata  # noqa: E402
+
+
+def _parse_now(value):
+    text = str(value or "").strip()
+    if not text:
+        return None
+    normalized = text[:-1] + "+00:00" if text.endswith("Z") else text
+    parsed = datetime.fromisoformat(normalized)
+    if parsed.tzinfo is None:
+        raise ValueError("--now must include a timezone")
+    return parsed.astimezone(timezone.utc)
+
+
+def preflight(metadata_path, expected_sha, expected_branch, now=None):
+    """Return a sanitized readiness verdict for one candidate deployment."""
+    expected_sha = str(expected_sha or "").strip()
+    expected_branch = str(expected_branch or "").strip()
+    env = {
+        "JARVIS_BUILD_SHA": expected_sha,
+        "JARVIS_CI_BRANCH": expected_branch,
+    }
+
+    if not load_health_metadata(metadata_path, env):
+        return {
+            "ok": False,
+            "failed_checks": ["metadata_rejected"],
+            "build_sha": expected_sha,
+            "ci_branch": expected_branch,
+        }
+
+    snapshot = build_project_health(
+        tasks=[],
+        job_state_for=lambda _task_id: None,
+        pending_approvals=[],
+        capability_count=0,
+        kill_switch_engaged=False,
+        provider="deployment-preflight",
+        workspace_id="deployment-preflight",
+        environ=env,
+        now=now,
+    )
+
+    checks = {
+        "build_identity": snapshot.get("build_sha") == expected_sha,
+        "branch_identity": snapshot.get("ci_branch") == expected_branch,
+        "ci": snapshot.get("ci_status") == "success",
+        "build": snapshot.get("build_status") == "success",
+        "tests": snapshot.get("tests_status") == "success",
+        "freshness": snapshot.get("ci_metadata_state") == "fresh",
+        "run_identity": (snapshot.get("evidence") or {}).get("ci_run") == "reported",
+        "blockers": int(snapshot.get("blockers") or 0) == 0,
+    }
+    failed_checks = [name for name, passed in checks.items() if not passed]
+
+    return {
+        "ok": not failed_checks,
+        "failed_checks": failed_checks,
+        "build_sha": snapshot.get("build_sha") or "",
+        "ci_branch": snapshot.get("ci_branch") or "",
+        "ci_run_id": snapshot.get("ci_run_id") or "",
+        "ci_run_number": snapshot.get("ci_run_number") or "",
+        "ci_status": snapshot.get("ci_status") or "unknown",
+        "build_status": snapshot.get("build_status") or "unknown",
+        "tests_status": snapshot.get("tests_status") or "unknown",
+        "ci_metadata_state": snapshot.get("ci_metadata_state") or "unknown",
+        "blockers": int(snapshot.get("blockers") or 0),
+        "phase": snapshot.get("phase") or "unknown",
+        "current_milestone": snapshot.get("current_milestone") or "unknown",
+        "next_milestone": snapshot.get("next_milestone") or "unknown",
+    }
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--metadata", required=True)
+    parser.add_argument("--expected-sha", required=True)
+    parser.add_argument("--expected-branch", required=True)
+    parser.add_argument("--now", default="")
+    args = parser.parse_args()
+
+    try:
+        now = _parse_now(args.now)
+    except ValueError as exc:
+        print(json.dumps({"ok": False, "failed_checks": ["invalid_now"], "error": str(exc)}))
+        return 2
+
+    result = preflight(
+        args.metadata,
+        args.expected_sha,
+        args.expected_branch,
+        now=now,
+    )
+    print(json.dumps(result, ensure_ascii=False, sort_keys=True))
+    return 0 if result["ok"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
