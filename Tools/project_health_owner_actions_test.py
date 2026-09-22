@@ -45,13 +45,13 @@ metadata = generator.build_metadata(base, plan_path=PLAN, generated_at="2026-09-
 owner_actions = metadata.get("owner_actions") or []
 
 check(
-    "reviewed project plan contributes only the two remaining device-only owner actions",
-    len(owner_actions) == 2
-    and {item.get("type") for item in owner_actions} == {"device_validation"}
-    and any("macOS Accessibility" in item.get("action", "") for item in owner_actions)
-    and any("Meeting handoff" in item.get("action", "") for item in owner_actions)
-    and not any("Siri/App Shortcuts" in item.get("action", "") for item in owner_actions)
-    and not any("AirPods/Shokz" in item.get("action", "") for item in owner_actions)
+    "reviewed project plan contributes only the remaining production handoff owner action",
+    len(owner_actions) == 1
+    and owner_actions[0].get("type") == "production_handoff"
+    and "Project Health" in owner_actions[0].get("action", "")
+    and "production" in owner_actions[0].get("action", "").lower()
+    and not any("macOS Accessibility" in item.get("action", "") for item in owner_actions)
+    and not any("Meeting handoff" in item.get("action", "") for item in owner_actions)
     and metadata["evidence"]["owner_actions"] == "version_controlled_plan",
 )
 
@@ -88,9 +88,9 @@ snapshot = project_health.build_project_health(
 )
 
 check(
-    "runtime combines one real pending approval with the two reviewed device actions without changing approval count",
+    "runtime combines one real pending approval with the reviewed production handoff without changing approval count",
     snapshot["pending_approvals"] == 1
-    and snapshot["owner_actions"] == 3
+    and snapshot["owner_actions"] == 2
     and snapshot["owner_action_items"][0].get("approval_id") == "approval-1"
     and snapshot["owner_action_items"][1:] == owner_actions,
 )
@@ -148,7 +148,7 @@ check(
 with tempfile.TemporaryDirectory() as td:
     malicious_path = Path(td) / "malicious.env"
     malicious_path.write_text(
-        'JARVIS_OWNER_ACTIONS_JSON=[{"type":"device_validation","action":"Safe-looking action","approval_id":"fake"}]\n',
+        'JARVIS_OWNER_ACTIONS_JSON=[{"type":"production_handoff","action":"Safe-looking action","approval_id":"fake"}]\n',
         encoding="utf-8",
     )
     malicious_loaded = {}
@@ -162,20 +162,20 @@ check(
 with tempfile.TemporaryDirectory() as td:
     temp_plan = Path(td) / "plan.json"
     temp_plan.write_text(json.dumps({
-        "phase": "device-validation",
-        "current_milestone": "Device checks",
+        "phase": "project-health-production-handoff",
+        "current_milestone": "Project Health production handoff",
         "next_milestone": "Release readiness",
         "owner_actions": [
-            {"type": "device_validation", "action": "Safe action", "params": "must-not-leak"},
-            {"type": "device_validation", "action": "bad\nline"},
-            {"type": "device_validation", "action": "x" * 241},
+            {"type": "production_handoff", "action": "Safe action", "params": "must-not-leak"},
+            {"type": "production_handoff", "action": "bad\nline"},
+            {"type": "production_handoff", "action": "x" * 241},
         ],
     }), encoding="utf-8")
     sanitized = generator.build_metadata(base, plan_path=temp_plan, generated_at="2026-09-22T01:00:00Z")
 
 check(
     "plan sanitizer keeps only bounded owner-visible fields and drops malformed actions",
-    sanitized["owner_actions"] == [{"type": "device_validation", "action": "Safe action"}]
+    sanitized["owner_actions"] == [{"type": "production_handoff", "action": "Safe action"}]
     and "must-not-leak" not in repr(sanitized),
 )
 
