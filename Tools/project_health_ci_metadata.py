@@ -68,13 +68,25 @@ def _safe_repository(value):
 
 
 def _result(env, key):
-    """Normalize GitHub job results to the runtime Project Health status contract."""
+    """Normalize GitHub job/step results to the runtime Project Health status contract."""
     value = _value(env, key).lower()
     if value == "success":
         return "success"
     if value in _FAILURE_RESULTS:
         return "failure"
     return "unknown"
+
+
+def _result_with_fallback(env, key, fallback_key):
+    """Prefer exact step outcome; older workflows conservatively fall back to job result.
+
+    A successful containing job proves its required build/test step completed. A failed
+    containing job may be caused by a later screenshot/artifact step, so the fallback can
+    be pessimistic but never invents a green result.
+    """
+    if str(env.get(key) or "").strip():
+        return _result(env, key)
+    return _result(env, fallback_key)
 
 
 def _aggregate(results):
@@ -152,14 +164,10 @@ def _run_url(env, run_id=""):
 def build_metadata(env=None, plan_path=DEFAULT_PLAN_PATH, generated_at=None):
     """Return truthful CI metadata; absent evidence stays unknown.
 
-    Repository variables remain authoritative when they are valid single-line
-    labels. When they are absent or malformed, milestone labels fall back to the
-    reviewed version-controlled project plan. Device-only owner actions are
-    intentionally sourced only from that reviewed plan so CI cannot invent actions
-    that require the owner's physical device. GitHub run/job fields are copied from
-    GitHub-provided environment values only after boundary validation; missing or
-    malformed identity remains empty/unknown rather than being guessed or serialized
-    into the line-oriented runtime handoff.
+    Overall CI stays tied to whole-job outcomes. Build and test truth are recorded
+    separately from the exact xcodebuild/test step outcomes when the current workflow
+    supplies them, so a later screenshot failure cannot falsely report a build or test
+    failure. Older workflows fall back conservatively to their containing job result.
     """
     env = os.environ if env is None else env
     jobs = {
@@ -167,7 +175,16 @@ def build_metadata(env=None, plan_path=DEFAULT_PLAN_PATH, generated_at=None):
         "ios": _result(env, "JARVIS_IOS_RESULT"),
         "mac": _result(env, "JARVIS_MAC_RESULT"),
     }
-    tests_status = _aggregate((jobs["backend_tests"], jobs["mac"]))
+    build_jobs = {
+        "ios": _result_with_fallback(env, "JARVIS_IOS_BUILD_RESULT", "JARVIS_IOS_RESULT"),
+        "mac": _result_with_fallback(env, "JARVIS_MAC_BUILD_RESULT", "JARVIS_MAC_RESULT"),
+    }
+    test_jobs = {
+        "backend_tests": jobs["backend_tests"],
+        "mac": _result_with_fallback(env, "JARVIS_MAC_TEST_RESULT", "JARVIS_MAC_RESULT"),
+    }
+    build_status = _aggregate(build_jobs.values())
+    tests_status = _aggregate(test_jobs.values())
     build_sha = _safe_build_sha(env.get("GITHUB_SHA", ""))
     plan = _load_plan(plan_path)
     phase, phase_source = _planning_value(env, "JARVIS_CURRENT_PHASE", plan, "phase")
@@ -192,9 +209,12 @@ def build_metadata(env=None, plan_path=DEFAULT_PLAN_PATH, generated_at=None):
     run_id = _safe_ci_digits(env.get("GITHUB_RUN_ID", ""))
     run_number = _safe_ci_digits(env.get("GITHUB_RUN_NUMBER", ""))
     branch = _safe_branch(env.get("GITHUB_REF_NAME", ""))
+    precise_build_steps = all(str(env.get(key) or "").strip() for key in ("JARVIS_IOS_BUILD_RESULT", "JARVIS_MAC_BUILD_RESULT"))
+    precise_mac_test = bool(str(env.get("JARVIS_MAC_TEST_RESULT") or "").strip())
 
     return {
         "build_sha": build_sha,
+        "build_status": build_status,
         "ci_status": _aggregate(jobs.values()),
         "tests_status": tests_status,
         "phase": phase,
@@ -207,10 +227,13 @@ def build_metadata(env=None, plan_path=DEFAULT_PLAN_PATH, generated_at=None):
         "ci_branch": branch,
         "metadata_generated_at": generated_at,
         "jobs": jobs,
+        "build_jobs": build_jobs,
+        "test_jobs": test_jobs,
         "evidence": {
             "build": "github_actions" if build_sha else "unknown",
+            "build_status": "github_actions_steps" if precise_build_steps else "github_actions_jobs_fallback",
             "ci": "github_actions",
-            "tests": "github_actions",
+            "tests": "github_actions_steps" if precise_mac_test else "github_actions_jobs_fallback",
             "milestones": milestone_source,
             "owner_actions": "version_controlled_plan" if owner_actions else "unknown",
             "run": "github_actions" if run_id and _run_url(env, run_id=run_id) else "unknown",
@@ -221,9 +244,12 @@ def build_metadata(env=None, plan_path=DEFAULT_PLAN_PATH, generated_at=None):
 def _write_env(path, metadata):
     """Write the exact secret-free environment keys consumed by GET /project/health."""
     jobs = metadata.get("jobs") or {}
+    build_jobs = metadata.get("build_jobs") or {}
+    test_jobs = metadata.get("test_jobs") or {}
     owner_actions_json = json.dumps(metadata.get("owner_actions") or [], ensure_ascii=False, separators=(",", ":"))
     lines = [
         f"JARVIS_BUILD_SHA={metadata['build_sha']}",
+        f"JARVIS_BUILD_STATUS={metadata.get('build_status', 'unknown')}",
         f"JARVIS_CI_STATUS={metadata['ci_status']}",
         f"JARVIS_TESTS_STATUS={metadata['tests_status']}",
         f"JARVIS_CURRENT_PHASE={metadata['phase']}",
@@ -238,6 +264,10 @@ def _write_env(path, metadata):
         f"JARVIS_CI_BACKEND_STATUS={jobs.get('backend_tests', 'unknown')}",
         f"JARVIS_CI_IOS_STATUS={jobs.get('ios', 'unknown')}",
         f"JARVIS_CI_MAC_STATUS={jobs.get('mac', 'unknown')}",
+        f"JARVIS_IOS_BUILD_STATUS={build_jobs.get('ios', 'unknown')}",
+        f"JARVIS_MAC_BUILD_STATUS={build_jobs.get('mac', 'unknown')}",
+        f"JARVIS_BACKEND_TEST_STATUS={test_jobs.get('backend_tests', 'unknown')}",
+        f"JARVIS_MAC_TEST_STATUS={test_jobs.get('mac', 'unknown')}",
     ]
     Path(path).write_text("\n".join(lines) + "\n", encoding="utf-8")
 
