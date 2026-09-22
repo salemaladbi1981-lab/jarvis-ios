@@ -1,18 +1,14 @@
 {
-  "schema_version": 3,
-  "phase": "device-validation",
-  "current_milestone": "Device-only validation & final stabilization — Mac permissions, Meeting handoff",
+  "schema_version": 4,
+  "phase": "project-health-production-handoff",
+  "current_milestone": "Project Health production handoff — deploy authenticated /project/health with fresh CI metadata",
   "next_milestone": "Release readiness — merge/TestFlight only with explicit user approval",
   "owner_actions": [
     {
-      "type": "device_validation",
-      "action": "Validate macOS Accessibility and Automation permission behavior on the signed local build"
-    },
-    {
-      "type": "device_validation",
-      "action": "Validate Meeting handoff from an EventKit-backed supported meeting URL on a real iPhone"
+      "type": "production_handoff",
+      "action": "Complete the already-approved production host connection so Project Health can be deployed and verified"
     }
   ],
-  "source": "user-approved priority order",
-  "updated_at": "2026-09-22"
+  "source": "user-approved priority order and completed device validation",
+  "updated_at": "2026-09-23"
 }
