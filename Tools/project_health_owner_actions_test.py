@@ -45,13 +45,13 @@ metadata = generator.build_metadata(base, plan_path=PLAN, generated_at="2026-09-
 owner_actions = metadata.get("owner_actions") or []
 
 check(
-    "reviewed project plan contributes the four current device-only owner actions",
-    len(owner_actions) == 4
+    "reviewed project plan contributes only the two remaining device-only owner actions",
+    len(owner_actions) == 2
     and {item.get("type") for item in owner_actions} == {"device_validation"}
-    and any("Siri/App Shortcuts" in item.get("action", "") for item in owner_actions)
-    and any("AirPods/Shokz" in item.get("action", "") for item in owner_actions)
     and any("macOS Accessibility" in item.get("action", "") for item in owner_actions)
     and any("Meeting handoff" in item.get("action", "") for item in owner_actions)
+    and not any("Siri/App Shortcuts" in item.get("action", "") for item in owner_actions)
+    and not any("AirPods/Shokz" in item.get("action", "") for item in owner_actions)
     and metadata["evidence"]["owner_actions"] == "version_controlled_plan",
 )
 
@@ -88,9 +88,9 @@ snapshot = project_health.build_project_health(
 )
 
 check(
-    "runtime combines real pending approvals with reviewed device actions without changing approval count",
+    "runtime combines one real pending approval with the two reviewed device actions without changing approval count",
     snapshot["pending_approvals"] == 1
-    and snapshot["owner_actions"] == 5
+    and snapshot["owner_actions"] == 3
     and snapshot["owner_action_items"][0].get("approval_id") == "approval-1"
     and snapshot["owner_action_items"][1:] == owner_actions,
 )
