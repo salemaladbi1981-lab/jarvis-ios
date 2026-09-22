@@ -48,8 +48,12 @@
     </array>
     <key>NSCalendarsUsageDescription</key>
     <string>يحتاج جارفس الوصول إلى التقويم لعرض مواعيدك اليوم عند طلبك.</string>
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>يحتاج جارفس وصولاً كاملاً للتقويم لقراءة اجتماعاتك ومواعيدك عند طلبك فقط.</string>
     <key>NSRemindersUsageDescription</key>
     <string>يحتاج جارفس الوصول إلى التذكيرات لعرض مهامك عند طلبك.</string>
+    <key>NSRemindersFullAccessUsageDescription</key>
+    <string>يحتاج جارفس وصولاً كاملاً للتذكيرات لعرض مهامك وتحديثها بعد موافقتك.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>يحتاج جارفس الميكروفون للمحادثة الصوتية معك.</string>
     <key>NSCameraUsageDescription</key>
