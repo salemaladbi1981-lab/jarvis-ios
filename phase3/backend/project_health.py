@@ -18,6 +18,14 @@ CI_JOB_ENV = {
     "ios": "JARVIS_CI_IOS_STATUS",
     "mac": "JARVIS_CI_MAC_STATUS",
 }
+BUILD_JOB_ENV = {
+    "ios": "JARVIS_IOS_BUILD_STATUS",
+    "mac": "JARVIS_MAC_BUILD_STATUS",
+}
+TEST_STEP_ENV = {
+    "backend_tests": "JARVIS_BACKEND_TEST_STATUS",
+    "mac": "JARVIS_MAC_TEST_STATUS",
+}
 TEST_JOB_NAMES = ("backend_tests", "mac")
 VALID_STATUSES = frozenset({"success", "failure", "unknown"})
 CI_METADATA_FRESHNESS_SECONDS = 24 * 60 * 60
@@ -120,10 +128,13 @@ def _freshness_gated_status(status, freshness_state):
 
 
 def _ci_success_evidence_present(ci):
-    """Return true when CI carries any success claim that needs freshness proof."""
-    if ci.get("status") == "success" or ci.get("tests_status") == "success":
+    """Return true when any CI/build/test success claim needs freshness proof."""
+    if any(ci.get(key) == "success" for key in ("status", "build_status", "tests_status")):
         return True
-    return any(status == "success" for status in (ci.get("jobs") or {}).values())
+    for key in ("jobs", "build_jobs", "test_jobs"):
+        if any(status == "success" for status in (ci.get(key) or {}).values()):
+            return True
+    return False
 
 
 def _ci_run_identity_present(ci):
@@ -131,15 +142,15 @@ def _ci_run_identity_present(ci):
     return bool(ci.get("run_id") and ci.get("run_url"))
 
 
-def _evidence_gated_status(status, freshness_state, ci, required_jobs):
-    """Fail closed when aggregate success disagrees with required CI evidence.
+def _evidence_gated_status(status, freshness_state, ci, required_jobs, job_statuses=None):
+    """Fail closed when aggregate success disagrees with its required evidence.
 
-    Freshness alone is not sufficient proof of a green build: a successful
-    aggregate must have an inspectable run identity and every required job must
-    itself be successful. Any explicit required-job failure remains visible even
-    if a corrupt/incomplete aggregate claims success or unknown.
+    Freshness alone is not sufficient proof of green: a successful aggregate
+    needs an inspectable run identity and every required job/step must itself be
+    successful. Explicit required failures remain visible even when an aggregate
+    is corrupt, stale, incomplete, or unknown.
     """
-    jobs = ci.get("jobs") or {}
+    jobs = (ci.get("jobs") or {}) if job_statuses is None else (job_statuses or {})
     required = [jobs.get(name, "unknown") for name in required_jobs]
     if any(job_status == "failure" for job_status in required):
         return "failure"
@@ -156,8 +167,11 @@ def _evidence_gated_status(status, freshness_state, ci, required_jobs):
 
 def _ci_snapshot(env):
     jobs = {name: _status(env, key) for name, key in CI_JOB_ENV.items()}
+    build_jobs = {name: _status(env, key) for name, key in BUILD_JOB_ENV.items()}
+    test_jobs = {name: _status(env, key) for name, key in TEST_STEP_ENV.items()}
     return {
         "status": _status(env, "JARVIS_CI_STATUS"),
+        "build_status": _status(env, "JARVIS_BUILD_STATUS"),
         "tests_status": _status(env, "JARVIS_TESTS_STATUS"),
         "run_id": _text(env, "JARVIS_CI_RUN_ID"),
         "run_number": _text(env, "JARVIS_CI_RUN_NUMBER"),
@@ -165,6 +179,10 @@ def _ci_snapshot(env):
         "branch": _text(env, "JARVIS_CI_BRANCH"),
         "metadata_generated_at": _text(env, "JARVIS_CI_METADATA_GENERATED_AT"),
         "jobs": jobs,
+        "build_jobs": build_jobs,
+        "test_jobs": test_jobs,
+        "has_build_job_evidence": any(_text(env, key) for key in BUILD_JOB_ENV.values()),
+        "has_test_job_evidence": any(_text(env, key) for key in TEST_STEP_ENV.values()),
     }
 
 
@@ -349,8 +367,12 @@ def build_project_health(
     effective_ci_status = _evidence_gated_status(
         ci["status"], freshness["state"], ci, tuple(CI_JOB_ENV)
     )
+    effective_build_status = _evidence_gated_status(
+        ci["build_status"], freshness["state"], ci, tuple(BUILD_JOB_ENV), ci["build_jobs"]
+    )
+    test_evidence_jobs = ci["test_jobs"] if ci["has_test_job_evidence"] else ci["jobs"]
     effective_tests_status = _evidence_gated_status(
-        ci["tests_status"], freshness["state"], ci, TEST_JOB_NAMES
+        ci["tests_status"], freshness["state"], ci, TEST_JOB_NAMES, test_evidence_jobs
     )
     failed_ci_jobs = []
     for job, status in ci["jobs"].items():
@@ -391,11 +413,12 @@ def build_project_health(
             blocker["run_url"] = ci["run_url"]
         blocker_items.append(blocker)
 
-    # Even fresh metadata cannot be called green when its aggregate success is
-    # missing run identity or required-job success. Surface the inconsistency as
-    # one owner-safe blocker; explicit job failures already have their own blocker.
+    # Even fresh metadata cannot be called green when an aggregate success lacks
+    # run identity or its exact required job/step evidence. A post-build screenshot
+    # failure may make CI red while build/tests remain independently truthful.
     if freshness["state"] == "fresh" and not failed_ci_jobs and (
         (ci["status"] == "success" and effective_ci_status != "success")
+        or (ci["build_status"] == "success" and effective_build_status != "success")
         or (ci["tests_status"] == "success" and effective_tests_status != "success")
     ):
         blocker_items.append({"type": "ci_evidence", "state": "incomplete"})
@@ -427,6 +450,7 @@ def build_project_health(
         "build_sha": build_sha,
         # Display-facing statuses are freshness/evidence-gated. Raw reported values
         # remain available in the nested `ci` object for diagnostics inspection.
+        "build_status": effective_build_status,
         "ci_status": effective_ci_status,
         "tests_status": effective_tests_status,
         "ci_run_id": ci["run_id"],
@@ -437,6 +461,8 @@ def build_project_health(
         "ci_metadata_state": freshness["state"],
         "ci_metadata_age_seconds": freshness["age_seconds"],
         "ci_jobs": ci["jobs"],
+        "build_jobs": ci["build_jobs"],
+        "test_jobs": ci["test_jobs"],
         "ci": ci,
         "provider": provider,
         "kill_switch": bool(kill_switch_engaged),

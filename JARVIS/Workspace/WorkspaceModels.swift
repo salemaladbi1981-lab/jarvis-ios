@@ -210,6 +210,7 @@ struct ProjectHealth: Codable {
     let currentMilestone: String?
     let nextMilestone: String?
     let buildSha: String?
+    let buildStatus: String?
     let ciStatus: String?
     let testsStatus: String?
     let ciRunId: String?
@@ -220,6 +221,8 @@ struct ProjectHealth: Codable {
     let ciMetadataState: String?
     let ciMetadataAgeSeconds: Int?
     let ciJobs: [String: String]?
+    let buildJobs: [String: String]?
+    let testJobs: [String: String]?
     let provider: String?
     let killSwitch: Bool?
     let workspaceId: String?
@@ -237,6 +240,20 @@ struct ProjectHealth: Codable {
 
     var failedCIJobs: [String] {
         (ciJobs ?? [:])
+            .filter { $0.value.lowercased() == "failure" }
+            .map(\.key)
+            .sorted()
+    }
+
+    var failedBuildJobs: [String] {
+        (buildJobs ?? [:])
+            .filter { $0.value.lowercased() == "failure" }
+            .map(\.key)
+            .sorted()
+    }
+
+    var failedTestJobs: [String] {
+        (testJobs ?? [:])
             .filter { $0.value.lowercased() == "failure" }
             .map(\.key)
             .sorted()
@@ -264,10 +281,27 @@ struct ProjectHealth: Codable {
         }
     }
 
+    var buildStatusDisplay: String {
+        switch (buildStatus ?? "unknown").lowercased() {
+        case "success", "passed", "green": return "البناء ناجح"
+        case "failed", "failure", "red":
+            if let failedJob = failedBuildJobs.first {
+                return "البناء فاشل • \(failedJob)"
+            }
+            return "البناء فاشل"
+        case "running", "in_progress": return "البناء يعمل"
+        default: return "حالة البناء غير متاحة"
+        }
+    }
+
     var testsDisplay: String {
         switch (testsStatus ?? "unknown").lowercased() {
         case "success", "passed", "green": return "الاختبارات ناجحة"
-        case "failed", "failure", "red": return "الاختبارات فاشلة"
+        case "failed", "failure", "red":
+            if let failedJob = failedTestJobs.first {
+                return "الاختبارات فاشلة • \(failedJob)"
+            }
+            return "الاختبارات فاشلة"
         case "running", "in_progress": return "الاختبارات تعمل"
         default: return "حالة الاختبارات غير متاحة"
         }
@@ -293,6 +327,7 @@ extension ProjectHealth {
             currentMilestone: nil,
             nextMilestone: nil,
             buildSha: nil,
+            buildStatus: "unknown",
             ciStatus: "unknown",
             testsStatus: "unknown",
             ciRunId: nil,
@@ -303,6 +338,8 @@ extension ProjectHealth {
             ciMetadataState: "unknown",
             ciMetadataAgeSeconds: nil,
             ciJobs: nil,
+            buildJobs: nil,
+            testJobs: nil,
             provider: health.provider,
             killSwitch: nil,
             workspaceId: nil,

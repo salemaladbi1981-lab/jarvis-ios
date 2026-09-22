@@ -27,6 +27,18 @@ check(
 )
 
 check(
+    "client decodes exact build and test step truth separately from whole-job CI",
+    all(token in MODELS for token in (
+        "let buildStatus: String?",
+        "let buildJobs: [String: String]?",
+        "let testJobs: [String: String]?",
+        "var failedBuildJobs: [String]",
+        "var failedTestJobs: [String]",
+        "var buildStatusDisplay: String",
+    )),
+)
+
+check(
     "client decodes task states, sanitized blockers, owner actions, and evidence",
     all(token in MODELS for token in (
         "let taskStates: [String: Int]?",
@@ -84,18 +96,24 @@ check(
 )
 
 check(
+    "build and test display labels can name exact failing steps",
+    'return "البناء فاشل • \\(failedJob)"' in MODELS
+    and 'return "الاختبارات فاشلة • \\(failedJob)"' in MODELS,
+)
+
+check(
     "production home still fetches authenticated project health instead of mock health",
     'api.getObject("project/health")' in HOME
     and "MockProjectHealth" not in HOME
     and "projectHealthCard(health)" in HOME,
 )
 
-
 check(
     "client uses honest legacy /health fallback when /project/health is unavailable",
     'LegacyRuntimeHealth' in MODELS
     and 'static func legacyRuntime' in MODELS
     and 'legacy_backend_fallback' in MODELS
+    and 'buildStatus: "unknown"' in MODELS
     and 'nsError.domain == "JarvisAPI", nsError.code == 404' in HOME
     and 'api.getObject("health")' in HOME
     and 'projectHealth = .legacyRuntime(legacy)' in HOME,
