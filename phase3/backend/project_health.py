@@ -90,6 +90,28 @@ def _ci_metadata_freshness(generated_at, now=None):
     return {"state": state, "age_seconds": age_seconds}
 
 
+def _freshness_gated_status(status, freshness_state):
+    """Never advertise green evidence unless its CI metadata is current.
+
+    Failures stay visible even when metadata freshness is unavailable because
+    suppressing a warning would be less safe. Success is downgraded to unknown
+    unless the artifact has a valid, fresh timestamp.
+    """
+    normalized = str(status or "unknown").strip().lower()
+    if normalized == "failure":
+        return "failure"
+    if freshness_state == "fresh" and normalized in VALID_STATUSES:
+        return normalized
+    return "unknown"
+
+
+def _ci_success_evidence_present(ci):
+    """Return true when CI carries any success claim that needs freshness proof."""
+    if ci.get("status") == "success" or ci.get("tests_status") == "success":
+        return True
+    return any(status == "success" for status in (ci.get("jobs") or {}).values())
+
+
 def _ci_snapshot(env):
     jobs = {name: _status(env, key) for name, key in CI_JOB_ENV.items()}
     return {
@@ -192,6 +214,8 @@ def build_project_health(
 
     ci = _ci_snapshot(env)
     freshness = _ci_metadata_freshness(ci["metadata_generated_at"], now=now)
+    effective_ci_status = _freshness_gated_status(ci["status"], freshness["state"])
+    effective_tests_status = _freshness_gated_status(ci["tests_status"], freshness["state"])
     failed_ci_jobs = []
     for job, status in ci["jobs"].items():
         if status == "failure":
@@ -212,6 +236,8 @@ def build_project_health(
     # staleness as an explicit owner-safe blocker instead of silently presenting
     # old CI as if it were current. A present-but-unparseable or materially-future
     # timestamp is also evidence corruption/skew and must be visible to the owner.
+    # Missing freshness proof is likewise a blocker whenever the artifact makes
+    # any success claim; otherwise old metadata could still look green to clients.
     if freshness["state"] == "stale":
         blocker = {
             "type": "ci_metadata",
@@ -221,7 +247,9 @@ def build_project_health(
         if ci["run_url"]:
             blocker["run_url"] = ci["run_url"]
         blocker_items.append(blocker)
-    elif ci["metadata_generated_at"] and freshness["state"] == "unknown":
+    elif freshness["state"] == "unknown" and (
+        ci["metadata_generated_at"] or _ci_success_evidence_present(ci)
+    ):
         blocker = {"type": "ci_metadata", "state": "unknown"}
         if ci["run_url"]:
             blocker["run_url"] = ci["run_url"]
@@ -244,8 +272,10 @@ def build_project_health(
         "current_milestone": current_milestone,
         "next_milestone": next_milestone,
         "build_sha": build_sha,
-        "ci_status": ci["status"],
-        "tests_status": ci["tests_status"],
+        # Display-facing statuses are freshness-gated. Raw reported values remain
+        # available in the nested `ci` object for diagnostics/evidence inspection.
+        "ci_status": effective_ci_status,
+        "tests_status": effective_tests_status,
         "ci_run_id": ci["run_id"],
         "ci_run_number": ci["run_number"],
         "ci_run_url": ci["run_url"],
