@@ -167,6 +167,12 @@ jobs:
             --env-output project-health.env
           cat project-health-ci.json
 
+      - name: Verify Project Health runtime handoff
+        run: |
+          python3 Tools/project_health_current_ci_smoke.py \
+            project-health.env \
+            project-health-ci.json
+
       - uses: actions/upload-artifact@v4
         with:
           name: project-health-metadata

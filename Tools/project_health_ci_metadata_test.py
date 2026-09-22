@@ -7,6 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = ROOT / "Tools" / "project_health_ci_metadata.py"
+SMOKE = ROOT / "Tools" / "project_health_current_ci_smoke.py"
 WORKFLOW = ROOT / ".github" / "workflows" / "ios-build.yml"
 PLAN = ROOT / "docs" / "PROJECT-HEALTH-PLAN.json"
 PASS = FAIL = 0
@@ -25,6 +26,7 @@ spec = importlib.util.spec_from_file_location("project_health_ci_metadata", SCRI
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 workflow = WORKFLOW.read_text(encoding="utf-8")
+smoke = SMOKE.read_text(encoding="utf-8")
 plan = json.loads(PLAN.read_text(encoding="utf-8"))
 
 base = {
@@ -94,7 +96,23 @@ failed_ios = dict(base)
 failed_ios["JARVIS_IOS_RESULT"] = "failure"
 failed_meta = module.build_metadata(failed_ios, plan_path=PLAN, generated_at="2026-09-21T13:10:00Z")
 check("iOS failure makes CI red without falsely failing backend/mac tests",
-      failed_meta["ci_status"] == "failure" and failed_meta["tests_status"] == "success")
+      failed_meta["ci_status"] == "failure" and
+      failed_meta["jobs"]["ios"] == "failure" and
+      failed_meta["tests_status"] == "success")
+
+cancelled_ios = dict(base)
+cancelled_ios["JARVIS_IOS_RESULT"] = "cancelled"
+cancelled_meta = module.build_metadata(cancelled_ios, plan_path=PLAN, generated_at="2026-09-21T13:10:00Z")
+check("GitHub cancellation normalizes to the runtime failure status contract",
+      cancelled_meta["ci_status"] == "failure" and
+      cancelled_meta["jobs"]["ios"] == "failure")
+
+unknown_ios = dict(base)
+unknown_ios["JARVIS_IOS_RESULT"] = "skipped"
+unknown_meta = module.build_metadata(unknown_ios, plan_path=PLAN, generated_at="2026-09-21T13:10:00Z")
+check("unsupported GitHub job states fail closed to unknown",
+      unknown_meta["ci_status"] == "unknown" and
+      unknown_meta["jobs"]["ios"] == "unknown")
 
 failed_tests = dict(base)
 failed_tests["JARVIS_BACKEND_TEST_RESULT"] = "failure"
@@ -153,6 +171,18 @@ check("workflow still permits repository-variable overrides",
       "vars.JARVIS_CURRENT_PHASE" in workflow and
       "vars.JARVIS_CURRENT_MILESTONE" in workflow and
       "vars.JARVIS_NEXT_MILESTONE" in workflow)
+
+check("actual-current-CI smoke uses the production loader and snapshot assembler",
+      "load_health_metadata" in smoke and
+      "build_project_health" in smoke and
+      "GITHUB_RUN_ID" in smoke and
+      "ci_metadata_state" in smoke)
+
+check("workflow verifies generated metadata through runtime code before upload",
+      "Verify Project Health runtime handoff" in workflow and
+      "python3 Tools/project_health_current_ci_smoke.py" in workflow and
+      "project-health.env" in workflow and
+      "project-health-ci.json" in workflow)
 
 check("workflow publishes a secret-free deployment handoff artifact",
       "name: project-health-metadata" in workflow and

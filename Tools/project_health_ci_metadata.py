@@ -17,14 +17,20 @@ def _value(env, key, default="unknown"):
 
 
 def _result(env, key):
-    return _value(env, key).lower()
+    """Normalize GitHub job results to the runtime Project Health status contract."""
+    value = _value(env, key).lower()
+    if value == "success":
+        return "success"
+    if value in _FAILURE_RESULTS:
+        return "failure"
+    return "unknown"
 
 
 def _aggregate(results):
     values = list(results)
     if values and all(value == "success" for value in values):
         return "success"
-    if any(value in _FAILURE_RESULTS for value in values):
+    if any(value == "failure" for value in values):
         return "failure"
     return "unknown"
 
