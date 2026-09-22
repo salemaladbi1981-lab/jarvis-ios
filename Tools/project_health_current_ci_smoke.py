@@ -71,11 +71,24 @@ def main():
     )
 
     jobs = metadata.get("jobs") or {}
+    build_jobs = metadata.get("build_jobs") or {}
+    test_jobs = metadata.get("test_jobs") or {}
     check(
-        "runtime snapshot preserves generated CI and test results",
+        "runtime snapshot preserves generated CI, build, and test results independently",
         snapshot["ci_status"] == metadata.get("ci_status")
+        and snapshot["build_status"] == metadata.get("build_status")
         and snapshot["tests_status"] == metadata.get("tests_status")
-        and snapshot["ci_jobs"] == jobs,
+        and snapshot["ci_jobs"] == jobs
+        and snapshot["build_jobs"] == build_jobs
+        and snapshot["test_jobs"] == test_jobs,
+    )
+
+    check(
+        "exact build/test step maps are complete for the current workflow",
+        set(build_jobs) == {"ios", "mac"}
+        and set(test_jobs) == {"backend_tests", "mac"}
+        and all(value in {"success", "failure", "unknown"} for value in build_jobs.values())
+        and all(value in {"success", "failure", "unknown"} for value in test_jobs.values()),
     )
 
     check(
@@ -89,7 +102,7 @@ def main():
 
     expected_owner_actions = metadata.get("owner_actions") or []
     check(
-        "runtime snapshot carries reviewed device-only owner actions without inventing approvals",
+        "runtime snapshot carries reviewed owner actions without inventing approvals",
         snapshot["pending_approvals"] == 0
         and snapshot["owner_actions"] == len(expected_owner_actions)
         and snapshot["owner_action_items"] == expected_owner_actions
