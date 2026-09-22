@@ -393,6 +393,46 @@ struct HomeEntryView: View {
                 healthPill(health.testsDisplay)
             }
 
+            if let blockers = health.blockerItems, !blockers.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("المعطلات الفعلية")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(JarvisColor.text_secondary)
+                    ForEach(blockers.prefix(3)) { blocker in
+                        Label(projectHealthBlockerText(blocker), systemImage: "exclamationmark.triangle.fill")
+                            .font(.system(size: 11))
+                            .foregroundColor(JarvisColor.danger)
+                            .lineLimit(2)
+                    }
+                    if blockers.count > 3 {
+                        Text("+\(blockers.count - 3) معطلات أخرى")
+                            .font(.system(size: 10))
+                            .foregroundColor(JarvisColor.text_muted)
+                    }
+                }
+                .padding(.top, 2)
+            }
+
+            if let actions = health.ownerActionItems, !actions.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("يتطلب تدخلك")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(JarvisColor.text_secondary)
+                    ForEach(actions.prefix(3)) { action in
+                        Label(projectHealthOwnerActionText(action), systemImage: "checkmark.shield.fill")
+                            .font(.system(size: 11))
+                            .foregroundColor(JarvisColor.highlight_gold)
+                            .lineLimit(2)
+                    }
+                    if actions.count > 3 {
+                        Text("+\(actions.count - 3) إجراءات أخرى")
+                            .font(.system(size: 10))
+                            .foregroundColor(JarvisColor.text_muted)
+                    }
+                }
+                .padding(.top, 2)
+            }
+
             if health.killSwitch == true {
                 Label("Kill switch مفعّل", systemImage: "exclamationmark.octagon.fill")
                     .font(.system(size: 12, weight: .semibold))
@@ -408,6 +448,38 @@ struct HomeEntryView: View {
             RoundedRectangle(cornerRadius: 16)
                 .stroke(JarvisColor.highlight_blue.opacity(0.16), lineWidth: 1)
         )
+    }
+
+    private func projectHealthBlockerText(_ blocker: ProjectHealthBlocker) -> String {
+        let task = blocker.taskId.map { " • مهمة \(String($0.prefix(8)))" } ?? ""
+        switch blocker.type {
+        case "task_failure":
+            return "فشل مهمة\(task) • \(blocker.state ?? "FAILED")"
+        case "ci_job":
+            return "CI: \(blocker.job ?? "job") • \(blocker.status ?? "failure")"
+        case "ci_metadata":
+            return blocker.state == "stale" ? "بيانات CI قديمة" : "بيانات CI غير موثوقة"
+        case "ci_evidence":
+            return "أدلة CI غير مكتملة"
+        case "kill_switch":
+            return "Kill switch مفعّل"
+        case "task_evidence":
+            return "أدلة المهمة غير مكتملة\(task) • \(blocker.state ?? "unknown")"
+        default:
+            return "\(blocker.type ?? "معطل غير مصنف")\(task)"
+        }
+    }
+
+    private func projectHealthOwnerActionText(_ item: ProjectHealthOwnerAction) -> String {
+        let task = item.taskId.map { " • مهمة \(String($0.prefix(8)))" } ?? ""
+        if let action = item.action, !action.isEmpty {
+            return item.type == "approval" ? "موافقة: \(action)\(task)" : "\(action)\(task)"
+        }
+        if item.type == "approval" {
+            let agent = item.agent.map { " • \($0)" } ?? ""
+            return "موافقة مطلوبة\(agent)\(task)"
+        }
+        return "إجراء مطلوب\(task)"
     }
 
     private func projectHealthUnavailableCard(_ error: String) -> some View {
