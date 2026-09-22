@@ -17,6 +17,7 @@ CI_JOB_ENV = {
     "ios": "JARVIS_CI_IOS_STATUS",
     "mac": "JARVIS_CI_MAC_STATUS",
 }
+TEST_JOB_NAMES = ("backend_tests", "mac")
 VALID_STATUSES = frozenset({"success", "failure", "unknown"})
 CI_METADATA_FRESHNESS_SECONDS = 24 * 60 * 60
 CI_METADATA_FUTURE_SKEW_SECONDS = 5 * 60
@@ -110,6 +111,34 @@ def _ci_success_evidence_present(ci):
     if ci.get("status") == "success" or ci.get("tests_status") == "success":
         return True
     return any(status == "success" for status in (ci.get("jobs") or {}).values())
+
+
+def _ci_run_identity_present(ci):
+    """A green CI claim must be tied to an inspectable GitHub Actions run."""
+    return bool(ci.get("run_id") and ci.get("run_url"))
+
+
+def _evidence_gated_status(status, freshness_state, ci, required_jobs):
+    """Fail closed when aggregate success disagrees with required CI evidence.
+
+    Freshness alone is not sufficient proof of a green build: a successful
+    aggregate must have an inspectable run identity and every required job must
+    itself be successful. Any explicit required-job failure remains visible even
+    if a corrupt/incomplete aggregate claims success or unknown.
+    """
+    jobs = ci.get("jobs") or {}
+    required = [jobs.get(name, "unknown") for name in required_jobs]
+    if any(job_status == "failure" for job_status in required):
+        return "failure"
+
+    gated = _freshness_gated_status(status, freshness_state)
+    if gated != "success":
+        return gated
+    if not _ci_run_identity_present(ci):
+        return "unknown"
+    if not required or not all(job_status == "success" for job_status in required):
+        return "unknown"
+    return "success"
 
 
 def _ci_snapshot(env):
@@ -214,8 +243,12 @@ def build_project_health(
 
     ci = _ci_snapshot(env)
     freshness = _ci_metadata_freshness(ci["metadata_generated_at"], now=now)
-    effective_ci_status = _freshness_gated_status(ci["status"], freshness["state"])
-    effective_tests_status = _freshness_gated_status(ci["tests_status"], freshness["state"])
+    effective_ci_status = _evidence_gated_status(
+        ci["status"], freshness["state"], ci, tuple(CI_JOB_ENV)
+    )
+    effective_tests_status = _evidence_gated_status(
+        ci["tests_status"], freshness["state"], ci, TEST_JOB_NAMES
+    )
     failed_ci_jobs = []
     for job, status in ci["jobs"].items():
         if status == "failure":
@@ -255,6 +288,15 @@ def build_project_health(
             blocker["run_url"] = ci["run_url"]
         blocker_items.append(blocker)
 
+    # Even fresh metadata cannot be called green when its aggregate success is
+    # missing run identity or required-job success. Surface the inconsistency as
+    # one owner-safe blocker; explicit job failures already have their own blocker.
+    if freshness["state"] == "fresh" and not failed_ci_jobs and (
+        (ci["status"] == "success" and effective_ci_status != "success")
+        or (ci["tests_status"] == "success" and effective_tests_status != "success")
+    ):
+        blocker_items.append({"type": "ci_evidence", "state": "incomplete"})
+
     if kill_switch_engaged:
         blocker_items.append({"type": "kill_switch", "state": "engaged"})
 
@@ -272,8 +314,8 @@ def build_project_health(
         "current_milestone": current_milestone,
         "next_milestone": next_milestone,
         "build_sha": build_sha,
-        # Display-facing statuses are freshness-gated. Raw reported values remain
-        # available in the nested `ci` object for diagnostics/evidence inspection.
+        # Display-facing statuses are freshness/evidence-gated. Raw reported values
+        # remain available in the nested `ci` object for diagnostics inspection.
         "ci_status": effective_ci_status,
         "tests_status": effective_tests_status,
         "ci_run_id": ci["run_id"],
