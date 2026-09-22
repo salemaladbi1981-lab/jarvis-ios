@@ -1,7 +1,7 @@
 {
   "schema_version": 3,
   "phase": "device-validation",
-  "current_milestone": "Device-only validation & final stabilization — Siri lock-screen, AirPods/Shokz, Mac permissions",
+  "current_milestone": "Device-only validation & final stabilization — Siri lock-screen, AirPods/Shokz, Mac permissions, Meeting handoff",
   "next_milestone": "Release readiness — merge/TestFlight only with explicit user approval",
   "owner_actions": [
     {
@@ -15,6 +15,10 @@
     {
       "type": "device_validation",
       "action": "Validate macOS Accessibility and Automation permission behavior on the signed local build"
+    },
+    {
+      "type": "device_validation",
+      "action": "Validate Meeting handoff from an EventKit-backed supported meeting URL on a real iPhone"
     }
   ],
   "source": "user-approved priority order",
