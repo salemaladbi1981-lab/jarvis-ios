@@ -27,10 +27,20 @@ _MAX_OWNER_ACTIONS = 20
 _MAX_OWNER_ACTION_FIELD_LENGTH = 240
 _MAX_OWNER_EXPIRY_ABS = 10 ** 20
 _MAX_TASK_STATE_LENGTH = 64
+_MAX_RUNTIME_FIELD_LENGTH = 240
+_MAX_BUILD_SHA_LENGTH = 64
 
 
 def _text(env, key, default=""):
     return str(env.get(key, default) or default).strip()
+
+
+def _bounded_runtime_text(value, default="", max_length=_MAX_RUNTIME_FIELD_LENGTH):
+    """Return a single bounded runtime evidence line, failing closed when malformed."""
+    value = str(value or "").strip()
+    if not value or "\n" in value or "\r" in value or len(value) > max_length:
+        return default
+    return value
 
 
 def _status(env, key):
@@ -396,10 +406,18 @@ def build_project_health(
     approval_action_items = _owner_action_items(pending_approvals)
     planned_action_items = _planned_owner_action_items(env)
     owner_action_items = approval_action_items + planned_action_items
-    phase = _text(env, "JARVIS_CURRENT_PHASE", "unknown")
-    current_milestone = _text(env, "JARVIS_CURRENT_MILESTONE", "unknown")
-    next_milestone = _text(env, "JARVIS_NEXT_MILESTONE", "unknown")
-    build_sha = _text(env, "JARVIS_BUILD_SHA")
+    phase = _bounded_runtime_text(
+        _text(env, "JARVIS_CURRENT_PHASE", "unknown"), default="unknown"
+    )
+    current_milestone = _bounded_runtime_text(
+        _text(env, "JARVIS_CURRENT_MILESTONE", "unknown"), default="unknown"
+    )
+    next_milestone = _bounded_runtime_text(
+        _text(env, "JARVIS_NEXT_MILESTONE", "unknown"), default="unknown"
+    )
+    build_sha = _bounded_runtime_text(
+        _text(env, "JARVIS_BUILD_SHA"), max_length=_MAX_BUILD_SHA_LENGTH
+    )
 
     return {
         "ok": True,
