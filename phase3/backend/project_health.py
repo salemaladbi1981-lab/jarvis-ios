@@ -383,6 +383,19 @@ def build_project_health(
                 blocker["run_url"] = ci["run_url"]
             blocker_items.append(blocker)
 
+    # Exact build/test step evidence can be red even when the containing GitHub
+    # job result is absent or contradictory (for example, a partially copied
+    # handoff artifact). Surface that failure as a real blocker instead of
+    # returning a red aggregate with blocker count zero. When the containing
+    # CI job is already red, the ci_job blocker remains the single canonical
+    # blocker so one underlying failure is not double-counted.
+    for job, status in ci["build_jobs"].items():
+        if status == "failure" and ci["jobs"].get(job) != "failure":
+            blocker_items.append({"type": "build_step", "job": job, "status": status})
+    for job, status in ci["test_jobs"].items():
+        if status == "failure" and ci["jobs"].get(job) != "failure":
+            blocker_items.append({"type": "test_step", "job": job, "status": status})
+
     # Preserve an overall failure even if older metadata lacks per-job results.
     if ci["status"] == "failure" and not failed_ci_jobs:
         blocker = {"type": "ci", "status": "failure"}
