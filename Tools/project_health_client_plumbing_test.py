@@ -90,6 +90,17 @@ check(
     and "projectHealthCard(health)" in HOME,
 )
 
+
+check(
+    "client uses honest legacy /health fallback when /project/health is unavailable",
+    'LegacyRuntimeHealth' in MODELS
+    and 'static func legacyRuntime' in MODELS
+    and 'legacy_backend_fallback' in MODELS
+    and 'nsError.domain == "JarvisAPI", nsError.code == 404' in HOME
+    and 'api.getObject("health")' in HOME
+    and 'projectHealth = .legacyRuntime(legacy)' in HOME,
+)
+
 failed = [name for name, ok in checks if not ok]
 print(f"\n== RESULT: {len(checks) - len(failed)} PASS / {len(failed)} FAIL ==")
 if failed:
