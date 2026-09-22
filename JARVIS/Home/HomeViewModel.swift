@@ -311,8 +311,7 @@ final class HomeViewModel: ObservableObject {
     /// App Intent / App Shortcut (استدعاء من قفل الشاشة): يبدأ الصوت إن كانت هناك علامة معلّقة.
     func handleAppIntentStart() {
         #if os(iOS)
-        guard AppBridge.pendingStartVoice else { return }
-        AppBridge.pendingStartVoice = false
+        guard AppBridge.consumePendingStartVoice() else { return }
         toggleVoice()
         #endif
     }
