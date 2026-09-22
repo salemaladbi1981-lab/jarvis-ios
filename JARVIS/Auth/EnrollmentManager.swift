@@ -16,6 +16,14 @@ final class EnrollmentManager: ObservableObject {
         self.baseURL = baseURL
         self.sessionToken = KeychainStore.load()
         self.isEnrolled = sessionToken != nil
+        #if os(iOS)
+        // A Siri/App Shortcut voice request must never survive an unauthenticated
+        // app launch. If there is no enrolled session, discard any short-lived
+        // handoff before the pairing UI can transition into the authenticated app.
+        if sessionToken == nil {
+            AppBridge.pendingStartVoice = false
+        }
+        #endif
         if let t = sessionToken {
             wire(t)
         }
@@ -40,6 +48,11 @@ final class EnrollmentManager: ObservableObject {
                 return false
             }
             KeychainStore.save(token)
+            #if os(iOS)
+            // Pairing is an authentication boundary. Never carry a voice request
+            // that was armed before enrollment into the newly authenticated UI.
+            AppBridge.pendingStartVoice = false
+            #endif
             sessionToken = token
             isEnrolled = true
             wire(token)
