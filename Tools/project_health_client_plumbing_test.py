@@ -13,13 +13,15 @@ def check(name, condition):
     print(("  PASS  " if condition else "  FAIL  ") + name)
 
 check(
-    "client decodes detailed CI identity and per-job status",
+    "client decodes detailed CI identity, freshness, and per-job status",
     all(token in MODELS for token in (
         "let ciRunId: String?",
         "let ciRunNumber: String?",
         "let ciRunUrl: String?",
         "let ciBranch: String?",
         "let ciMetadataGeneratedAt: String?",
+        "let ciMetadataState: String?",
+        "let ciMetadataAgeSeconds: Int?",
         "let ciJobs: [String: String]?",
     )),
 )
@@ -55,6 +57,14 @@ check(
     "ciRunNumber" in MODELS
     and "failedCIJobs" in MODELS
     and 'return "CI فاشل\\(run) • \\(failedJob)"' in MODELS,
+)
+
+check(
+    "CI display refuses to present stale or invalid-timestamp metadata as green",
+    'metadataState == "stale"' in MODELS
+    and 'return "CI قديم\\(run)"' in MODELS
+    and 'metadataState == "unknown", ciMetadataGeneratedAt?.isEmpty == false' in MODELS
+    and 'return "CI غير موثوق\\(run)"' in MODELS,
 )
 
 check(

@@ -212,6 +212,8 @@ struct ProjectHealth: Codable {
     let ciRunUrl: String?
     let ciBranch: String?
     let ciMetadataGeneratedAt: String?
+    let ciMetadataState: String?
+    let ciMetadataAgeSeconds: Int?
     let ciJobs: [String: String]?
     let provider: String?
     let killSwitch: Bool?
@@ -237,6 +239,13 @@ struct ProjectHealth: Codable {
 
     var ciDisplay: String {
         let run = (ciRunNumber?.isEmpty == false) ? " #\(ciRunNumber!)" : ""
+        let metadataState = (ciMetadataState ?? "unknown").lowercased()
+        if metadataState == "stale" {
+            return "CI قديم\(run)"
+        }
+        if metadataState == "unknown", ciMetadataGeneratedAt?.isEmpty == false {
+            return "CI غير موثوق\(run)"
+        }
         switch (ciStatus ?? "unknown").lowercased() {
         case "success", "passed", "green": return "CI أخضر\(run)"
         case "failed", "failure", "red":
