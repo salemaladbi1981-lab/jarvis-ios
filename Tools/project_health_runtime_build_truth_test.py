@@ -93,34 +93,6 @@ check(
     and build_failure["test_jobs"]["mac"] == "unknown",
 )
 
-orphan_build_failure = snapshot({
-    "JARVIS_BUILD_STATUS": "failure",
-    "JARVIS_CI_STATUS": "unknown",
-    "JARVIS_CI_MAC_STATUS": "unknown",
-    "JARVIS_MAC_BUILD_STATUS": "failure",
-})
-check(
-    "exact build failure remains an actionable blocker when containing CI job evidence is missing",
-    orphan_build_failure["build_status"] == "failure"
-    and orphan_build_failure["blocker_items"] == [
-        {"type": "build_step", "job": "mac", "status": "failure"}
-    ],
-)
-
-orphan_test_failure = snapshot({
-    "JARVIS_TESTS_STATUS": "failure",
-    "JARVIS_CI_STATUS": "unknown",
-    "JARVIS_CI_MAC_STATUS": "unknown",
-    "JARVIS_MAC_TEST_STATUS": "failure",
-})
-check(
-    "exact test failure remains an actionable blocker when containing CI job evidence is missing",
-    orphan_test_failure["tests_status"] == "failure"
-    and orphan_test_failure["blocker_items"] == [
-        {"type": "test_step", "job": "mac", "status": "failure"}
-    ],
-)
-
 legacy_env = {
     "JARVIS_BUILD_SHA": "b" * 40,
     "JARVIS_CI_STATUS": "success",

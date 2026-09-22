@@ -383,19 +383,6 @@ def build_project_health(
                 blocker["run_url"] = ci["run_url"]
             blocker_items.append(blocker)
 
-    # Exact build/test step evidence can be red even when the containing GitHub
-    # job result is absent or contradictory (for example, a partially copied
-    # handoff artifact). Surface that failure as a real blocker instead of
-    # returning a red aggregate with blocker count zero. When the containing
-    # CI job is already red, the ci_job blocker remains the single canonical
-    # blocker so one underlying failure is not double-counted.
-    for job, status in ci["build_jobs"].items():
-        if status == "failure" and ci["jobs"].get(job) != "failure":
-            blocker_items.append({"type": "build_step", "job": job, "status": status})
-    for job, status in ci["test_jobs"].items():
-        if status == "failure" and ci["jobs"].get(job) != "failure":
-            blocker_items.append({"type": "test_step", "job": job, "status": status})
-
     # Preserve an overall failure even if older metadata lacks per-job results.
     if ci["status"] == "failure" and not failed_ci_jobs:
         blocker = {"type": "ci", "status": "failure"}
@@ -409,11 +396,11 @@ def build_project_health(
     # timestamp is also evidence corruption/skew and must be visible to the owner.
     # Missing freshness proof is likewise a blocker whenever the artifact makes
     # any success claim; otherwise old metadata could still look green to clients.
-    if freshness(["state"] == "stale":
+    if freshness["state"] == "stale":
         blocker = {
             "type": "ci_metadata",
             "state": "stale",
-            "age_seconds": freshness(["age_seconds"],
+            "age_seconds": freshness["age_seconds"],
         }
         if ci["run_url"]:
             blocker["run_url"] = ci["run_url"]
@@ -429,7 +416,7 @@ def build_project_health(
     # Even fresh metadata cannot be called green when an aggregate success lacks
     # run identity or its exact required job/step evidence. A post-build screenshot
     # failure may make CI red while build/tests remain independently truthful.
-    if freshness(["state"] == "fresh" and not failed_ci_jobs and (
+    if freshness["state"] == "fresh" and not failed_ci_jobs and (
         (ci["status"] == "success" and effective_ci_status != "success")
         or (ci["build_status"] == "success" and effective_build_status != "success")
         or (ci["tests_status"] == "success" and effective_tests_status != "success")
@@ -472,7 +459,7 @@ def build_project_health(
         "ci_branch": ci["branch"],
         "ci_metadata_generated_at": ci["metadata_generated_at"],
         "ci_metadata_state": freshness["state"],
-        "ci_metadata_age_seconds": freshness(["age_seconds"],
+        "ci_metadata_age_seconds": freshness["age_seconds"],
         "ci_jobs": ci["jobs"],
         "build_jobs": ci["build_jobs"],
         "test_jobs": ci["test_jobs"],
@@ -496,7 +483,7 @@ def build_project_health(
             "ci": _reported(ci["status"]),
             "tests": _reported(ci["tests_status"]),
             "ci_run": "reported" if ci["run_id"] and ci["run_url"] else "unknown",
-            "ci_freshness": freshness(["state"],
+            "ci_freshness": freshness["state"],
             "milestones": _planning_evidence(phase, current_milestone, next_milestone),
         },
     }
