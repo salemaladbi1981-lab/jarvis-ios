@@ -107,20 +107,19 @@ struct MacHomeView: View {
             selectedMacOperatorURL = url
             Task { await inspectUserSelectedItem(url) }
         }
-        .confirmationDialog(
+        .alert(
             "السماح لجارفس بإظهار الملف في Finder؟",
             isPresented: $showFinderRevealApproval,
-            titleVisibility: .visible
-        ) {
+            presenting: pendingFinderRevealURL
+        ) { url in
             Button("إظهار في Finder") {
-                guard let url = pendingFinderRevealURL else { return }
                 Task { await revealUserSelectedItem(url) }
             }
             Button("إلغاء", role: .cancel) {
                 pendingFinderRevealURL = nil
             }
-        } message: {
-            Text(pendingFinderRevealURL?.lastPathComponent ?? "")
+        } message: { url in
+            Text(url.lastPathComponent)
         }
         .task {
             await vm.load()
@@ -352,15 +351,16 @@ struct MacHomeView: View {
 /// work, cannot mutate the file, and refuses any execution token that lacks owner approval or
 /// targets a different path. The UI creates it only after the explicit confirmation dialog.
 struct FinderRevealMacOperatorExecutor: MacOperatorExecuting {
-    typealias RevealHandler = @MainActor @Sendable ([URL]) -> Void
+    typealias RevealHandler = @MainActor @Sendable (URL) -> Bool
 
     private let selectedURL: URL
     private let revealHandler: RevealHandler
 
     init(
         selectedURL: URL,
-        revealHandler: @escaping RevealHandler = { urls in
-            NSWorkspace.shared.activateFileViewerSelecting(urls)
+        revealHandler: @escaping RevealHandler = { url in
+            // Official AppKit API: reveal and select the exact user-approved path.
+            NSWorkspace.shared.selectFile(url.path, inFileViewerRootedAtPath: "")
         }
     ) {
         self.selectedURL = selectedURL
@@ -390,7 +390,10 @@ struct FinderRevealMacOperatorExecutor: MacOperatorExecuting {
             return .blocked("finder_reveal_target_missing")
         }
 
-        await revealHandler([selectedURL])
+        let didReveal = await revealHandler(selectedURL)
+        guard didReveal else {
+            return .blocked("finder_reveal_failed")
+        }
         return .completed
     }
 }
