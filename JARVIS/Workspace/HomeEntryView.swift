@@ -621,8 +621,20 @@ final class HomeEntryViewModel: ObservableObject {
             projectHealth = try await health
             projectHealthError = nil
         } catch {
-            projectHealth = nil
-            projectHealthError = "تعذّر تحميل بيانات صحة المشروع: \(error.localizedDescription)"
+            let nsError = error as NSError
+            if nsError.domain == "JarvisAPI", nsError.code == 404 {
+                do {
+                    let legacy: LegacyRuntimeHealth = try await api.getObject("health")
+                    projectHealth = .legacyRuntime(legacy)
+                    projectHealthError = nil
+                } catch {
+                    projectHealth = nil
+                    projectHealthError = "تعذّر تحميل حالة جارفس"
+                }
+            } else {
+                projectHealth = nil
+                projectHealthError = "تعذّر تحميل حالة جارفس"
+            }
         }
     }
 
@@ -631,8 +643,20 @@ final class HomeEntryViewModel: ObservableObject {
             projectHealth = try await api.getObject("project/health")
             projectHealthError = nil
         } catch {
-            projectHealth = nil
-            projectHealthError = "تعذّر تحميل بيانات صحة المشروع: \(error.localizedDescription)"
+            let nsError = error as NSError
+            if nsError.domain == "JarvisAPI", nsError.code == 404 {
+                do {
+                    let legacy: LegacyRuntimeHealth = try await api.getObject("health")
+                    projectHealth = .legacyRuntime(legacy)
+                    projectHealthError = nil
+                } catch {
+                    projectHealth = nil
+                    projectHealthError = "تعذّر تحميل حالة جارفس"
+                }
+            } else {
+                projectHealth = nil
+                projectHealthError = "تعذّر تحميل حالة جارفس"
+            }
         }
     }
 
