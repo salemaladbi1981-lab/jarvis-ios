@@ -1,8 +1,22 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "phase": "device-validation",
   "current_milestone": "Device-only validation & final stabilization — Siri lock-screen, AirPods/Shokz, Mac permissions",
   "next_milestone": "Release readiness — merge/TestFlight only with explicit user approval",
+  "owner_actions": [
+    {
+      "type": "device_validation",
+      "action": "Validate Siri/App Shortcuts from the lock screen on a real iPhone"
+    },
+    {
+      "type": "device_validation",
+      "action": "Validate AirPods/Shokz voice routing and interruption behavior on real devices"
+    },
+    {
+      "type": "device_validation",
+      "action": "Validate macOS Accessibility and Automation permission behavior on the signed local build"
+    }
+  ],
   "source": "user-approved priority order",
   "updated_at": "2026-09-22"
 }
