@@ -126,7 +126,9 @@ enum MeetingHandoffPolicy {
                                now: Date = Date(),
                                userInitiated: Bool) -> URL? {
         guard userInitiated,
-              target == current,
+              target.eventID == current.eventID,
+              target.url == current.url,
+              target.provider == current.provider,
               current.end >= now,
               MeetingLinkPolicy.provider(for: current.url) == current.provider else {
             return nil
