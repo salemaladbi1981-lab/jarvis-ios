@@ -70,6 +70,11 @@ check(
     "runtime loader cross-checks run URL against effective run id",
     "_drop_inconsistent_run_identity(staged, env)" in loader_source,
 )
+check(
+    "runtime loader fail-closes on deployed build or branch identity conflicts",
+    "_matches_explicit_build_identity(staged, env)" in loader_source
+    and 'for key in ("JARVIS_BUILD_SHA", "JARVIS_CI_BRANCH")' in loader_source,
+)
 
 with tempfile.TemporaryDirectory() as td:
     handoff = Path(td) / "project-health.env"
@@ -121,6 +126,34 @@ with tempfile.TemporaryDirectory() as td:
         "explicit deployment environment remains authoritative",
         "|failure|" in explicit_values
         and "|Deployment-owned milestone|" in explicit_values,
+    )
+
+    wrong_build = clean.copy()
+    wrong_build["JARVIS_BUILD_SHA"] = "ffffffffffffffffffffffffffffffffffffffff"
+    wrong_build_values, _ = probe(wrong_build)
+    wrong_build_parts = wrong_build_values.split("|")
+    check(
+        "artifact is rejected as a unit when deployed build SHA disagrees",
+        wrong_build_parts[0] == "ffffffffffffffffffffffffffffffffffffffff"
+        and wrong_build_parts[1] == ""
+        and wrong_build_parts[2] == ""
+        and wrong_build_parts[6] == ""
+        and wrong_build_parts[8] == ""
+        and wrong_build_parts[9] == "",
+    )
+
+    wrong_branch = clean.copy()
+    wrong_branch["JARVIS_CI_BRANCH"] = "main"
+    wrong_branch_values, _ = probe(wrong_branch)
+    wrong_branch_parts = wrong_branch_values.split("|")
+    check(
+        "artifact is rejected as a unit when deployed branch disagrees",
+        wrong_branch_parts[0] == ""
+        and wrong_branch_parts[1] == ""
+        and wrong_branch_parts[2] == ""
+        and wrong_branch_parts[6] == ""
+        and wrong_branch_parts[8] == ""
+        and wrong_branch_parts[9] == "main",
     )
 
     bad = Path(td) / "bad.env"
