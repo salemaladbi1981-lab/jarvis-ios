@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
+import re
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_PLAN_PATH = ROOT / "docs" / "PROJECT-HEALTH-PLAN.json"
@@ -13,6 +14,12 @@ _OWNER_ACTION_FIELDS = ("type", "action", "agent", "task_id")
 _MAX_OWNER_ACTIONS = 20
 _MAX_OWNER_ACTION_FIELD_LENGTH = 240
 _MAX_PLANNING_FIELD_LENGTH = 240
+_MAX_BRANCH_LENGTH = 200
+_MAX_CI_ID_LENGTH = 32
+_MAX_REPOSITORY_LENGTH = 200
+_SHA_RE = re.compile(r"^[0-9a-fA-F]{7,40}$")
+_DIGITS_RE = re.compile(r"^[0-9]+$")
+_REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
 
 def _value(env, key, default="unknown"):
@@ -31,6 +38,33 @@ def _safe_planning_text(value):
     if not text or "\n" in text or "\r" in text or len(text) > _MAX_PLANNING_FIELD_LENGTH:
         return ""
     return text
+
+
+def _safe_single_line(value, *, max_length):
+    """Return bounded single-line CI identity text, failing closed when malformed."""
+    text = str(value or "").strip()
+    if not text or "\n" in text or "\r" in text or len(text) > max_length:
+        return ""
+    return text
+
+
+def _safe_build_sha(value):
+    text = _safe_single_line(value, max_length=40)
+    return text if _SHA_RE.fullmatch(text) else ""
+
+
+def _safe_ci_digits(value):
+    text = _safe_single_line(value, max_length=_MAX_CI_ID_LENGTH)
+    return text if _DIGITS_RE.fullmatch(text) else ""
+
+
+def _safe_branch(value):
+    return _safe_single_line(value, max_length=_MAX_BRANCH_LENGTH)
+
+
+def _safe_repository(value):
+    text = _safe_single_line(value, max_length=_MAX_REPOSITORY_LENGTH)
+    return text if _REPOSITORY_RE.fullmatch(text) else ""
 
 
 def _result(env, key):
@@ -105,12 +139,13 @@ def _planning_value(env, env_key, plan, plan_key):
     return "unknown", "unknown"
 
 
-def _run_url(env):
-    server = _value(env, "GITHUB_SERVER_URL", default="")
-    repository = _value(env, "GITHUB_REPOSITORY", default="")
-    run_id = _value(env, "GITHUB_RUN_ID", default="")
-    if server and repository and run_id:
-        return f"{server.rstrip('/')}/{repository}/actions/runs/{run_id}"
+def _run_url(env, run_id=""):
+    """Build only the canonical public GitHub Actions URL consumed by runtime validation."""
+    server = _safe_single_line(env.get("GITHUB_SERVER_URL", ""), max_length=64)
+    repository = _safe_repository(env.get("GITHUB_REPOSITORY", ""))
+    run_id = _safe_ci_digits(run_id or env.get("GITHUB_RUN_ID", ""))
+    if server == "https://github.com" and repository and run_id:
+        return f"{server}/{repository}/actions/runs/{run_id}"
     return ""
 
 
@@ -122,8 +157,9 @@ def build_metadata(env=None, plan_path=DEFAULT_PLAN_PATH, generated_at=None):
     reviewed version-controlled project plan. Device-only owner actions are
     intentionally sourced only from that reviewed plan so CI cannot invent actions
     that require the owner's physical device. GitHub run/job fields are copied from
-    GitHub-provided environment values; missing values remain empty/unknown rather
-    than being guessed.
+    GitHub-provided environment values only after boundary validation; missing or
+    malformed identity remains empty/unknown rather than being guessed or serialized
+    into the line-oriented runtime handoff.
     """
     env = os.environ if env is None else env
     jobs = {
@@ -132,7 +168,7 @@ def build_metadata(env=None, plan_path=DEFAULT_PLAN_PATH, generated_at=None):
         "mac": _result(env, "JARVIS_MAC_RESULT"),
     }
     tests_status = _aggregate((jobs["backend_tests"], jobs["mac"]))
-    build_sha = _value(env, "GITHUB_SHA", default="")
+    build_sha = _safe_build_sha(env.get("GITHUB_SHA", ""))
     plan = _load_plan(plan_path)
     phase, phase_source = _planning_value(env, "JARVIS_CURRENT_PHASE", plan, "phase")
     current_milestone, current_source = _planning_value(
@@ -153,9 +189,9 @@ def build_metadata(env=None, plan_path=DEFAULT_PLAN_PATH, generated_at=None):
         milestone_source = "mixed"
 
     generated_at = generated_at or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-    run_id = _value(env, "GITHUB_RUN_ID", default="")
-    run_number = _value(env, "GITHUB_RUN_NUMBER", default="")
-    branch = _value(env, "GITHUB_REF_NAME", default="")
+    run_id = _safe_ci_digits(env.get("GITHUB_RUN_ID", ""))
+    run_number = _safe_ci_digits(env.get("GITHUB_RUN_NUMBER", ""))
+    branch = _safe_branch(env.get("GITHUB_REF_NAME", ""))
 
     return {
         "build_sha": build_sha,
@@ -167,7 +203,7 @@ def build_metadata(env=None, plan_path=DEFAULT_PLAN_PATH, generated_at=None):
         "owner_actions": owner_actions,
         "ci_run_id": run_id,
         "ci_run_number": run_number,
-        "ci_run_url": _run_url(env),
+        "ci_run_url": _run_url(env, run_id=run_id),
         "ci_branch": branch,
         "metadata_generated_at": generated_at,
         "jobs": jobs,
@@ -177,7 +213,7 @@ def build_metadata(env=None, plan_path=DEFAULT_PLAN_PATH, generated_at=None):
             "tests": "github_actions",
             "milestones": milestone_source,
             "owner_actions": "version_controlled_plan" if owner_actions else "unknown",
-            "run": "github_actions" if run_id else "unknown",
+            "run": "github_actions" if run_id and _run_url(env, run_id=run_id) else "unknown",
         },
     }
 
