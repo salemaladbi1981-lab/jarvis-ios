@@ -276,10 +276,11 @@ struct HomeEntryView: View {
             }
         }
         .task {
+            // Cold-launch Siri / Shortcut handoff must be consumed before any
+            // network/provider loading. The request is intentionally short-lived.
+            voiceVM.handleAppIntentStart()
             await vm.load()
             await voiceVM.load()
-            // Cold-launch handoff from Siri / Shortcuts.
-            voiceVM.handleAppIntentStart()
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .background {
