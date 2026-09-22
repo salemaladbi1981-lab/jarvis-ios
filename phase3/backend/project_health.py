@@ -26,6 +26,7 @@ _OWNER_ACTION_FIELDS = ("type", "action", "agent", "task_id")
 _MAX_OWNER_ACTIONS = 20
 _MAX_OWNER_ACTION_FIELD_LENGTH = 240
 _MAX_OWNER_EXPIRY_ABS = 10 ** 20
+_MAX_TASK_STATE_LENGTH = 64
 
 
 def _text(env, key, default=""):
@@ -182,6 +183,18 @@ def _bounded_owner_expiry(value):
     return _bounded_owner_text(value)
 
 
+def _task_state(value):
+    """Return a bounded task/job state for aggregation, or None if malformed."""
+    if not isinstance(value, str):
+        return None
+    value = value.strip()
+    if not value or "\n" in value or "\r" in value:
+        return None
+    if len(value) > _MAX_TASK_STATE_LENGTH:
+        return None
+    return value.upper()
+
+
 def _owner_action_items(pending_approvals):
     """Return only bounded fields the owner needs to decide; never echo params/payloads.
 
@@ -264,10 +277,53 @@ def build_project_health(
     blocker_items = []
 
     for task in task_list:
-        task_id = task.get("task_id")
-        job_state = job_state_for(task_id) if task_id else None
-        state = (job_state or {}).get("state") or task.get("status") or "UNKNOWN"
-        state = str(state).upper()
+        raw_task_id = task.get("task_id")
+        task_id = _bounded_owner_text(raw_task_id) if raw_task_id is not None else None
+        if raw_task_id is not None and task_id is None:
+            blocker_items.append({"type": "task_evidence", "state": "invalid_task_id"})
+
+        job_state = None
+        if task_id:
+            try:
+                candidate_job_state = job_state_for(task_id)
+            except Exception:
+                blocker_items.append({
+                    "type": "task_evidence",
+                    "state": "job_lookup_failed",
+                    "task_id": task_id,
+                })
+            else:
+                if candidate_job_state is None:
+                    pass
+                elif isinstance(candidate_job_state, dict):
+                    job_state = candidate_job_state
+                else:
+                    blocker_items.append({
+                        "type": "task_evidence",
+                        "state": "invalid_job_state",
+                        "task_id": task_id,
+                    })
+
+        state = None
+        if job_state is not None:
+            raw_job_state = job_state.get("state")
+            state = _task_state(raw_job_state)
+            if raw_job_state is not None and state is None:
+                blocker = {"type": "task_evidence", "state": "invalid_state", "source": "job"}
+                if task_id:
+                    blocker["task_id"] = task_id
+                blocker_items.append(blocker)
+
+        if state is None:
+            raw_task_state = task.get("status")
+            state = _task_state(raw_task_state)
+            if raw_task_state is not None and state is None:
+                blocker = {"type": "task_evidence", "state": "invalid_state", "source": "task"}
+                if task_id:
+                    blocker["task_id"] = task_id
+                blocker_items.append(blocker)
+
+        state = state or "UNKNOWN"
         state_counts[state] = state_counts.get(state, 0) + 1
         if state in ACTIVE_TASK_STATES:
             active += 1
