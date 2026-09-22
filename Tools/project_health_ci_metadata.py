@@ -9,6 +9,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_PLAN_PATH = ROOT / "docs" / "PROJECT-HEALTH-PLAN.json"
 _FAILURE_RESULTS = {"failure", "cancelled", "timed_out", "action_required"}
+_OWNER_ACTION_FIELDS = ("type", "action", "agent", "task_id")
+_MAX_OWNER_ACTIONS = 20
+_MAX_OWNER_ACTION_FIELD_LENGTH = 240
 
 
 def _value(env, key, default="unknown"):
@@ -35,18 +38,45 @@ def _aggregate(results):
     return "unknown"
 
 
+def _safe_owner_actions(value):
+    """Return bounded owner-visible actions only; malformed entries are ignored."""
+    if not isinstance(value, list):
+        return []
+    actions = []
+    for raw in value[:_MAX_OWNER_ACTIONS]:
+        if not isinstance(raw, dict):
+            continue
+        item = {}
+        for key in _OWNER_ACTION_FIELDS:
+            raw_value = raw.get(key)
+            if not isinstance(raw_value, str):
+                continue
+            text = raw_value.strip()
+            if not text or "\n" in text or "\r" in text or len(text) > _MAX_OWNER_ACTION_FIELD_LENGTH:
+                continue
+            item[key] = text
+        if item.get("action"):
+            item.setdefault("type", "project_action")
+            actions.append(item)
+    return actions
+
+
 def _load_plan(path=DEFAULT_PLAN_PATH):
-    """Load version-controlled milestone labels; malformed/missing plans fail closed."""
+    """Load version-controlled planning facts; malformed/missing plans fail closed."""
     try:
         data = json.loads(Path(path).read_text(encoding="utf-8"))
         if not isinstance(data, dict):
             return {}
         allowed = ("phase", "current_milestone", "next_milestone")
-        return {
+        plan = {
             key: str(data.get(key, "")).strip()
             for key in allowed
             if str(data.get(key, "")).strip()
         }
+        owner_actions = _safe_owner_actions(data.get("owner_actions"))
+        if owner_actions:
+            plan["owner_actions"] = owner_actions
+        return plan
     except (OSError, ValueError, TypeError):
         return {}
 
@@ -75,6 +105,8 @@ def build_metadata(env=None, plan_path=DEFAULT_PLAN_PATH, generated_at=None):
 
     Repository variables remain authoritative. When they are not configured,
     milestone labels fall back to the reviewed version-controlled project plan.
+    Device-only owner actions are intentionally sourced only from that reviewed
+    plan so CI cannot invent actions that require the owner's physical device.
     GitHub run/job fields are copied from GitHub-provided environment values;
     missing values remain empty/unknown rather than being guessed.
     """
@@ -94,6 +126,7 @@ def build_metadata(env=None, plan_path=DEFAULT_PLAN_PATH, generated_at=None):
     next_milestone, next_source = _planning_value(
         env, "JARVIS_NEXT_MILESTONE", plan, "next_milestone"
     )
+    owner_actions = list(plan.get("owner_actions") or [])
     planning_sources = {phase_source, current_source, next_source}
     if planning_sources == {"github_repository_variables"}:
         milestone_source = "github_repository_variables"
@@ -116,6 +149,7 @@ def build_metadata(env=None, plan_path=DEFAULT_PLAN_PATH, generated_at=None):
         "phase": phase,
         "current_milestone": current_milestone,
         "next_milestone": next_milestone,
+        "owner_actions": owner_actions,
         "ci_run_id": run_id,
         "ci_run_number": run_number,
         "ci_run_url": _run_url(env),
@@ -127,6 +161,7 @@ def build_metadata(env=None, plan_path=DEFAULT_PLAN_PATH, generated_at=None):
             "ci": "github_actions",
             "tests": "github_actions",
             "milestones": milestone_source,
+            "owner_actions": "version_controlled_plan" if owner_actions else "unknown",
             "run": "github_actions" if run_id else "unknown",
         },
     }
@@ -135,6 +170,7 @@ def build_metadata(env=None, plan_path=DEFAULT_PLAN_PATH, generated_at=None):
 def _write_env(path, metadata):
     """Write the exact secret-free environment keys consumed by GET /project/health."""
     jobs = metadata.get("jobs") or {}
+    owner_actions_json = json.dumps(metadata.get("owner_actions") or [], ensure_ascii=False, separators=(",", ":"))
     lines = [
         f"JARVIS_BUILD_SHA={metadata['build_sha']}",
         f"JARVIS_CI_STATUS={metadata['ci_status']}",
@@ -142,6 +178,7 @@ def _write_env(path, metadata):
         f"JARVIS_CURRENT_PHASE={metadata['phase']}",
         f"JARVIS_CURRENT_MILESTONE={metadata['current_milestone']}",
         f"JARVIS_NEXT_MILESTONE={metadata['next_milestone']}",
+        f"JARVIS_OWNER_ACTIONS_JSON={owner_actions_json}",
         f"JARVIS_CI_RUN_ID={metadata.get('ci_run_id', '')}",
         f"JARVIS_CI_RUN_NUMBER={metadata.get('ci_run_number', '')}",
         f"JARVIS_CI_RUN_URL={metadata.get('ci_run_url', '')}",
