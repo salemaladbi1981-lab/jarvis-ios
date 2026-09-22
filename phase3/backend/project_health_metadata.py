@@ -37,6 +37,7 @@ STATUS_KEYS = {
 VALID_STATUSES = {"success", "failure", "unknown"}
 _SHA_RE = re.compile(r"^[0-9a-fA-F]{7,40}$")
 _DIGITS_RE = re.compile(r"^[0-9]+$")
+_GITHUB_RUN_PATH_RE = re.compile(r"^/[^/]+/[^/]+/actions/runs/([0-9]+)/?$")
 _OWNER_ACTION_FIELDS = {"type", "action", "agent", "task_id"}
 _MAX_OWNER_ACTIONS = 20
 _MAX_OWNER_ACTION_FIELD_LENGTH = 240
@@ -69,6 +70,23 @@ def _valid_owner_actions_json(value):
     return True
 
 
+def _github_run_id_from_url(value):
+    """Return the GitHub Actions run id only for the expected canonical HTTPS shape."""
+    if not value:
+        return None
+    parsed = urlparse(value)
+    if (
+        parsed.scheme != "https"
+        or parsed.netloc != "github.com"
+        or parsed.params
+        or parsed.query
+        or parsed.fragment
+    ):
+        return None
+    match = _GITHUB_RUN_PATH_RE.fullmatch(parsed.path)
+    return match.group(1) if match else None
+
+
 def _valid_value(key, value):
     if key in STATUS_KEYS:
         return value.lower() in VALID_STATUSES
@@ -77,10 +95,7 @@ def _valid_value(key, value):
     if key in {"JARVIS_CI_RUN_ID", "JARVIS_CI_RUN_NUMBER"}:
         return not value or bool(_DIGITS_RE.fullmatch(value))
     if key == "JARVIS_CI_RUN_URL":
-        if not value:
-            return True
-        parsed = urlparse(value)
-        return parsed.scheme == "https" and bool(parsed.netloc)
+        return not value or _github_run_id_from_url(value) is not None
     if key == "JARVIS_CI_METADATA_GENERATED_AT":
         return not value or ("T" in value and value.endswith("Z"))
     if key == "JARVIS_CI_BRANCH":
@@ -88,6 +103,28 @@ def _valid_value(key, value):
     if key == "JARVIS_OWNER_ACTIONS_JSON":
         return _valid_owner_actions_json(value)
     return True
+
+
+def _drop_inconsistent_run_identity(staged, env):
+    """Do not surface a clickable CI URL unless it agrees with the effective run id.
+
+    Process environment values remain authoritative. If a staged artifact conflicts
+    with an explicit deployment value, only the conflicting staged field is removed.
+    """
+    staged_url = staged.get("JARVIS_CI_RUN_URL")
+    staged_id = staged.get("JARVIS_CI_RUN_ID")
+    explicit_url = (env.get("JARVIS_CI_RUN_URL") or "").strip()
+    explicit_id = (env.get("JARVIS_CI_RUN_ID") or "").strip()
+
+    if staged_url:
+        expected_id = explicit_id or staged_id or ""
+        if expected_id and _github_run_id_from_url(staged_url) != expected_id:
+            staged.pop("JARVIS_CI_RUN_URL", None)
+
+    if staged_id and explicit_url:
+        explicit_url_id = _github_run_id_from_url(explicit_url)
+        if explicit_url_id and staged_id != explicit_url_id:
+            staged.pop("JARVIS_CI_RUN_ID", None)
 
 
 def load_health_metadata(path, environ=None):
@@ -117,6 +154,8 @@ def load_health_metadata(path, environ=None):
         if key not in HEALTH_KEYS or not _valid_value(key, value):
             continue
         staged[key] = value
+
+    _drop_inconsistent_run_identity(staged, env)
 
     if not staged:
         return False

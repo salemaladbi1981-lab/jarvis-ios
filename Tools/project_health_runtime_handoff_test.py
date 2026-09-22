@@ -59,11 +59,16 @@ check(
     "HEALTH_KEYS" in loader_source and "env.setdefault(key, value)" in loader_source,
 )
 check(
-    "runtime loader validates CI identity fields",
+    "runtime loader validates canonical GitHub CI identity fields",
     "JARVIS_CI_RUN_ID" in loader_source
     and "JARVIS_CI_RUN_URL" in loader_source
-    and "urlparse" in loader_source
-    and "_DIGITS_RE" in loader_source,
+    and "_github_run_id_from_url" in loader_source
+    and "_GITHUB_RUN_PATH_RE" in loader_source
+    and "parsed.netloc != \"github.com\"" in loader_source,
+)
+check(
+    "runtime loader cross-checks run URL against effective run id",
+    "_drop_inconsistent_run_identity(staged, env)" in loader_source,
 )
 
 with tempfile.TemporaryDirectory() as td:
@@ -139,6 +144,40 @@ with tempfile.TemporaryDirectory() as td:
     check("valid fields from a partially malformed handoff remain usable", invalid_parts[2] == "success")
     check("invalid CI run identity is rejected", invalid_parts[6] == "" and invalid_parts[8] == "")
     check("invalid per-job status is rejected", invalid_parts[11] == "")
+
+    foreign = Path(td) / "foreign-run-url.env"
+    foreign.write_text(
+        "JARVIS_CI_RUN_ID=35603375966\n"
+        "JARVIS_CI_RUN_URL=https://example.com/salemaladbi1981-lab/jarvis-ios/actions/runs/35603375966\n",
+        encoding="utf-8",
+    )
+    foreign_env = os.environ.copy()
+    for key in HEALTH_KEYS:
+        foreign_env.pop(key, None)
+    foreign_env["JARVIS_PROJECT_HEALTH_METADATA_PATH"] = str(foreign)
+    foreign_values, _ = probe(foreign_env)
+    foreign_parts = foreign_values.split("|")
+    check(
+        "foreign HTTPS hosts cannot become clickable CI run URLs",
+        foreign_parts[6] == "35603375966" and foreign_parts[8] == "",
+    )
+
+    mismatch = Path(td) / "mismatched-run.env"
+    mismatch.write_text(
+        "JARVIS_CI_RUN_ID=35603375966\n"
+        "JARVIS_CI_RUN_URL=https://github.com/salemaladbi1981-lab/jarvis-ios/actions/runs/99999999999\n",
+        encoding="utf-8",
+    )
+    mismatch_env = os.environ.copy()
+    for key in HEALTH_KEYS:
+        mismatch_env.pop(key, None)
+    mismatch_env["JARVIS_PROJECT_HEALTH_METADATA_PATH"] = str(mismatch)
+    mismatch_values, _ = probe(mismatch_env)
+    mismatch_parts = mismatch_values.split("|")
+    check(
+        "mismatched GitHub run URL is removed instead of being surfaced",
+        mismatch_parts[6] == "35603375966" and mismatch_parts[8] == "",
+    )
 
 missing = os.environ.copy()
 for key in HEALTH_KEYS:
