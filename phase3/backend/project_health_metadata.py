@@ -4,6 +4,7 @@ The CI workflow emits ``project-health.env``. A deployment may mount/copy that
 artifact and point ``JARVIS_PROJECT_HEALTH_METADATA_PATH`` at it. Only Project
 Health keys are accepted; explicit process environment values always win.
 """
+from datetime import datetime
 import json
 import os
 import re
@@ -38,6 +39,9 @@ VALID_STATUSES = {"success", "failure", "unknown"}
 _SHA_RE = re.compile(r"^[0-9a-fA-F]{7,40}$")
 _DIGITS_RE = re.compile(r"^[0-9]+$")
 _GITHUB_RUN_PATH_RE = re.compile(r"^/[^/]+/[^/]+/actions/runs/([0-9]+)/?$")
+_GENERATED_AT_RE = re.compile(
+    r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,6})?Z$"
+)
 _OWNER_ACTION_FIELDS = {"type", "action", "agent", "task_id"}
 _MAX_OWNER_ACTIONS = 20
 _MAX_OWNER_ACTION_FIELD_LENGTH = 240
@@ -87,6 +91,19 @@ def _github_run_id_from_url(value):
     return match.group(1) if match else None
 
 
+def _valid_generated_at(value):
+    """Accept only the UTC timestamp shape emitted by the CI metadata producer."""
+    if not value:
+        return True
+    if not _GENERATED_AT_RE.fullmatch(value):
+        return False
+    try:
+        datetime.fromisoformat(value[:-1] + "+00:00")
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
 def _valid_value(key, value):
     if key in STATUS_KEYS:
         return value.lower() in VALID_STATUSES
@@ -97,7 +114,7 @@ def _valid_value(key, value):
     if key == "JARVIS_CI_RUN_URL":
         return not value or _github_run_id_from_url(value) is not None
     if key == "JARVIS_CI_METADATA_GENERATED_AT":
-        return not value or ("T" in value and value.endswith("Z"))
+        return _valid_generated_at(value)
     if key == "JARVIS_CI_BRANCH":
         return "\n" not in value and "\r" not in value and len(value) <= 200
     if key == "JARVIS_OWNER_ACTIONS_JSON":
