@@ -10,6 +10,13 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         return true
     }
 
+    /// If Siri / Shortcuts opened the app but the scene backgrounds before SwiftUI consumes
+    /// the one-shot voice handoff, cancel that pending request. Returning to the app later must
+    /// never start the microphone from an abandoned lock-screen invocation.
+    func applicationDidEnterBackground(_ application: UIApplication) {
+        AppBridge.pendingStartVoice = false
+    }
+
     func application(_ application: UIApplication,
                      handleEventsForBackgroundURLSession identifier: String,
                      completionHandler: @escaping () -> Void) {
