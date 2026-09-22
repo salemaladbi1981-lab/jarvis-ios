@@ -134,12 +134,20 @@ check("missing or malformed plan fails closed to unknown planning metadata",
       missing_meta["evidence"]["milestones"] == "unknown" and
       malformed_meta["current_milestone"] == "unknown")
 
+owner_actions = plan.get("owner_actions") or []
+action_text = " | ".join(str(item.get("action", "")) for item in owner_actions if isinstance(item, dict))
 check("checked-in plan tracks the active approved priority order",
       plan.get("phase") == "device-validation" and
       str(plan.get("current_milestone", "")).startswith("Device-only validation & final stabilization") and
-      "Siri lock-screen" in str(plan.get("current_milestone", "")) and
-      "AirPods/Shokz" in str(plan.get("current_milestone", "")) and
+      "Siri" not in str(plan.get("current_milestone", "")) and
+      "AirPods/Shokz" not in str(plan.get("current_milestone", "")) and
       "Mac permissions" in str(plan.get("current_milestone", "")) and
+      "Meeting handoff" in str(plan.get("current_milestone", "")) and
+      len(owner_actions) == 2 and
+      "macOS Accessibility" in action_text and
+      "Meeting handoff" in action_text and
+      "Siri/App Shortcuts" not in action_text and
+      "AirPods/Shokz" not in action_text and
       str(plan.get("next_milestone", "")).startswith("Release readiness") and
       "explicit user approval" in str(plan.get("next_milestone", "")) and
       plan.get("source") == "user-approved priority order")
