@@ -216,7 +216,9 @@ mac_settings = {
     "ENABLE_HARDENED_RUNTIME": "YES",
     "INFOPLIST_KEY_NSMicrophoneUsageDescription": "جارفس يحتاج الميكروفون للمحادثة الصوتية.",
     "INFOPLIST_KEY_NSCalendarsUsageDescription": "جارفس يحتاج التقويم لعرض مواعيدك.",
+    "INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription": "جارفس يحتاج وصولاً كاملاً للتقويم لقراءة اجتماعاتك ومواعيدك عند طلبك فقط.",
     "INFOPLIST_KEY_NSRemindersUsageDescription": "جارفس يحتاج التذكيرات لعرض مهامك.",
+    "INFOPLIST_KEY_NSRemindersFullAccessUsageDescription": "جارفس يحتاج وصولاً كاملاً للتذكيرات لعرض مهامك وتحديثها بعد موافقتك.",
 }
 proj_common = {"MACOSX_DEPLOYMENT_TARGET": "14.0", "IPHONEOS_DEPLOYMENT_TARGET": "17.0", "SDKROOT": "macosx", "CLANG_ENABLE_MODULES": "YES"}
 app_debug = add("XCBuildConfiguration", buildSettings=dict(app_settings), name="Debug")
