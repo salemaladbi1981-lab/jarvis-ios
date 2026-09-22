@@ -127,6 +127,22 @@ def _drop_inconsistent_run_identity(staged, env):
             staged.pop("JARVIS_CI_RUN_ID", None)
 
 
+def _matches_explicit_build_identity(staged, env):
+    """Reject a CI artifact that belongs to a different deployed build or branch.
+
+    Explicit deployment identity is authoritative. Mixing its SHA/branch with CI,
+    tests, milestones, or owner actions from another artifact could present a fresh
+    green snapshot for the wrong build, so identity conflicts fail closed as one
+    unit instead of partially loading unrelated evidence.
+    """
+    for key in ("JARVIS_BUILD_SHA", "JARVIS_CI_BRANCH"):
+        staged_value = (staged.get(key) or "").strip()
+        explicit_value = (env.get(key) or "").strip()
+        if staged_value and explicit_value and staged_value != explicit_value:
+            return False
+    return True
+
+
 def load_health_metadata(path, environ=None):
     """Load allow-listed health metadata without overriding explicit env.
 
@@ -157,7 +173,7 @@ def load_health_metadata(path, environ=None):
 
     _drop_inconsistent_run_identity(staged, env)
 
-    if not staged:
+    if not staged or not _matches_explicit_build_identity(staged, env):
         return False
 
     for key, value in staged.items():
