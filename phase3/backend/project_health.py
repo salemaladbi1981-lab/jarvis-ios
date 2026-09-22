@@ -210,13 +210,19 @@ def build_project_health(
 
     # A previously successful artifact is not current evidence forever. Surface
     # staleness as an explicit owner-safe blocker instead of silently presenting
-    # old CI as if it were current.
+    # old CI as if it were current. A present-but-unparseable or materially-future
+    # timestamp is also evidence corruption/skew and must be visible to the owner.
     if freshness["state"] == "stale":
         blocker = {
             "type": "ci_metadata",
             "state": "stale",
             "age_seconds": freshness["age_seconds"],
         }
+        if ci["run_url"]:
+            blocker["run_url"] = ci["run_url"]
+        blocker_items.append(blocker)
+    elif ci["metadata_generated_at"] and freshness["state"] == "unknown":
+        blocker = {"type": "ci_metadata", "state": "unknown"}
         if ci["run_url"]:
             blocker["run_url"] = ci["run_url"]
         blocker_items.append(blocker)

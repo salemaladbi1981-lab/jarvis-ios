@@ -150,10 +150,11 @@ future = project_health.build_project_health(
     environ={"JARVIS_CI_METADATA_GENERATED_AT": "2026-09-22T16:00:00Z"},
     now=fixed_now,
 )
-check("materially future CI timestamps fail closed to unknown freshness",
+check("materially future CI timestamps fail closed and become an explicit metadata blocker",
       future["ci_metadata_state"] == "unknown" and
       future["ci_metadata_age_seconds"] is None and
-      future["blockers"] == 0)
+      future["blockers"] == 1 and
+      future["blocker_items"] == [{"type": "ci_metadata", "state": "unknown"}])
 
 unknown = project_health.build_project_health(
     tasks=[], job_state_for=lambda _: None, pending_approvals=[], capability_count=0,
