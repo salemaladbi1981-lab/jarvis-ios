@@ -199,6 +199,11 @@ struct ProjectHealthOwnerAction: Codable, Identifiable {
 /// Snapshot from GET /project/health. Kept in WorkspaceModels.swift because this file
 /// is already part of both iOS and macOS targets; health UI must not depend on an
 /// unregistered source file in the generated Xcode project.
+struct LegacyRuntimeHealth: Codable {
+    let ok: Bool?
+    let provider: String?
+}
+
 struct ProjectHealth: Codable {
     let ok: Bool?
     let phase: String?
@@ -275,6 +280,44 @@ struct ProjectHealth: Codable {
             return "\(ciBranch) • \(short)"
         }
         return short
+    }
+}
+
+extension ProjectHealth {
+    /// Honest compatibility snapshot for an older deployed backend that exposes
+    /// only /health. CI/build/milestone evidence remains unknown instead of fake.
+    static func legacyRuntime(_ health: LegacyRuntimeHealth) -> ProjectHealth {
+        ProjectHealth(
+            ok: health.ok,
+            phase: "runtime",
+            currentMilestone: nil,
+            nextMilestone: nil,
+            buildSha: nil,
+            ciStatus: "unknown",
+            testsStatus: "unknown",
+            ciRunId: nil,
+            ciRunNumber: nil,
+            ciRunUrl: nil,
+            ciBranch: nil,
+            ciMetadataGeneratedAt: nil,
+            ciMetadataState: "unknown",
+            ciMetadataAgeSeconds: nil,
+            ciJobs: nil,
+            provider: health.provider,
+            killSwitch: nil,
+            workspaceId: nil,
+            tasksTotal: nil,
+            tasksActive: nil,
+            tasksFailed: nil,
+            taskStates: nil,
+            pendingApprovals: nil,
+            ownerActions: nil,
+            ownerActionItems: nil,
+            capabilityCount: nil,
+            blockers: nil,
+            blockerItems: nil,
+            evidence: ["project_health_endpoint": "legacy_backend_fallback"]
+        )
     }
 }
 
