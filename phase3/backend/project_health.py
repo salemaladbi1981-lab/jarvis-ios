@@ -155,17 +155,47 @@ def _ci_snapshot(env):
     }
 
 
+def _bounded_owner_text(value):
+    """Return one bounded owner-visible line, or None for malformed data."""
+    if not isinstance(value, str):
+        return None
+    value = value.strip()
+    if not value or "\n" in value or "\r" in value:
+        return None
+    if len(value) > _MAX_OWNER_ACTION_FIELD_LENGTH:
+        return None
+    return value
+
+
 def _owner_action_items(pending_approvals):
-    """Return only fields the owner needs to decide; never echo params/payloads."""
+    """Return only bounded fields the owner needs to decide; never echo params/payloads.
+
+    Runtime approvals are treated as untrusted input at this response boundary.
+    A malformed approval identifier is skipped entirely because it cannot support
+    a real owner decision. Other malformed display fields are omitted while the
+    valid approval remains visible.
+    """
     items = []
     for approval in pending_approvals or []:
         if not isinstance(approval, dict):
             continue
-        item = {"type": "approval"}
-        for key in ("approval_id", "agent", "action", "task_id", "expires"):
-            value = approval.get(key)
-            if value is not None:
-                item[key] = value
+        approval_id = _bounded_owner_text(approval.get("approval_id"))
+        if not approval_id:
+            continue
+
+        item = {"type": "approval", "approval_id": approval_id}
+        for key in ("agent", "action", "task_id"):
+            field = _bounded_owner_text(approval.get(key))
+            if field:
+                item[key] = field
+
+        expires = approval.get("expires")
+        if isinstance(expires, (int, float)) and not isinstance(expires, bool):
+            item["expires"] = expires
+        else:
+            expires_text = _bounded_owner_text(expires)
+            if expires_text:
+                item["expires"] = expires_text
         items.append(item)
     return items
 
@@ -193,13 +223,9 @@ def _planned_owner_action_items(env):
             continue
         item = {}
         for key in _OWNER_ACTION_FIELDS:
-            field = candidate.get(key)
-            if not isinstance(field, str):
-                continue
-            field = field.strip()
-            if not field or "\n" in field or "\r" in field or len(field) > _MAX_OWNER_ACTION_FIELD_LENGTH:
-                continue
-            item[key] = field
+            field = _bounded_owner_text(candidate.get(key))
+            if field:
+                item[key] = field
         if item.get("action"):
             item.setdefault("type", "project_action")
             items.append(item)
