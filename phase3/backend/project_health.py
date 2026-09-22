@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import json
+import math
 import os
 
 ACTIVE_TASK_STATES = frozenset({"QUEUED", "RUNNING", "PROCESSING"})
@@ -24,6 +25,7 @@ CI_METADATA_FUTURE_SKEW_SECONDS = 5 * 60
 _OWNER_ACTION_FIELDS = ("type", "action", "agent", "task_id")
 _MAX_OWNER_ACTIONS = 20
 _MAX_OWNER_ACTION_FIELD_LENGTH = 240
+_MAX_OWNER_EXPIRY_ABS = 10 ** 20
 
 
 def _text(env, key, default=""):
@@ -167,6 +169,19 @@ def _bounded_owner_text(value):
     return value
 
 
+def _bounded_owner_expiry(value):
+    """Return a JSON-safe owner-visible expiry, or None for malformed data."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value if abs(value) <= _MAX_OWNER_EXPIRY_ABS else None
+    if isinstance(value, float):
+        if math.isfinite(value) and abs(value) <= _MAX_OWNER_EXPIRY_ABS:
+            return value
+        return None
+    return _bounded_owner_text(value)
+
+
 def _owner_action_items(pending_approvals):
     """Return only bounded fields the owner needs to decide; never echo params/payloads.
 
@@ -189,13 +204,9 @@ def _owner_action_items(pending_approvals):
             if field:
                 item[key] = field
 
-        expires = approval.get("expires")
-        if isinstance(expires, (int, float)) and not isinstance(expires, bool):
+        expires = _bounded_owner_expiry(approval.get("expires"))
+        if expires is not None:
             item["expires"] = expires
-        else:
-            expires_text = _bounded_owner_text(expires)
-            if expires_text:
-                item["expires"] = expires_text
         items.append(item)
     return items
 
