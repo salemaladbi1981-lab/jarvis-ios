@@ -35,6 +35,11 @@ enrolled_index = enroll_section.find('isEnrolled = true')
 check("successful pairing clears pre-enrollment voice handoff before exposing authenticated UI",
       clear_index >= 0 and enrolled_index >= 0 and clear_index < enrolled_index)
 
+check("enrollment handoff clearing stays iOS-scoped for macOS build compatibility",
+      '#if os(iOS)' in init_section and
+      '#if os(iOS)' in enroll_section and
+      enrollment.count('AppBridge.pendingStartVoice = false') == 2)
+
 check("enrollment boundary never arms or directly starts microphone capture",
       'AppBridge.pendingStartVoice = true' not in enrollment and
       'AudioCapture' not in enrollment and
