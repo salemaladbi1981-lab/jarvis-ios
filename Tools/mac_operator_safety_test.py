@@ -211,7 +211,8 @@ check(
 
 check(
     "Finder reveal requires a visible owner confirmation before execution",
-    '.confirmationDialog(' in MAC_UI
+    '.alert(' in MAC_UI
+    and 'presenting: pendingFinderRevealURL' in MAC_UI
     and '"السماح لجارفس بإظهار الملف في Finder؟"' in MAC_UI
     and 'Button("إظهار في Finder")' in MAC_UI
     and "Task { await revealUserSelectedItem(url) }" in MAC_UI,
@@ -251,7 +252,9 @@ check(
     "selectedURL.startAccessingSecurityScopedResource()" in MAC_UI
     and "selectedURL.stopAccessingSecurityScopedResource()" in MAC_UI
     and "FileManager.default.fileExists(atPath: url.path)" in MAC_UI
-    and "NSWorkspace.shared.activateFileViewerSelecting(urls)" in MAC_UI
+    and 'NSWorkspace.shared.selectFile(url.path, inFileViewerRootedAtPath: "")' in MAC_UI
+    and 'return .blocked("finder_reveal_failed")' in MAC_UI
+    and "NSWorkspace.shared.activateFileViewerSelecting" not in MAC_UI
     and "NSWorkspace.shared.open" not in MAC_UI
     and "NSAppleScript" not in MAC_UI
     and "Process(" not in MAC_UI
