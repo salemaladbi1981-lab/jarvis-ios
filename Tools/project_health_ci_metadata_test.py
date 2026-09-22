@@ -161,6 +161,35 @@ check("env handoff carries real plan and CI run evidence consumed by project hea
       f"JARVIS_CURRENT_MILESTONE={plan['current_milestone']}" in env_text and
       f"JARVIS_NEXT_MILESTONE={plan['next_milestone']}" in env_text)
 
+poisoned = dict(fallback_env)
+poisoned["JARVIS_CURRENT_MILESTONE"] = "Looks safe\nJARVIS_CI_STATUS=success"
+poisoned["JARVIS_NEXT_MILESTONE"] = "x" * 241
+poisoned_meta = module.build_metadata(poisoned, plan_path=PLAN, generated_at="2026-09-21T13:10:00Z")
+with tempfile.TemporaryDirectory() as temp_dir:
+    poisoned_env_path = Path(temp_dir) / "project-health.env"
+    module._write_env(poisoned_env_path, poisoned_meta)
+    poisoned_env_text = poisoned_env_path.read_text(encoding="utf-8")
+check("malformed repository planning values cannot inject Project Health env keys",
+      poisoned_meta["current_milestone"] == plan["current_milestone"] and
+      poisoned_meta["next_milestone"] == plan["next_milestone"] and
+      poisoned_meta["evidence"]["milestones"] == "version_controlled_plan" and
+      poisoned_env_text.count("JARVIS_CI_STATUS=") == 1 and
+      "Looks safe\nJARVIS_CI_STATUS=success" not in poisoned_env_text)
+
+with tempfile.TemporaryDirectory() as temp_dir:
+    unsafe_plan = Path(temp_dir) / "unsafe-plan.json"
+    unsafe_plan.write_text(json.dumps({
+        "phase": "device-validation\nJARVIS_TESTS_STATUS=success",
+        "current_milestone": "Valid fallback milestone",
+        "next_milestone": "y" * 241,
+    }), encoding="utf-8")
+    unsafe_plan_meta = module.build_metadata(fallback_env, plan_path=unsafe_plan, generated_at="2026-09-21T13:10:00Z")
+check("malformed version-controlled planning labels fail closed instead of entering the env handoff",
+      unsafe_plan_meta["phase"] == "unknown" and
+      unsafe_plan_meta["current_milestone"] == "Valid fallback milestone" and
+      unsafe_plan_meta["next_milestone"] == "unknown" and
+      unsafe_plan_meta["evidence"]["milestones"] == "mixed")
+
 check("workflow emits metadata only after all verification jobs settle",
       "project-health-metadata:" in workflow and
       "needs: [backend-tests, ios, mac]" in workflow and
