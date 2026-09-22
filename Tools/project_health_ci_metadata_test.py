@@ -137,20 +137,18 @@ check("missing or malformed plan fails closed to unknown planning metadata",
 owner_actions = plan.get("owner_actions") or []
 action_text = " | ".join(str(item.get("action", "")) for item in owner_actions if isinstance(item, dict))
 check("checked-in plan tracks the active approved priority order",
-      plan.get("phase") == "device-validation" and
-      str(plan.get("current_milestone", "")).startswith("Device-only validation & final stabilization") and
-      "Siri" not in str(plan.get("current_milestone", "")) and
-      "AirPods/Shokz" not in str(plan.get("current_milestone", "")) and
-      "Mac permissions" in str(plan.get("current_milestone", "")) and
-      "Meeting handoff" in str(plan.get("current_milestone", "")) and
-      len(owner_actions) == 2 and
-      "macOS Accessibility" in action_text and
-      "Meeting handoff" in action_text and
-      "Siri/App Shortcuts" not in action_text and
-      "AirPods/Shokz" not in action_text and
+      plan.get("phase") == "project-health-production-handoff" and
+      "Project Health" in str(plan.get("current_milestone", "")) and
+      "production" in str(plan.get("current_milestone", "")).lower() and
+      len(owner_actions) == 1 and
+      owner_actions[0].get("type") == "production_handoff" and
+      "Project Health" in action_text and
+      "production" in action_text.lower() and
+      "macOS Accessibility" not in action_text and
+      "Meeting handoff" not in action_text and
       str(plan.get("next_milestone", "")).startswith("Release readiness") and
       "explicit user approval" in str(plan.get("next_milestone", "")) and
-      plan.get("source") == "user-approved priority order")
+      plan.get("source") == "user-approved priority order and completed device validation")
 
 with tempfile.TemporaryDirectory() as temp_dir:
     env_path = Path(temp_dir) / "project-health.env"
