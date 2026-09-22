@@ -25,8 +25,10 @@ check("authenticated project health endpoint exists",
 check("health does not fabricate CI/build/test evidence",
       'project_health_mod.build_project_health(' in main and
       '"build_sha": build_sha' in health_snapshot and
-      '"ci_status": ci["status"]' in health_snapshot and
-      '"tests_status": ci["tests_status"]' in health_snapshot and
+      '"ci_status": effective_ci_status' in health_snapshot and
+      '"tests_status": effective_tests_status' in health_snapshot and
+      '_freshness_gated_status' in health_snapshot and
+      '"ci": ci' in health_snapshot and
       '_text(env, "JARVIS_CURRENT_MILESTONE", "unknown")' in health_snapshot)
 
 check("health reports real runtime blockers and approvals",
