@@ -12,11 +12,25 @@ _FAILURE_RESULTS = {"failure", "cancelled", "timed_out", "action_required"}
 _OWNER_ACTION_FIELDS = ("type", "action", "agent", "task_id")
 _MAX_OWNER_ACTIONS = 20
 _MAX_OWNER_ACTION_FIELD_LENGTH = 240
+_MAX_PLANNING_FIELD_LENGTH = 240
 
 
 def _value(env, key, default="unknown"):
     value = (env.get(key) or "").strip()
     return value or default
+
+
+def _safe_planning_text(value):
+    """Return a bounded single-line planning label or an empty string.
+
+    Planning values are later serialized to a line-oriented env handoff. Rejecting
+    embedded newlines here prevents repository variables or plan text from
+    injecting additional Project Health environment keys and corrupting CI truth.
+    """
+    text = str(value or "").strip()
+    if not text or "\n" in text or "\r" in text or len(text) > _MAX_PLANNING_FIELD_LENGTH:
+        return ""
+    return text
 
 
 def _result(env, key):
@@ -68,11 +82,11 @@ def _load_plan(path=DEFAULT_PLAN_PATH):
         if not isinstance(data, dict):
             return {}
         allowed = ("phase", "current_milestone", "next_milestone")
-        plan = {
-            key: str(data.get(key, "")).strip()
-            for key in allowed
-            if str(data.get(key, "")).strip()
-        }
+        plan = {}
+        for key in allowed:
+            value = _safe_planning_text(data.get(key, ""))
+            if value:
+                plan[key] = value
         owner_actions = _safe_owner_actions(data.get("owner_actions"))
         if owner_actions:
             plan["owner_actions"] = owner_actions
@@ -82,10 +96,10 @@ def _load_plan(path=DEFAULT_PLAN_PATH):
 
 
 def _planning_value(env, env_key, plan, plan_key):
-    explicit = _value(env, env_key, default="")
+    explicit = _safe_planning_text(env.get(env_key, ""))
     if explicit:
         return explicit, "github_repository_variables"
-    fallback = str(plan.get(plan_key, "")).strip()
+    fallback = _safe_planning_text(plan.get(plan_key, ""))
     if fallback:
         return fallback, "version_controlled_plan"
     return "unknown", "unknown"
@@ -103,12 +117,13 @@ def _run_url(env):
 def build_metadata(env=None, plan_path=DEFAULT_PLAN_PATH, generated_at=None):
     """Return truthful CI metadata; absent evidence stays unknown.
 
-    Repository variables remain authoritative. When they are not configured,
-    milestone labels fall back to the reviewed version-controlled project plan.
-    Device-only owner actions are intentionally sourced only from that reviewed
-    plan so CI cannot invent actions that require the owner's physical device.
-    GitHub run/job fields are copied from GitHub-provided environment values;
-    missing values remain empty/unknown rather than being guessed.
+    Repository variables remain authoritative when they are valid single-line
+    labels. When they are absent or malformed, milestone labels fall back to the
+    reviewed version-controlled project plan. Device-only owner actions are
+    intentionally sourced only from that reviewed plan so CI cannot invent actions
+    that require the owner's physical device. GitHub run/job fields are copied from
+    GitHub-provided environment values; missing values remain empty/unknown rather
+    than being guessed.
     """
     env = os.environ if env is None else env
     jobs = {
