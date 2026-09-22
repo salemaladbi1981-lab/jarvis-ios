@@ -87,6 +87,15 @@ def main():
                 for key in ("phase", "current_milestone", "next_milestone")),
     )
 
+    expected_owner_actions = metadata.get("owner_actions") or []
+    check(
+        "runtime snapshot carries reviewed device-only owner actions without inventing approvals",
+        snapshot["pending_approvals"] == 0
+        and snapshot["owner_actions"] == len(expected_owner_actions)
+        and snapshot["owner_action_items"] == expected_owner_actions
+        and all(item.get("action") and item.get("type") for item in expected_owner_actions),
+    )
+
     check(
         "freshly generated CI evidence is reported as fresh and grounded",
         snapshot["ci_metadata_state"] == "fresh"
@@ -105,11 +114,6 @@ def main():
             "non-green current CI artifact remains visible as a blocker",
             any(item.get("type") in {"ci", "ci_job"} for item in snapshot["blocker_items"]),
         )
-
-    check(
-        "CI smoke introduces no synthetic owner action",
-        snapshot["owner_actions"] == 0 and snapshot["owner_action_items"] == [],
-    )
 
     print(f"\n== RESULT: {PASS} PASS / {FAIL} FAIL ==")
     return 1 if FAIL else 0
