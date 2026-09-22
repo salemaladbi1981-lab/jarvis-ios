@@ -45,7 +45,7 @@ check('Meeting foundation does not silently request access during discovery', 'u
 
 # Explicit handoff must be revalidated against a fresh EventKit read.
 check('Handoff policy requires explicit user initiation', 'enum MeetingHandoffPolicy' in models and 'guard userInitiated' in models)
-check('Handoff policy rejects stale or changed targets', 'target == current' in models)
+check('Handoff policy binds to same event identity and URL without brittle full-struct equality', 'target.eventID == current.eventID' in models and 'target.url == current.url' in models and 'target.provider == current.provider' in models and 'target == current' not in models)
 check('Handoff policy rejects ended meetings', 'current.end >= now' in models)
 check('Handoff policy revalidates provider allowlist', 'MeetingLinkPolicy.provider(for: current.url) == current.provider' in models)
 check('Provider re-reads EventKit event by identifier before handoff', 'store.event(withIdentifier: target.eventID)' in provider)
