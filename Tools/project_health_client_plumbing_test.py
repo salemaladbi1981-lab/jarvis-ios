@@ -53,18 +53,27 @@ check(
 )
 
 check(
-    "CI display carries run identity and first failing job when present",
+    "CI display carries run identity, failing job, and grounded build identity",
     "ciRunNumber" in MODELS
     and "failedCIJobs" in MODELS
-    and 'return "CI فاشل\\(run) • \\(failedJob)"' in MODELS,
+    and 'let build = buildDisplay.map { " • \\($0)" } ?? ""' in MODELS
+    and 'return "CI أخضر\\(run)\\(build)"' in MODELS
+    and 'return "CI فاشل\\(run) • \\(failedJob)\\(build)"' in MODELS,
+)
+
+check(
+    "CI display keeps build identity visible for stale, running, and unavailable states",
+    'return "CI قديم\\(run)\\(build)"' in MODELS
+    and 'return "CI يعمل\\(run)\\(build)"' in MODELS
+    and 'return "CI غير متاح\\(build)"' in MODELS,
 )
 
 check(
     "CI display refuses to present stale or invalid-timestamp metadata as green",
     'metadataState == "stale"' in MODELS
-    and 'return "CI قديم\\(run)"' in MODELS
+    and 'return "CI قديم\\(run)\\(build)"' in MODELS
     and 'metadataState == "unknown", ciMetadataGeneratedAt?.isEmpty == false' in MODELS
-    and 'return "CI غير موثوق\\(run)"' in MODELS,
+    and 'return "CI غير موثوق\\(run)\\(build)"' in MODELS,
 )
 
 check(

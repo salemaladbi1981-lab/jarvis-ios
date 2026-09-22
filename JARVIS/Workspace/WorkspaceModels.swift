@@ -239,22 +239,23 @@ struct ProjectHealth: Codable {
 
     var ciDisplay: String {
         let run = (ciRunNumber?.isEmpty == false) ? " #\(ciRunNumber!)" : ""
+        let build = buildDisplay.map { " • \($0)" } ?? ""
         let metadataState = (ciMetadataState ?? "unknown").lowercased()
         if metadataState == "stale" {
-            return "CI قديم\(run)"
+            return "CI قديم\(run)\(build)"
         }
         if metadataState == "unknown", ciMetadataGeneratedAt?.isEmpty == false {
-            return "CI غير موثوق\(run)"
+            return "CI غير موثوق\(run)\(build)"
         }
         switch (ciStatus ?? "unknown").lowercased() {
-        case "success", "passed", "green": return "CI أخضر\(run)"
+        case "success", "passed", "green": return "CI أخضر\(run)\(build)"
         case "failed", "failure", "red":
             if let failedJob = failedCIJobs.first {
-                return "CI فاشل\(run) • \(failedJob)"
+                return "CI فاشل\(run) • \(failedJob)\(build)"
             }
-            return "CI فاشل\(run)"
-        case "running", "in_progress": return "CI يعمل\(run)"
-        default: return "CI غير متاح"
+            return "CI فاشل\(run)\(build)"
+        case "running", "in_progress": return "CI يعمل\(run)\(build)"
+        default: return "CI غير متاح\(build)"
         }
     }
 
