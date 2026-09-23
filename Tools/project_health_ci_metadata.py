@@ -17,6 +17,7 @@ _MAX_PLANNING_FIELD_LENGTH = 240
 _MAX_BRANCH_LENGTH = 200
 _MAX_CI_ID_LENGTH = 32
 _MAX_REPOSITORY_LENGTH = 200
+_PLAN_SCHEMA_VERSION = 4
 _SHA_RE = re.compile(r"^[0-9a-fA-F]{7,40}$")
 _DIGITS_RE = re.compile(r"^[0-9]+$")
 _REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
@@ -126,6 +127,11 @@ def _load_plan(path=DEFAULT_PLAN_PATH):
     try:
         data = json.loads(Path(path).read_text(encoding="utf-8"))
         if not isinstance(data, dict):
+            return {}
+        # Planning facts are deployment evidence, not arbitrary repository text.
+        # Accept only the currently reviewed schema so an older/future plan shape
+        # cannot be mislabeled as trusted `version_controlled_plan` provenance.
+        if data.get("schema_version") != _PLAN_SCHEMA_VERSION:
             return {}
         allowed = ("phase", "current_milestone", "next_milestone")
         plan = {}

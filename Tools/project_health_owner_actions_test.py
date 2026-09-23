@@ -162,6 +162,7 @@ check(
 with tempfile.TemporaryDirectory() as td:
     temp_plan = Path(td) / "plan.json"
     temp_plan.write_text(json.dumps({
+        "schema_version": 4,
         "phase": "project-health-production-handoff",
         "current_milestone": "Project Health production handoff",
         "next_milestone": "Release readiness",
