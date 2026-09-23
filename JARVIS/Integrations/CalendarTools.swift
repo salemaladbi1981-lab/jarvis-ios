@@ -42,6 +42,19 @@ struct CalendarTools {
         }
     }
 
+    func events(dayOffset: Int) async -> CalendarToolResult {
+        let access = await provider.eventAccess()
+        guard access == .authorized else {
+            return CalendarToolResult(ok: false, kind: dayOffset == 1 ? "tomorrow" : "day", events: [], reminders: [], error: access == .denied ? "permission_denied" : "permission_required", mock: false, providerMode: "real", providerName: "AppleEventKitProvider", debugReason: nil)
+        }
+        do {
+            let e = try await provider.events(dayOffset: dayOffset)
+            return CalendarToolResult(ok: true, kind: dayOffset == 1 ? "tomorrow" : "day", events: e, reminders: [], error: nil, mock: false, providerMode: "real", providerName: "AppleEventKitProvider", debugReason: nil)
+        } catch {
+            return CalendarToolResult(ok: false, kind: "day", events: [], reminders: [], error: "unavailable", mock: false, providerMode: "real", providerName: "AppleEventKitProvider", debugReason: nil)
+        }
+    }
+
     func nextEvent() async -> CalendarToolResult {
         if useMock {
             let e = mockProvider.nextEvent()

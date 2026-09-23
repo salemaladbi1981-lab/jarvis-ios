@@ -367,8 +367,9 @@ final class HomeViewModel: ObservableObject {
             return
         }
         // 3) قراءة التقويم (أداة محلية) — تُعرض على الشاشة فقط، لا sendText
-        if t.contains("جدول") || t.contains("موعد") || t.contains("اليوم") || t.contains("بكرة") || t.contains("calendar") {
-            await runCalendar(kind: "today")
+        if t.contains("جدول") || t.contains("موعد") || t.contains("مواعيد") || t.contains("اليوم") || t.contains("بكرة") || t.contains("غد") || t.contains("تقويم") || t.contains("كلندر") || t.contains("calendar") || t.contains("tomorrow") {
+            let wantsTomorrow = t.contains("بكرة") || t.contains("غد") || t.contains("tomorrow")
+            await runCalendar(kind: wantsTomorrow ? "tomorrow" : "today")
             return
         }
         // 4) الذاكرة الشخصية — الدماغ الوحيد = backend (memory_tools عبر function calling).
@@ -404,12 +405,13 @@ final class HomeViewModel: ObservableObject {
                 : "التقويم غير متاح"
             return
         }
-        let result = await calendarTools.today()
+        let isTomorrow = kind == "tomorrow"
+        let result = isTomorrow ? await calendarTools.events(dayOffset: 1) : await calendarTools.today()
         state = .idle
         if result.ok {
-            let grounded = Self.formatEvents(result.events)
+            let grounded = Self.formatEvents(result.events, dayLabel: isTomorrow ? "بكرة" : "اليوم")
             calendarMessage = grounded
-            voiceSession.sendGroundedDeviceResult(userRequest: "calendar today", result: grounded)
+            voiceSession.sendGroundedDeviceResult(userRequest: isTomorrow ? "calendar tomorrow" : "calendar today", result: grounded)
         } else {
             state = .alert
             calendarMessage = "التقويم غير متاح"
@@ -451,8 +453,8 @@ final class HomeViewModel: ObservableObject {
         }
     }
 
-    private static func formatEvents(_ events: [JarvisCalendarEvent]) -> String {
-        guard !events.isEmpty else { return "لا توجد مواعيد اليوم" }
+    private static func formatEvents(_ events: [JarvisCalendarEvent], dayLabel: String = "اليوم") -> String {
+        guard !events.isEmpty else { return "لا توجد مواعيد \(dayLabel)" }
         let f = DateFormatter()
         f.locale = Locale(identifier: "ar_QA")
         f.dateFormat = "h:mm a"

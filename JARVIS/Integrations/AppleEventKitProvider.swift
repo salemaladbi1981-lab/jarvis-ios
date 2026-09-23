@@ -53,14 +53,19 @@ final class AppleEventKitProvider {
         catch { return .denied }
     }
 
-    func todayEvents() async throws -> [JarvisCalendarEvent] {
+    func events(dayOffset: Int = 0, now: Date = Date()) async throws -> [JarvisCalendarEvent] {
         let cal = Calendar.current
-        let start = cal.startOfDay(for: Date())
-        guard let end = cal.date(byAdding: .day, value: 1, to: start) else { return [] }
+        let today = cal.startOfDay(for: now)
+        guard let start = cal.date(byAdding: .day, value: dayOffset, to: today),
+              let end = cal.date(byAdding: .day, value: 1, to: start) else { return [] }
         let predicate = store.predicateForEvents(withStart: start, end: end, calendars: nil)
         return store.events(matching: predicate)
             .sorted { $0.startDate < $1.startDate }
             .map { JarvisCalendarEvent(ek: $0) }
+    }
+
+    func todayEvents() async throws -> [JarvisCalendarEvent] {
+        try await events(dayOffset: 0)
     }
 
     func nextEvent() async throws -> JarvisCalendarEvent? {

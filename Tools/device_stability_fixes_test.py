@@ -39,7 +39,7 @@ check("لا sendText محلي (لا رد منافس)", 'voiceSession.sendText' n
 check("معالج .error يسجّل رمز الخطأ", 'case .error(let code):' in vm and '[JARVIS-VOICE] error code' in vm)
 check("استرداد تلقائي من الخطأ العابر", 'scheduleErrorRecovery' in vm and 'state = .idle' in vm)
 check("Calendar voice uses authoritative EventKit grounding",
-      'voiceSession.sendGroundedDeviceResult(userRequest: "calendar today", result: grounded)' in vm)
+      'voiceSession.sendGroundedDeviceResult(userRequest: isTomorrow ? "calendar tomorrow" : "calendar today", result: grounded)' in vm)
 check("Reminders voice uses authoritative device grounding",
       'voiceSession.sendGroundedDeviceResult(userRequest: "upcoming reminders", result: grounded)' in vm)
 check("Agent inventory voice uses bundled registry grounding",
