@@ -209,6 +209,22 @@ def _matches_explicit_build_identity(staged, env):
     return True
 
 
+def _trusted_owner_action_provenance(staged, env):
+    """Require reviewed provenance before importing owner-facing project actions.
+
+    Owner actions are instructions shown to the owner, so merely having bounded
+    JSON is not sufficient trust. If an artifact contributes owner actions, its
+    effective provenance must be the reviewed version-controlled plan. Explicit
+    deployment environment values remain authoritative and cannot be bypassed by
+    a staged source label.
+    """
+    if not (staged.get("JARVIS_OWNER_ACTIONS_JSON") or "").strip():
+        return True
+    explicit_source = (env.get("JARVIS_OWNER_ACTIONS_SOURCE") or "").strip()
+    staged_source = (staged.get("JARVIS_OWNER_ACTIONS_SOURCE") or "").strip()
+    return (explicit_source or staged_source) == "version_controlled_plan"
+
+
 def load_health_metadata(path, environ=None):
     """Load allow-listed health metadata without overriding explicit env.
 
@@ -239,7 +255,11 @@ def load_health_metadata(path, environ=None):
 
     _drop_inconsistent_run_identity(staged, env)
 
-    if not staged or not _matches_explicit_build_identity(staged, env):
+    if (
+        not staged
+        or not _matches_explicit_build_identity(staged, env)
+        or not _trusted_owner_action_provenance(staged, env)
+    ):
         return False
 
     for key, value in staged.items():
