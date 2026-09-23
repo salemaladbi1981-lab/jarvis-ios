@@ -74,9 +74,14 @@ final class AppleEventKitProvider {
         guard let start = cal.date(byAdding: .day, value: dayOffset, to: today),
               let end = cal.date(byAdding: .day, value: 1, to: start) else { return [] }
         let predicate = store.predicateForEvents(withStart: start, end: end, calendars: nil)
-        return store.events(matching: predicate)
+        let list = store.events(matching: predicate)
             .sorted { $0.startDate < $1.startDate }
             .map { JarvisCalendarEvent(ek: $0) }
+        Self.diagLog("events dayOffset=\(dayOffset) count=\(list.count) tz=\(TimeZone.current.identifier) window=\(Self.diagStamp(start))..\(Self.diagStamp(end))")
+        for e in list {
+            Self.diagLog("events item title=\(e.title) start=\(Self.diagStamp(e.start)) allDay=\(e.isAllDay)")
+        }
+        return list
     }
 
     func todayEvents() async throws -> [JarvisCalendarEvent] {
