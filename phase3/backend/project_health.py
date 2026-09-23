@@ -39,9 +39,18 @@ _MAX_OWNER_EXPIRY_ABS = 10 ** 20
 _MAX_TASK_STATE_LENGTH = 64
 _MAX_RUNTIME_FIELD_LENGTH = 240
 _MAX_BUILD_SHA_LENGTH = 40
+_MAX_CI_ID_LENGTH = 32
+_MAX_BRANCH_LENGTH = 200
+_MAX_REPOSITORY_LENGTH = 200
+_MAX_RUN_URL_LENGTH = 512
+_MAX_CI_TIMESTAMP_LENGTH = 32
 _BUILD_SHA_RE = re.compile(r"^[0-9a-fA-F]{7,40}$")
 _REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+_DIGITS_RE = re.compile(r"^[0-9]+$")
 _GITHUB_RUN_PATH_RE = re.compile(r"^/([^/]+/[^/]+)/actions/runs/([0-9]+)/?$")
+_GENERATED_AT_RE = re.compile(
+    r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,6})?Z$"
+)
 _MILESTONE_SOURCES = frozenset({"github_repository_variables", "version_controlled_plan", "mixed", "unknown"})
 _OWNER_ACTION_SOURCES = frozenset({"version_controlled_plan", "unknown"})
 
@@ -155,6 +164,52 @@ def _valid_build_sha(value):
     return text if _BUILD_SHA_RE.fullmatch(text) else ""
 
 
+def _valid_ci_digits(value):
+    """Return one bounded numeric GitHub Actions identifier."""
+    text = _bounded_runtime_text(value, max_length=_MAX_CI_ID_LENGTH)
+    return text if _DIGITS_RE.fullmatch(text) else ""
+
+
+def _valid_ci_branch(value):
+    return _bounded_runtime_text(value, max_length=_MAX_BRANCH_LENGTH)
+
+
+def _valid_ci_repository(value):
+    text = _bounded_runtime_text(value, max_length=_MAX_REPOSITORY_LENGTH)
+    return text if _REPOSITORY_RE.fullmatch(text) else ""
+
+
+def _valid_ci_generated_at(value):
+    """Reflect only the bounded UTC timestamp shape emitted by CI."""
+    text = _bounded_runtime_text(value, max_length=_MAX_CI_TIMESTAMP_LENGTH)
+    if not text or not _GENERATED_AT_RE.fullmatch(text):
+        return ""
+    return text if _parse_timestamp(text) is not None else ""
+
+
+def _valid_ci_run_url(value):
+    """Reflect only a bounded canonical public GitHub Actions run URL."""
+    text = _bounded_runtime_text(value, max_length=_MAX_RUN_URL_LENGTH)
+    if not text:
+        return ""
+    parsed = urlparse(text)
+    if (
+        parsed.scheme != "https"
+        or parsed.netloc != "github.com"
+        or parsed.params
+        or parsed.query
+        or parsed.fragment
+    ):
+        return ""
+    match = _GITHUB_RUN_PATH_RE.fullmatch(parsed.path)
+    if not match:
+        return ""
+    repository = match.group(1)
+    if len(repository) > _MAX_REPOSITORY_LENGTH or not _REPOSITORY_RE.fullmatch(repository):
+        return ""
+    return text
+
+
 def _ci_run_identity_present(ci):
     """Require one coherent public GitHub Actions run identity before showing green.
 
@@ -224,12 +279,12 @@ def _ci_snapshot(env):
         "status": _status(env, "JARVIS_CI_STATUS"),
         "build_status": _status(env, "JARVIS_BUILD_STATUS"),
         "tests_status": _status(env, "JARVIS_TESTS_STATUS"),
-        "run_id": _text(env, "JARVIS_CI_RUN_ID"),
-        "run_number": _text(env, "JARVIS_CI_RUN_NUMBER"),
-        "run_url": _text(env, "JARVIS_CI_RUN_URL"),
-        "branch": _text(env, "JARVIS_CI_BRANCH"),
-        "repository": _text(env, "JARVIS_CI_REPOSITORY"),
-        "metadata_generated_at": _text(env, "JARVIS_CI_METADATA_GENERATED_AT"),
+        "run_id": _valid_ci_digits(_text(env, "JARVIS_CI_RUN_ID")),
+        "run_number": _valid_ci_digits(_text(env, "JARVIS_CI_RUN_NUMBER")),
+        "run_url": _valid_ci_run_url(_text(env, "JARVIS_CI_RUN_URL")),
+        "branch": _valid_ci_branch(_text(env, "JARVIS_CI_BRANCH")),
+        "repository": _valid_ci_repository(_text(env, "JARVIS_CI_REPOSITORY")),
+        "metadata_generated_at": _valid_ci_generated_at(_text(env, "JARVIS_CI_METADATA_GENERATED_AT")),
         "jobs": jobs,
         "build_jobs": build_jobs,
         "test_jobs": test_jobs,

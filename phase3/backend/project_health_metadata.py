@@ -64,6 +64,9 @@ _OWNER_ACTION_FIELDS = {"type", "action", "agent", "task_id"}
 _MAX_OWNER_ACTIONS = 20
 _MAX_OWNER_ACTION_FIELD_LENGTH = 240
 _MAX_OWNER_ACTIONS_JSON_LENGTH = 8192
+_MAX_CI_ID_LENGTH = 32
+_MAX_REPOSITORY_LENGTH = 200
+_MAX_RUN_URL_LENGTH = 512
 
 
 def _valid_owner_actions_json(value):
@@ -106,7 +109,12 @@ def _github_run_identity_from_url(value):
     ):
         return None
     match = _GITHUB_RUN_PATH_RE.fullmatch(parsed.path)
-    return (match.group(1), match.group(2)) if match else None
+    if not match:
+        return None
+    repository, run_id = match.group(1), match.group(2)
+    if len(repository) > _MAX_REPOSITORY_LENGTH or not _REPOSITORY_RE.fullmatch(repository):
+        return None
+    return repository, run_id
 
 
 def _github_run_id_from_url(value):
@@ -133,15 +141,15 @@ def _valid_value(key, value):
     if key == "JARVIS_BUILD_SHA":
         return not value or bool(_SHA_RE.fullmatch(value))
     if key in {"JARVIS_CI_RUN_ID", "JARVIS_CI_RUN_NUMBER"}:
-        return not value or bool(_DIGITS_RE.fullmatch(value))
+        return not value or (len(value) <= _MAX_CI_ID_LENGTH and bool(_DIGITS_RE.fullmatch(value)))
     if key == "JARVIS_CI_RUN_URL":
-        return not value or _github_run_id_from_url(value) is not None
+        return not value or (len(value) <= _MAX_RUN_URL_LENGTH and _github_run_id_from_url(value) is not None)
     if key == "JARVIS_CI_METADATA_GENERATED_AT":
         return _valid_generated_at(value)
     if key == "JARVIS_CI_BRANCH":
         return "\n" not in value and "\r" not in value and len(value) <= 200
     if key == "JARVIS_CI_REPOSITORY":
-        return not value or bool(_REPOSITORY_RE.fullmatch(value))
+        return not value or (len(value) <= _MAX_REPOSITORY_LENGTH and bool(_REPOSITORY_RE.fullmatch(value)))
     if key == "JARVIS_OWNER_ACTIONS_JSON":
         return _valid_owner_actions_json(value)
     if key in PROVENANCE_VALUES:
