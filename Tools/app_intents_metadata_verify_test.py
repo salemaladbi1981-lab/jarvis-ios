@@ -11,7 +11,7 @@ spec.loader.exec_module(module)
 
 
 def action():
-    return {"isAuthPolExplicit": True, "isDiscoverable": True, "openAppWhenRun": True}
+    return {"authenticationPolicy": 1, "isAuthPolExplicit": True, "isDiscoverable": True, "openAppWhenRun": True}
 
 
 def shortcut(identifier, phrases):
@@ -29,11 +29,20 @@ VALID = {
 cases = []
 cases.append(("valid compiled contract passes", VALID, []))
 
+legacy = deepcopy(VALID)
+legacy["generator"] = {"name": "xcode-tools", "version": "15F31d"}
+for item in legacy["actions"].values():
+    item.pop("isAuthPolExplicit", None)
+cases.append(("Xcode 15 metadata without modern explicitness flag passes", legacy, []))
+
 bad = deepcopy(VALID); bad["actions"].pop("JarvisVoiceIntent")
 cases.append(("missing voice intent fails", bad, ["action:JarvisVoiceIntent"]))
 
+bad = deepcopy(VALID); bad["actions"]["JarvisOpenIntent"]["authenticationPolicy"] = 0
+cases.append(("always-allowed auth policy fails", bad, ["auth_policy:JarvisOpenIntent"]))
+
 bad = deepcopy(VALID); bad["actions"]["JarvisOpenIntent"]["isAuthPolExplicit"] = False
-cases.append(("non-explicit auth policy fails", bad, ["auth_explicit:JarvisOpenIntent"]))
+cases.append(("modern non-explicit auth policy fails", bad, ["auth_explicit:JarvisOpenIntent"]))
 
 bad = deepcopy(VALID); bad["autoShortcuts"].append(shortcut("JarvisNavigateIntent", ["Navigate ${applicationName}"]))
 cases.append(("parameterized navigation is not auto-registered", bad, ["shortcut_action_set", "parameterized_navigation_shortcut"]))

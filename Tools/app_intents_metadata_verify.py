@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Verify the compiled AppIntents metadata emitted by Xcode for JARVIS.
+"""Verify compiled AppIntents metadata emitted by Xcode for JARVIS.
 
-This is a build-artifact check, not a simulator/Siri claim. It proves that the
-expected authenticated intents and parameterless App Shortcuts survived Swift
-metadata extraction and are present in the built .app.
+The extractor schema differs across Xcode releases. This verifier checks the
+stable security/runtime contract while accepting known legacy schema shape.
 """
 from __future__ import annotations
 
@@ -34,7 +33,11 @@ def validate_payload(payload):
         if not isinstance(action, dict):
             errors.append(f"action:{name}")
             continue
-        if action.get("isAuthPolExplicit") is not True:
+        # Xcode 15.x emits authenticationPolicy but not isAuthPolExplicit;
+        # newer extractors emit both. Policy 1 is requiresAuthentication.
+        if action.get("authenticationPolicy") != 1:
+            errors.append(f"auth_policy:{name}")
+        if "isAuthPolExplicit" in action and action.get("isAuthPolExplicit") is not True:
             errors.append(f"auth_explicit:{name}")
         if action.get("isDiscoverable") is not True:
             errors.append(f"discoverable:{name}")
@@ -82,20 +85,32 @@ def load_app_metadata(app_path):
     return payload
 
 
+def payload_generator(payload):
+    generator = payload.get("generator") if isinstance(payload, dict) else None
+    if not isinstance(generator, dict):
+        return "unknown extractor"
+    name = generator.get("name")
+    version = generator.get("version")
+    if isinstance(name, str) and isinstance(version, str):
+        return f"{name} {version}"
+    return "unknown extractor"
+
+
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     if len(argv) != 1:
         print("usage: app_intents_metadata_verify.py /path/to/JARVIS.app", file=sys.stderr)
         return 2
     try:
-        errors = validate_payload(load_app_metadata(argv[0]))
+        payload = load_app_metadata(argv[0])
+        errors = validate_payload(payload)
     except ValueError as exc:
         print(f"App Intents metadata verification FAILED: {exc}")
         return 1
     if errors:
-        print("App Intents metadata verification FAILED: " + ", ".join(errors))
+        print(f"App Intents metadata verification FAILED ({payload_generator(payload)}): " + ", ".join(errors))
         return 1
-    print("App Intents metadata verification PASS: 3 authenticated intents, 2 parameterless shortcuts")
+    print(f"App Intents metadata verification PASS: 3 authenticated intents, 2 parameterless shortcuts ({payload_generator(payload)})")
     return 0
 
 
