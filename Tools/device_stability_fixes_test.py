@@ -50,8 +50,12 @@ check("Meeting voice uses on-device EventKit grounding",
       'isMeetingQuestion' in vm and 'runMeetings(userRequest:' in vm and 'calendarProvider.upcomingMeetingTargets()' in vm)
 check("Meeting voice result is spoken through grounded device reply",
       'voiceSession.sendGroundedDeviceResult(userRequest: userRequest, result: grounded)' in vm)
+rvs = open(os.path.join(ROOT, 'Voice/RealtimeVoiceSession.swift'), encoding='utf-8').read()
+grounded = rvs.split('func sendGroundedDeviceResult')[-1].split('\n    func ')[0]
 check("Realtime cancels speculative answer before grounded device reply",
-      'Authoritative device result for my previous request' in open(os.path.join(ROOT, 'Voice/RealtimeVoiceSession.swift'), encoding='utf-8').read())
+      'guardState.onBarge()' in grounded and 'response.cancel' in grounded and 'audio.flush()' in grounded)
+check("Grounded device reply is injected as the authoritative verbatim result",
+      'Authoritative device result.' in grounded and 'VERBATIM RESULT:' in grounded)
 
 print(f"\n== RESULT: {PASS} PASS / {FAIL} FAIL ==")
 sys.exit(1 if FAIL else 0)
