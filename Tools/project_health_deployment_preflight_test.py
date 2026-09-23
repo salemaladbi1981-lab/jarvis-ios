@@ -140,10 +140,9 @@ with tempfile.TemporaryDirectory() as temp_dir:
     path.write_text(metadata_text(JARVIS_OWNER_ACTIONS_SOURCE="unknown"), encoding="utf-8")
     missing_owner_source = module.preflight(path, SHA, BRANCH, now=NOW)
     check(
-        "planned owner actions without provenance cannot pass deployment preflight",
+        "planned owner actions without provenance are rejected at metadata handoff",
         missing_owner_source["ok"] is False
-        and "owner_action_provenance" in missing_owner_source["failed_checks"]
-        and missing_owner_source["owner_actions"] == 1,
+        and missing_owner_source["failed_checks"] == ["metadata_rejected"],
     )
 
     path.write_text(metadata_text(JARVIS_CURRENT_MILESTONE="unknown"), encoding="utf-8")
