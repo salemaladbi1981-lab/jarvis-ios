@@ -8,7 +8,7 @@ from pathlib import Path
 import re
 
 ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_PLAN_PATH = ROOT / "Docs" / "PROJECT-HEALTH-PLAN.json"
+DEFAULT_PLAN_PATH = ROOT / "docs" / "PROJECT-HEALTH-PLAN.json"
 _FAILURE_RESULTS = {"failure", "cancelled", "timed_out", "action_required"}
 _OWNER_ACTION_FIELDS = ("type", "action", "agent", "task_id")
 _RESERVED_OWNER_ACTION_TYPES = frozenset({"approval"})
@@ -238,4 +238,70 @@ def build_metadata(env=None, plan_path=DEFAULT_PLAN_PATH, generated_at=None):
         "ci_repository": repository,
         "metadata_generated_at": generated_at,
         "jobs": jobs,
-        "build_jobs": build_jobs"À¢'FW7Eö¦ö'2#¢FW7Eö¦ö'2À¢&Wf–FVæ6R#¢°¢&'V–ÆB#¢&v—F‡V%ö7F–öç2"–b'V–ÆE÷6†VÇ6R'Væ¶æ÷vâ"À¢&'V–ÆE÷7FGW2#¢&v—F‡V%ö7F–öç5÷7FW2"–b&V6—6Uö'V–ÆE÷7FW2VÇ6R&v—F‡V%ö7F–öç5ö¦ö'5öfÆÆ&6²"À¢&6’#¢&v—F‡V%ö7F–öç2"À¢'FW7G2#¢&v—F‡V%ö7F–öç5÷7FW2"–b&V6—6UöÖ5÷FW7BVÇ6R&v—F‡V%ö7F–öç5ö¦ö'5öfÆÆ&6²"À¢&Ö–ÆW7FöæW2#¢Ö–ÆW7FöæU÷6÷W&6RÀ¢&÷væW%ö7F–öç2#¢'fW'6–öåö6öçG&öÆÆVE÷Æâ"–b÷væW%ö7F–öç2VÇ6R'Væ¶æ÷vâ"À¢''Vâ#¢&v—F‡V%ö7F–öç2"–b'Våö–BæB&W÷6—F÷'’æB÷'Vå÷W&Â†VçbÂ'Våö–C×'Våö–B’VÇ6R'Væ¶æ÷vâ"À¢ÒÀ¢Ğ  ¦FVb÷w&—FUöVçb‡F‚ÂÖWFFF“ ¢""%w&—FRF†RW†7B6V7&WBÖg&VRVçf—&öæÖVçB¶W—26öç7VÖVB'’tUB÷&ö¦V7Bö†VÇF‚â"" ¢¦ö'2ÒÖWFFFævWB‚&¦ö'2"’÷"·Ğ¢'V–ÆEö¦ö'2ÒÖWFFFævWB‚&'V–ÆEö¦ö'2"’÷"·Ğ¢FW7Eö¦ö'2ÒÖWFFFævWB‚'FW7Eö¦ö'2"’÷"·Ğ¢÷væW%ö7F–öç5ö§6öâÒ§6öâæGV×2†ÖWFFFævWB‚&÷væW%ö7F–öç2"’÷"µÒÂVç7W&Uö66–“ÔfÇ6RÂ6W&F÷'3Ò‚"Â"Â#¢"’¢Wf–FVæ6RÒÖWFFFævWB‚&Wf–FVæ6R"’÷"·Ğ¢Æ–æW2Ò°¢b$¤%d•5ô%T”ÄEõ4„×¶ÖWFFF²v'V–ÆE÷6†u×Ò"À¢b$¤%d•5ô%T”ÄEõ5DEU3×¶ÖWFFFævWB‚v'V–ÆE÷7FGW2rÂwVæ¶æ÷vâr—Ò"À¢b$¤%d•5ô4•õ5DEU3×¶ÖWFFF²v6•÷7FGW2u×Ò"À¢b$¤%d•5õDU5E5õ5DEU3×¶ÖWFFF²wFW7G5÷7FGW2u×Ò"À¢b$¤%d•5ô5U%$TåEõ„4S×¶ÖWFFF²w†6Ru×Ò"À¢b$¤%d•5ô5U%$TåEôÔ”ÄU5DôäS×¶ÖWFFF²v7W'&VçEöÖ–ÆW7FöæRu×Ò"À¢b$¤%d•5ôäU…EôÔ”ÄU5DôäS×¶ÖWFFF²væW‡EöÖ–ÆW7FöæRu×Ò"À¢b$¤%d•5ôõtäU%ô5D”ôå5ô¥4ôã×¶÷væW%ö7F–öç5ö§6öçÒ"À¢b$¤%d•5ôÔ”ÄU5DôäUõ4õU$4S×¶Wf–FVæ6RævWBµ¥±•ÍÑ½¹•Ìœ°€Õ¹­¹½İ¸œ¥ôˆ°(€€€€€€€˜‰)IY%M}=]9I}Q%=9M}M=UIõí•Ù¥‘•¹”¹•Ğ ½İ¹•É}…Ñ¥½¹Ìœ°€Õ¹­¹½İ¸œ¥ôˆ°(€€€€€€€˜‰)IY%M}%}IU9}%õíµ•Ñ…‘…Ñ„¹•Ğ ¥}ÉÕ¹}¥œ°€œœ¥ôˆ°(€€€€€€€˜‰)IY%M}%}IU9}9U5	Hõíµ•Ñ…‘…Ñ„¹•Ğ ¥}ÉÕ¹}¹Õµ‰•Èœ°€œœ¥ôˆ°(€€€€€€€˜‰)IY%M}%}IU9}UI0õíµ•Ñ…‘…Ñ„¹•Ğ ¥}ÉÕ¹}ÕÉ°œ°€œœ¥ôˆ°(€€€€€€€˜‰)IY%M}%}	I9 õíµ•Ñ…‘…Ñ„¹•Ğ ¥}‰É…¹ œ°€œœ¥ôˆ°(€€€€€€€˜‰)IY%M}%}IA=M%Q=Idõíµ•Ñ…‘…Ñ„¹•Ğ ¥}É•Á½Í¥Ñ½Éäœ°€œœ¥ôˆ°(€€€€€€€˜‰)IY%M}%}5QQ}9IQ}Põíµ•Ñ…‘…Ñ„¹•Ğ µ•Ñ…‘…Ñ…}•¹•É…Ñ•‘}…Ğœ°€œœ¥ôˆ°(€€€€€€€˜‰)IY%M}%}	-9}MQQULõí©½‰Ì¹•Ğ ‰…­•¹‘}Ñ•ÍÑÌœ°€Õ¹­¹½İ¸œ¥ôˆ°(€€€€€€€˜‰)IY%M}%}%=M}MQQULõí©½‰Ì¹•Ğ ¥½Ìœ°€Õ¹­¹½İ¸œ¥ôˆ°(€€€€€€€˜‰)IY%M}%}5}MQQULõí©½‰Ì¹•Ğ µ…Œœ°€Õ¹­¹½İ¸œ¥ôˆ°(€€€€€€€˜‰)IY%M}%=M}	U%1}MQQULõí‰Õ¥±‘}©½‰Ì¹•Ğ ¥½Ìœ°€Õ¹­¹½İ¸œ¥ôˆ°(€€€€€€€˜‰)IY%M}5}	U%1}MQQULõí‰Õ¥±‘}©½‰Ì¹•Ğ µ…Œœ°€Õ¹­¹½İ¸œ¥ôˆ°(€€€€€€€˜‰)IY%M}	-9}QMQ}MQQULõíÑ•ÍÑ}©½‰Ì¹•Ğ ‰…­•¹‘}Ñ•ÍÑÌœ°€Õ¹­¹½İ¸œ¥ôˆ°(€€€€€€€˜‰)IY%M}5}QMQ}MQQULõíÑ•ÍÑ}©½‰Ì¹•Ğ µ…Œœ°€Õ¹­¹½İ¸œ¥ôˆ°(€€€t(€€€A…Ñ ¡Á…Ñ ¤¹İÉ¥Ñ•}Ñ•áĞ ‰q¸ˆ¹©½¥¸¡±¥¹•Ì¤€¬€‰q¸ˆ°•¹½‘¥¹œô‰ÕÑ˜´àˆ¤(()‘•˜µ…¥¸ ¤è(€€€Á…ÉÍ•È€ô…ÉÁ…ÉÍ”¹ÉÕµ•¹ÑA…ÉÍ•È ¤(€€€Á…ÉÍ•È¹…‘‘}…ÉÕµ•¹Ğ ˆ´µ½ÕÑÁÕĞˆ°‘•™…Õ±Ğô‰ÁÉ½©•Ğµ¡•…±Ñ µ¤¹©Í½¸ˆ¤(€€€Á…ÉÍ•È¹…‘‘}…ÉÕµ•¹Ğ ˆ´µ•¹Øµ½ÕÑÁÕĞˆ°‘•™…Õ±Ğôˆˆ¤(€€€Á…ÉÍ•È¹…‘‘}…ÉÕµ•¹Ğ ˆ´µÁ±…¸ˆ°‘•™…Õ±ĞõÍÑÈ¡U1Q}A19}AQ ¤¤(€€€…ÉÌ€ôÁ…ÉÍ•È¹Á…ÉÍ•}…ÉÌ ¤((€€€µ•Ñ…‘…Ñ„€ô‰Õ¥±‘}µ•Ñ…‘…Ñ„¡Á±…¹}Á…Ñ õ…ÉÌ¹Á±…¸¤(€€€A…Ñ ¡…ÉÌ¹½ÕÑÁÕĞ¤¹İÉ¥Ñ•}Ñ•áĞ (€€€€€€€©Í½¸¹‘ÕµÁÌ¡µ•Ñ…‘…Ñ„°•¹ÍÕÉ•}…Í¥¤õ…±Í”°¥¹‘•¹ĞôÈ¤€¬€‰q¸ˆ°(€€€€€€€•¹½‘¥¹œô‰ÕÑ˜´àˆ°(€€€€¤(€€€¥˜…ÉÌ¹•¹Ù}½ÕÑÁÕĞè(€€€€€€€}İÉ¥Ñ•}•¹Ø¡…ÉÌ¹•¹Ù}½ÕÑÁÕĞ°µ•Ñ…‘…Ñ„¤(()¥˜}}¹…µ•}|€ôô€‰}}µ…¥¹}|ˆè(€€€µ…¥¸ ¤(
+        "build_jobs": build_jobs,
+        "test_jobs": test_jobs,
+        "evidence": {
+            "build": "github_actions" if build_sha else "unknown",
+            "build_status": "github_actions_steps" if precise_build_steps else "github_actions_jobs_fallback",
+            "ci": "github_actions",
+            "tests": "github_actions_steps" if precise_mac_test else "github_actions_jobs_fallback",
+            "milestones": milestone_source,
+            "owner_actions": "version_controlled_plan" if owner_actions else "unknown",
+            "run": "github_actions" if run_id and repository and _run_url(env, run_id=run_id) else "unknown",
+        },
+    }
+
+
+def _write_env(path, metadata):
+    """Write the exact secret-free environment keys consumed by GET /project/health."""
+    jobs = metadata.get("jobs") or {}
+    build_jobs = metadata.get("build_jobs") or {}
+    test_jobs = metadata.get("test_jobs") or {}
+    owner_actions_json = json.dumps(metadata.get("owner_actions") or [], ensure_ascii=False, separators=(",", ":"))
+    evidence = metadata.get("evidence") or {}
+    lines = [
+        f"JARVIS_BUILD_SHA={metadata['build_sha']}",
+        f"JARVIS_BUILD_STATUS={metadata.get('build_status', 'unknown')}",
+        f"JARVIS_CI_STATUS={metadata['ci_status']}",
+        f"JARVIS_TESTS_STATUS={metadata['tests_status']}",
+        f"JARVIS_CURRENT_PHASE={metadata['phase']}",
+        f"JARVIS_CURRENT_MILESTONE={metadata['current_milestone']}",
+        f"JARVIS_NEXT_MILESTONE={metadata['next_milestone']}",
+        f"JARVIS_OWNER_ACTIONS_JSON={owner_actions_json}",
+        f"JARVIS_MILESTONE_SOURCE={evidence.get('milestones', 'unknown')}",
+        f"JARVIS_OWNER_ACTIONS_SOURCE={evidence.get('owner_actions', 'unknown')}",
+        f"JARVIS_CI_RUN_ID={metadata.get('ci_run_id', '')}",
+        f"JARVIS_CI_RUN_NUMBER={metadata.get('ci_run_number', '')}",
+        f"JARVIS_CI_RUN_URL={metadata.get('ci_run_url', '')}",
+        f"JARVIS_CI_BRANCH={metadata.get('ci_branch', '')}",
+        f"JARVIS_CI_REPOSITORY={metadata.get('ci_repository', '')}",
+        f"JARVIS_CI_METADATA_GENERATED_AT={metadata.get('metadata_generated_at', '')}",
+        f"JARVIS_CI_BACKEND_STATUS={jobs.get('backend_tests', 'unknown')}",
+        f"JARVIS_CI_IOS_STATUS={jobs.get('ios', 'unknown')}",
+        f"JARVIS_CI_MAC_STATUS={jobs.get('mac', 'unknown')}",
+        f"JARVIS_IOS_BUILD_STATUS={build_jobs.get('ios', 'unknown')}",
+        f"JARVIS_MAC_BUILD_STATUS={build_jobs.get('mac', 'unknown')}",
+        f"JARVIS_BACKEND_TEST_STATUS={test_jobs.get('backend_tests', 'unknown')}",
+        f"JARVIS_MAC_TEST_STATUS={test_jobs.get('mac', 'unknown')}",
+    ]
+    Path(path).write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--output", default="project-health-ci.json")
+    parser.add_argument("--env-output", default="")
+    parser.add_argument("--plan", default=str(DEFAULT_PLAN_PATH))
+    args = parser.parse_args()
+
+    metadata = build_metadata(plan_path=args.plan)
+    Path(args.output).write_text(
+        json.dumps(metadata, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    if args.env_output:
+        _write_env(args.env_output, metadata)
+
+
+if __name__ == "__main__":
+    main()
