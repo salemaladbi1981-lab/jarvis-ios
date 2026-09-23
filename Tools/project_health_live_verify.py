@@ -4,8 +4,9 @@
 This tool is intentionally separate from deployment/cutover. It performs one
 HTTPS GET, optionally using an existing bearer token supplied via an
 environment variable, and validates that the live runtime is serving fresh CI,
-build, test, milestone, and blocker evidence for the exact expected build.
-It never writes production state and never prints authentication material.
+build, test, milestone, and blocker evidence for the exact expected build and
+GitHub Actions run. It never writes production state and never prints
+authentication material.
 """
 import argparse
 import json
@@ -21,6 +22,14 @@ EXPECTED_REPOSITORY = "salemaladbi1981-lab/jarvis-ios"
 
 def _nonempty(value):
     return bool(str(value or "").strip()) and str(value).strip().lower() != "unknown"
+
+
+def _canonical_run_url(repository, run_id):
+    repository = str(repository or "").strip()
+    run_id = str(run_id or "").strip()
+    if not repository or not run_id:
+        return ""
+    return f"https://github.com/{repository}/actions/runs/{run_id}"
 
 
 def validate_url(url):
@@ -54,7 +63,14 @@ def fetch_snapshot(url, bearer_token="", timeout=10.0):
     return payload
 
 
-def assess_snapshot(snapshot, expected_sha, expected_branch, expected_repository=EXPECTED_REPOSITORY):
+def assess_snapshot(
+    snapshot,
+    expected_sha,
+    expected_branch,
+    expected_repository=EXPECTED_REPOSITORY,
+    expected_run_id="",
+    expected_run_number="",
+):
     """Return a sanitized, fail-closed verdict for one live health snapshot."""
     if not isinstance(snapshot, dict):
         return {"ok": False, "failed_checks": ["response_object"]}
@@ -62,6 +78,9 @@ def assess_snapshot(snapshot, expected_sha, expected_branch, expected_repository
     expected_sha = str(expected_sha or "").strip()
     expected_branch = str(expected_branch or "").strip()
     expected_repository = str(expected_repository or "").strip()
+    expected_run_id = str(expected_run_id or "").strip()
+    expected_run_number = str(expected_run_number or "").strip()
+    expected_run_url = _canonical_run_url(expected_repository, expected_run_id)
     evidence = snapshot.get("evidence") if isinstance(snapshot.get("evidence"), dict) else {}
     blocker_items = snapshot.get("blocker_items") if isinstance(snapshot.get("blocker_items"), list) else []
     owner_items = snapshot.get("owner_action_items") if isinstance(snapshot.get("owner_action_items"), list) else []
@@ -76,10 +95,19 @@ def assess_snapshot(snapshot, expected_sha, expected_branch, expected_repository
         owner_actions = -1
 
     checks = {
-        "expected_identity": bool(expected_sha and expected_branch and expected_repository),
+        "expected_identity": bool(
+            expected_sha
+            and expected_branch
+            and expected_repository
+            and expected_run_id.isdigit()
+            and expected_run_number.isdigit()
+        ),
         "build_identity": snapshot.get("build_sha") == expected_sha,
         "branch_identity": snapshot.get("ci_branch") == expected_branch,
         "repository_identity": snapshot.get("ci_repository") == expected_repository,
+        "run_id_identity": str(snapshot.get("ci_run_id") or "") == expected_run_id,
+        "run_number_identity": str(snapshot.get("ci_run_number") or "") == expected_run_number,
+        "run_url_identity": str(snapshot.get("ci_run_url") or "") == expected_run_url,
         "ci": snapshot.get("ci_status") == "success",
         "build": snapshot.get("build_status") == "success",
         "tests": snapshot.get("tests_status") == "success",
@@ -106,6 +134,7 @@ def assess_snapshot(snapshot, expected_sha, expected_branch, expected_repository
         "ci_repository": str(snapshot.get("ci_repository") or ""),
         "ci_run_id": str(snapshot.get("ci_run_id") or ""),
         "ci_run_number": str(snapshot.get("ci_run_number") or ""),
+        "ci_run_url": str(snapshot.get("ci_run_url") or ""),
         "ci_status": str(snapshot.get("ci_status") or "unknown"),
         "build_status": str(snapshot.get("build_status") or "unknown"),
         "tests_status": str(snapshot.get("tests_status") or "unknown"),
@@ -126,6 +155,8 @@ def main():
     parser.add_argument("--expected-sha", required=True)
     parser.add_argument("--expected-branch", required=True)
     parser.add_argument("--expected-repository", default=EXPECTED_REPOSITORY)
+    parser.add_argument("--expected-run-id", required=True)
+    parser.add_argument("--expected-run-number", required=True)
     parser.add_argument("--token-env", default="JARVIS_SESSION_TOKEN")
     parser.add_argument("--timeout", type=float, default=10.0)
     args = parser.parse_args()
@@ -133,7 +164,14 @@ def main():
     try:
         token = os.environ.get(args.token_env, "") if args.token_env else ""
         snapshot = fetch_snapshot(args.url, bearer_token=token, timeout=args.timeout)
-        result = assess_snapshot(snapshot, args.expected_sha, args.expected_branch, args.expected_repository)
+        result = assess_snapshot(
+            snapshot,
+            args.expected_sha,
+            args.expected_branch,
+            args.expected_repository,
+            args.expected_run_id,
+            args.expected_run_number,
+        )
     except Exception as exc:  # CLI boundary: return only a sanitized error class/message.
         result = {"ok": False, "failed_checks": ["live_fetch"], "error": str(exc)}
 

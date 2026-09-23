@@ -8,6 +8,11 @@ sys.path.insert(0, str(ROOT / "Tools"))
 from project_health_live_verify import assess_snapshot, validate_url  # noqa: E402
 
 PASS = FAIL = 0
+EXPECTED_SHA = "a" * 40
+EXPECTED_BRANCH = "chatgpt-overnight-2"
+EXPECTED_REPOSITORY = "salemaladbi1981-lab/jarvis-ios"
+EXPECTED_RUN_ID = "123456"
+EXPECTED_RUN_NUMBER = "409"
 
 
 def check(name, condition):
@@ -21,11 +26,12 @@ def check(name, condition):
 
 def green_snapshot():
     return {
-        "build_sha": "a" * 40,
-        "ci_branch": "chatgpt-overnight-2",
-        "ci_repository": "salemaladbi1981-lab/jarvis-ios",
-        "ci_run_id": "123456",
-        "ci_run_number": "409",
+        "build_sha": EXPECTED_SHA,
+        "ci_branch": EXPECTED_BRANCH,
+        "ci_repository": EXPECTED_REPOSITORY,
+        "ci_run_id": EXPECTED_RUN_ID,
+        "ci_run_number": EXPECTED_RUN_NUMBER,
+        "ci_run_url": f"https://github.com/{EXPECTED_REPOSITORY}/actions/runs/{EXPECTED_RUN_ID}",
         "ci_status": "success",
         "build_status": "success",
         "tests_status": "success",
@@ -50,62 +56,81 @@ def green_snapshot():
     }
 
 
+def verdict(snapshot, **overrides):
+    values = {
+        "expected_sha": EXPECTED_SHA,
+        "expected_branch": EXPECTED_BRANCH,
+        "expected_repository": EXPECTED_REPOSITORY,
+        "expected_run_id": EXPECTED_RUN_ID,
+        "expected_run_number": EXPECTED_RUN_NUMBER,
+    }
+    values.update(overrides)
+    return assess_snapshot(snapshot, **values)
+
+
 base = green_snapshot()
-expected_sha = "a" * 40
-expected_branch = "chatgpt-overnight-2"
+check("green exact live snapshot passes", verdict(base)["ok"])
 
-check("green exact live snapshot passes", assess_snapshot(base, expected_sha, expected_branch)["ok"])
-
-missing_expected = assess_snapshot(base, "", expected_branch)
-check("caller must provide an explicit expected build identity", "expected_identity" in missing_expected["failed_checks"])
+missing_expected = verdict(base, expected_run_id="")
+check("caller must provide exact GitHub run identity", "expected_identity" in missing_expected["failed_checks"])
 
 wrong_sha = dict(base, build_sha="b" * 40)
-check("wrong deployed SHA fails closed", "build_identity" in assess_snapshot(wrong_sha, expected_sha, expected_branch)["failed_checks"])
+check("wrong deployed SHA fails closed", "build_identity" in verdict(wrong_sha)["failed_checks"])
 
 wrong_branch = dict(base, ci_branch="main")
-check("wrong deployed branch fails closed", "branch_identity" in assess_snapshot(wrong_branch, expected_sha, expected_branch)["failed_checks"])
+check("wrong deployed branch fails closed", "branch_identity" in verdict(wrong_branch)["failed_checks"])
 
 wrong_repo = dict(base, ci_repository="other/repo")
-check("wrong deployed repository fails closed", "repository_identity" in assess_snapshot(wrong_repo, expected_sha, expected_branch)["failed_checks"])
+check("wrong deployed repository fails closed", "repository_identity" in verdict(wrong_repo)["failed_checks"])
+
+wrong_run_id = dict(base, ci_run_id="654321")
+check("wrong live GitHub run id fails closed", "run_id_identity" in verdict(wrong_run_id)["failed_checks"])
+
+wrong_run_number = dict(base, ci_run_number="410")
+check("wrong live GitHub run number fails closed", "run_number_identity" in verdict(wrong_run_number)["failed_checks"])
+
+wrong_run_url = dict(base, ci_run_url=f"https://github.com/{EXPECTED_REPOSITORY}/actions/runs/654321")
+check("wrong live GitHub run URL fails closed", "run_url_identity" in verdict(wrong_run_url)["failed_checks"])
 
 stale = dict(base, ci_metadata_state="stale")
-check("stale CI metadata cannot pass", "freshness" in assess_snapshot(stale, expected_sha, expected_branch)["failed_checks"])
+check("stale CI metadata cannot pass", "freshness" in verdict(stale)["failed_checks"])
 
 bad_tests = dict(base, tests_status="failure")
-check("failing tests remain visible", "tests" in assess_snapshot(bad_tests, expected_sha, expected_branch)["failed_checks"])
+check("failing tests remain visible", "tests" in verdict(bad_tests)["failed_checks"])
 
 blocked = dict(base, blockers=1, blocker_items=[{"type": "ci_job"}])
-check("live blockers prevent readiness", "blockers" in assess_snapshot(blocked, expected_sha, expected_branch)["failed_checks"])
+check("live blockers prevent readiness", "blockers" in verdict(blocked)["failed_checks"])
 
 missing_evidence = dict(base, evidence={"build": "reported"})
-check("missing runtime evidence fails closed", "reported_evidence" in assess_snapshot(missing_evidence, expected_sha, expected_branch)["failed_checks"])
+check("missing runtime evidence fails closed", "reported_evidence" in verdict(missing_evidence)["failed_checks"])
 
 owner_mismatch = dict(base, owner_actions=2)
-check("owner-action count must match sanitized items", "owner_action_coherence" in assess_snapshot(owner_mismatch, expected_sha, expected_branch)["failed_checks"])
+check("owner-action count must match sanitized items", "owner_action_coherence" in verdict(owner_mismatch)["failed_checks"])
 
 no_milestone_source = dict(base, evidence=dict(base["evidence"], milestone_source="unknown"))
 check(
     "live milestones need trusted provenance",
-    "milestone_provenance" in assess_snapshot(no_milestone_source, expected_sha, expected_branch)["failed_checks"],
+    "milestone_provenance" in verdict(no_milestone_source)["failed_checks"],
 )
 
 no_owner_source = dict(base, evidence=dict(base["evidence"], owner_actions="unknown"))
 check(
     "live owner actions need trusted provenance",
-    "owner_action_provenance" in assess_snapshot(no_owner_source, expected_sha, expected_branch)["failed_checks"],
+    "owner_action_provenance" in verdict(no_owner_source)["failed_checks"],
 )
 
 empty_owner = dict(base, owner_actions=0, owner_action_items=[], evidence=dict(base["evidence"], owner_actions="unknown"))
 check(
     "no owner actions does not require invented provenance",
-    assess_snapshot(empty_owner, expected_sha, expected_branch)["ok"],
+    verdict(empty_owner)["ok"],
 )
 
-result = assess_snapshot(base, expected_sha, expected_branch)
+result = verdict(base)
 check(
     "verdict is sanitized and omits owner payloads",
     "owner_action_items" not in result and "evidence" not in result and result["owner_actions"] == 1,
 )
+check("verdict reports exact run identity", result["ci_run_id"] == EXPECTED_RUN_ID and result["ci_run_number"] == EXPECTED_RUN_NUMBER)
 
 check("canonical HTTPS URL is accepted", validate_url("https://jarvis.example/project/health") == "https://jarvis.example/project/health")
 for unsafe in (
