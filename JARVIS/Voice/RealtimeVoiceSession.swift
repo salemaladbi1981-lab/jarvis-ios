@@ -242,7 +242,7 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     /// Replace any speculative model answer with authoritative on-device data
     /// (e.g. EventKit calendar/reminders), then ask Realtime to speak only from that result.
     func sendGroundedDeviceResult(userRequest: String, result: String) {
-        let payload = "Authoritative device result. SPEAK THE RESULT VERBATIM, character-for-character in meaning and numbers. Do not paraphrase times, dates, titles, or access status. Do not add another topic. Request: \(userRequest)\nVERBATIM RESULT: \(result)"
+        let payload = "Authoritative device result. SPEAK THE RESULT VERBATIM, character-for-character in meaning and numbers. Do not paraphrase times, dates, titles, or access status. Do not add another topic. Read every title exactly as written, as words — never spell it letter by letter, never translate it, and never read Latin letters one by one. Request: \(userRequest)\nVERBATIM RESULT: \(result)"
         let escaped = payload
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "\"", with: "\\\"")

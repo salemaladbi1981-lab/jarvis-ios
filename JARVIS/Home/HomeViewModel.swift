@@ -8,6 +8,60 @@ import AlarmKit
 #endif
 
 
+/// Spoken-safe Arabic phrasing for every grounded device reply.
+/// A bare "٢:٠٠ م" was read aloud as "2 AM" for a 14:00 event, so a time is now
+/// stated three ways at once: hour in Arabic words, the part of day in words, and
+/// the 24-hour clock in digits. Nothing here is for on-screen display.
+private enum JarvisSpokenTime {
+    private static let hourWords = ["", "واحد", "اثنين", "ثلاثة", "أربعة", "خمسة", "ستة",
+                                    "سبعة", "ثمانية", "تسعة", "عشرة", "إحدى عشر", "اثنا عشر"]
+
+    private static func partOfDay(_ hour24: Int) -> String {
+        switch hour24 {
+        case 0..<5:   return "بعد منتصف الليل"
+        case 5..<12:  return "الصبح"
+        case 12..<17: return "بعد الظهر"
+        default:      return "المساء"
+        }
+    }
+
+    private static func minuteWords(_ m: Int) -> String {
+        guard m > 0 else { return "" }
+        if m == 15 { return " والربع" }
+        if m == 30 { return " والنص" }
+        let ones = ["", "دقيقة واحدة", "دقيقتين", "ثلاث دقائق", "أربع دقائق", "خمس دقائق",
+                    "ست دقائق", "سبع دقائق", "ثمان دقائق", "تسع دقائق"]
+        let teens = ["عشر دقائق", "إحدى عشرة دقيقة", "اثنتي عشرة دقيقة", "ثلاث عشرة دقيقة",
+                     "أربع عشرة دقيقة", "خمس عشرة دقيقة", "ست عشرة دقيقة", "سبع عشرة دقيقة",
+                     "ثمان عشرة دقيقة", "تسع عشرة دقيقة"]
+        let tens = ["", "عشر دقائق", "عشرين دقيقة", "ثلاثين دقيقة", "أربعين دقيقة", "خمسين دقيقة"]
+        let unit = ["", "واحدة", "اثنتين", "ثلاث", "أربع", "خمس", "ست", "سبع", "ثمان", "تسع"]
+        if m < 10 { return " و\(ones[m])" }
+        if m < 20 { return " و\(teens[m - 10])" }
+        let t = m / 10, u = m % 10
+        if u == 0 { return " و\(tens[t])" }
+        return " و\(unit[u]) و\(tens[t])"
+    }
+
+    /// e.g. "الساعة اثنين بعد الظهر (14:00)"
+    static func phrase(_ date: Date, calendar: Calendar = .current) -> String {
+        let h24 = calendar.component(.hour, from: date)
+        let minute = calendar.component(.minute, from: date)
+        let h12 = h24 % 12 == 0 ? 12 : h24 % 12
+        let digits = String(format: "%02d:%02d", h24, minute)
+        return "الساعة \(hourWords[h12])\(minuteWords(minute)) \(partOfDay(h24)) (\(digits))"
+    }
+
+    /// Arabic count phrase, e.g. "موعد واحد" / "موعدين" / "ثلاثة مواعيد".
+    static func count(_ n: Int, one: String, two: String, many: String) -> String {
+        let words = ["", "", "", "ثلاثة", "أربعة", "خمسة", "ستة", "سبعة", "ثمانية", "تسعة", "عشرة"]
+        if n == 1 { return one }
+        if n == 2 { return two }
+        if n <= 10 { return "\(words[n]) \(many)" }
+        return "\(n) \(many)"
+    }
+}
+
 #if canImport(AlarmKit)
 @available(iOS 26.0, *)
 private struct JarvisAlarmMetadata: AlarmMetadata {}
@@ -46,11 +100,7 @@ enum JarvisAlarmScheduler {
             let scheduled = try manager.alarms.first { $0.id == id && $0.state == .scheduled }
             guard scheduled != nil else { return "تعذر التحقق من المنبه — لم يتم اعتماده في النظام" }
 
-            let f = DateFormatter()
-            f.locale = Locale(identifier: "ar_QA")
-            f.timeZone = .current
-            f.dateFormat = "h:mm a"
-            return "تم ضبط المنبه والتحقق منه في النظام على \(f.string(from: date))"
+            return "تم ضبط المنبه والتحقق منه في النظام على \(JarvisSpokenTime.phrase(date))"
         } catch {
             return "تعذر ضبط المنبه: \(error.localizedDescription)"
         }
@@ -545,15 +595,23 @@ final class HomeViewModel: ObservableObject {
 
     private static func formatEvents(_ events: [JarvisCalendarEvent], dayLabel: String = "اليوم") -> String {
         guard !events.isEmpty else { return "لا توجد مواعيد \(dayLabel)" }
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "ar_QA")
-        f.dateFormat = "h:mm a"
-        return events.prefix(5).map { "\(f.string(from: $0.start)) — \($0.title)" }.joined(separator: "\n")
+        let shown = Array(events.prefix(5))
+        let head = JarvisSpokenTime.count(shown.count, one: "موعد واحد", two: "موعدين", many: "مواعيد")
+        if let only = shown.first, shown.count == 1 {
+            return "\(dayLabel) عندك \(head): \(JarvisSpokenTime.phrase(only.start))، عنوانه: \(only.title)"
+        }
+        let lines = shown.map { "- \(JarvisSpokenTime.phrase($0.start))، عنوانه: \($0.title)" }
+        return "\(dayLabel) عندك \(head):\n" + lines.joined(separator: "\n")
     }
 
     private static func formatReminders(_ reminders: [JarvisReminderItem]) -> String {
         guard !reminders.isEmpty else { return "لا توجد تذكيرات قادمة" }
-        return reminders.prefix(5).map { "• \($0.title)" }.joined(separator: "\n")
+        let shown = Array(reminders.prefix(5))
+        let head = JarvisSpokenTime.count(shown.count, one: "تذكير واحد", two: "تذكيرين", many: "تذكيرات")
+        if let only = shown.first, shown.count == 1 {
+            return "عندك \(head): \(only.title)"
+        }
+        return "عندك \(head):\n" + shown.map { "- \($0.title)" }.joined(separator: "\n")
     }
 
     // MARK: V1.1 — write confirmation (minimal coupling)
@@ -622,12 +680,18 @@ final class HomeViewModel: ObservableObject {
         guard !meetings.isEmpty else {
             return "ما لقيت اجتماعات قادمة بروابط مدعومة في تقويم الجهاز"
         }
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "ar_QA")
-        f.dateFormat = "EEE h:mm a"
-        return meetings.prefix(5).map {
-            "\(f.string(from: $0.start)) — \($0.title) — \($0.provider.displayName)"
-        }.joined(separator: "\n")
+        let day = DateFormatter()
+        day.locale = Locale(identifier: "ar_QA")
+        day.dateFormat = "EEEE"
+        let shown = Array(meetings.prefix(5))
+        let head = JarvisSpokenTime.count(shown.count, one: "اجتماع واحد", two: "اجتماعين", many: "اجتماعات")
+        let lines = shown.map {
+            "- \(day.string(from: $0.start)) \(JarvisSpokenTime.phrase($0.start))، عنوانه: \($0.title)، عبر \($0.provider.displayName)"
+        }
+        if shown.count == 1, let only = lines.first {
+            return "عندك \(head): " + only.dropFirst(2)
+        }
+        return "عندك \(head):\n" + lines.joined(separator: "\n")
     }
 
     private func groundedAgentInventoryAnswer(for query: String) -> String {
