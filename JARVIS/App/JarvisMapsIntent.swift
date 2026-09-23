@@ -10,6 +10,14 @@ struct JarvisNavigateIntent: AppIntent {
     static var title: LocalizedStringResource = "Navigate with Google Maps"
     static var description = IntentDescription("Open Google Maps turn-by-turn navigation to a destination.")
     static var openAppWhenRun: Bool = true
+    #if compiler(>=6.2)
+    @available(iOS 26.0, *)
+    static var supportedModes: IntentModes { .foreground(.immediate) }
+    #endif
+    #if compiler(>=6.4)
+    @available(iOS 27.0, *)
+    static var allowedExecutionTargets: IntentExecutionTargets { .main }
+    #endif
     static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
     @Parameter(title: "الوجهة")

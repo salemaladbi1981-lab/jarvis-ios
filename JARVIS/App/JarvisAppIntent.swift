@@ -45,9 +45,16 @@ enum AppBridge {
 struct JarvisVoiceIntent: AppIntent {
     static var title: LocalizedStringResource = "Start Jarvis"
     static var description = IntentDescription("Open Jarvis and start listening.")
-    // Xcode 15 / iOS 17 compatibility. On newer SDKs Apple replaces this with
-    // AppIntent.supportedModes; migrate when the project toolchain is raised.
+    // iOS 17–25 compatibility. On iOS 26+ use Apple's explicit foreground mode.
     static var openAppWhenRun: Bool = true
+    #if compiler(>=6.2)
+    @available(iOS 26.0, *)
+    static var supportedModes: IntentModes { .foreground(.immediate) }
+    #endif
+    #if compiler(>=6.4)
+    @available(iOS 27.0, *)
+    static var allowedExecutionTargets: IntentExecutionTargets { .main }
+    #endif
     static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
     func perform() async throws -> some IntentResult {
@@ -65,6 +72,14 @@ struct JarvisOpenIntent: AppIntent {
     static var title: LocalizedStringResource = "Open Jarvis"
     static var description = IntentDescription("Open Jarvis without starting the microphone.")
     static var openAppWhenRun: Bool = true
+    #if compiler(>=6.2)
+    @available(iOS 26.0, *)
+    static var supportedModes: IntentModes { .foreground(.immediate) }
+    #endif
+    #if compiler(>=6.4)
+    @available(iOS 27.0, *)
+    static var allowedExecutionTargets: IntentExecutionTargets { .main }
+    #endif
     static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
     func perform() async throws -> some IntentResult {

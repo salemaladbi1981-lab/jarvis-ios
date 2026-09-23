@@ -65,6 +65,12 @@ jobs:
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
 
+      - name: Verify compiled App Intents + Shortcuts metadata
+        run: |
+          APP=$(find build -name "JARVIS.app" -type d 2>/dev/null | head -1)
+          test -n "$APP"
+          python3 Tools/app_intents_metadata_verify.py "$APP"
+
       - name: Boot iPhone + P5 screenshots (real UI via -demo, real API client)
         run: |
           APP=$(find build -name "JARVIS.app" -type d 2>/dev/null | head -1)
@@ -184,7 +190,7 @@ jobs:
             project-health.env \
             project-health-ci.json
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifaact@v4
         with:
           name: project-health-metadata
           path: |
