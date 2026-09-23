@@ -28,6 +28,7 @@ def snapshot(overrides=None):
         "JARVIS_CI_STATUS": "success",
         "JARVIS_TESTS_STATUS": "success",
         "JARVIS_CI_RUN_ID": "36700000000",
+        "JARVIS_CI_RUN_NUMBER": "419",
         "JARVIS_CI_RUN_URL": "https://github.com/salemaladbi1981-lab/jarvis-ios/actions/runs/36700000000",
         "JARVIS_CI_BRANCH": "chatgpt-overnight-2",
         "JARVIS_CI_REPOSITORY": "salemaladbi1981-lab/jarvis-ios",

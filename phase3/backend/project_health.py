@@ -214,16 +214,18 @@ def _valid_ci_run_url(value):
 def _ci_run_identity_present(ci):
     """Require one coherent public GitHub Actions run identity before showing green.
 
-    A run id + URL pair is not enough: the URL repository, reported repository,
-    branch, and run id must all be present and agree. This keeps a copied or
+    A run id + URL pair is not enough: run number, URL repository, reported
+    repository, branch, and run id must all be present; URL repository/run id agree. This keeps a copied or
     partially stripped CI artifact from proving the wrong repository as healthy.
     """
     run_id = str(ci.get("run_id") or "").strip()
+    run_number = str(ci.get("run_number") or "").strip()
     run_url = str(ci.get("run_url") or "").strip()
     branch = str(ci.get("branch") or "").strip()
     repository = str(ci.get("repository") or "").strip()
     if (
         not run_id.isdigit()
+        or not run_number.isdigit()
         or not branch
         or "\n" in branch
         or "\r" in branch

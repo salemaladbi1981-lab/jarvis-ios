@@ -44,6 +44,7 @@ success = {
     "JARVIS_CI_IOS_STATUS": "success",
     "JARVIS_CI_MAC_STATUS": "success",
     "JARVIS_CI_RUN_ID": "359",
+    "JARVIS_CI_RUN_NUMBER": "419",
     "JARVIS_CI_RUN_URL": "https://github.com/example/project/actions/runs/359",
     "JARVIS_CI_BRANCH": "chatgpt-overnight-2",
     "JARVIS_CI_REPOSITORY": "example/project",
