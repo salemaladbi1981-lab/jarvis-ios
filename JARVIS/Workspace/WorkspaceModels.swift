@@ -217,6 +217,7 @@ struct ProjectHealth: Codable {
     let ciRunNumber: String?
     let ciRunUrl: String?
     let ciBranch: String?
+    let ciRepository: String?
     let ciMetadataGeneratedAt: String?
     let ciMetadataState: String?
     let ciMetadataAgeSeconds: Int?
@@ -334,6 +335,7 @@ extension ProjectHealth {
             ciRunNumber: nil,
             ciRunUrl: nil,
             ciBranch: nil,
+            ciRepository: nil,
             ciMetadataGeneratedAt: nil,
             ciMetadataState: "unknown",
             ciMetadataAgeSeconds: nil,

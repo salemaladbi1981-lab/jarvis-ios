@@ -24,10 +24,13 @@ def check(name, condition):
 
 def snapshot(overrides=None):
     env = {
+        "JARVIS_BUILD_SHA": "a" * 40,
         "JARVIS_CI_STATUS": "success",
         "JARVIS_TESTS_STATUS": "success",
         "JARVIS_CI_RUN_ID": "36700000000",
         "JARVIS_CI_RUN_URL": "https://github.com/salemaladbi1981-lab/jarvis-ios/actions/runs/36700000000",
+        "JARVIS_CI_BRANCH": "chatgpt-overnight-2",
+        "JARVIS_CI_REPOSITORY": "salemaladbi1981-lab/jarvis-ios",
         "JARVIS_CI_METADATA_GENERATED_AT": "2026-09-22T06:55:00Z",
         "JARVIS_CI_BACKEND_STATUS": "success",
         "JARVIS_CI_IOS_STATUS": "success",
@@ -62,7 +65,7 @@ check(
     missing_identity["ci_status"] == "unknown"
     and missing_identity["tests_status"] == "unknown"
     and missing_identity["blocker_items"] == [
-        {"type": "ci_evidence", "state": "incomplete"}
+        {"type": "ci_identity", "state": "incomplete"}
     ],
 )
 

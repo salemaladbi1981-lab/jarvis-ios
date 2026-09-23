@@ -457,6 +457,12 @@ struct HomeEntryView: View {
             return "فشل مهمة\(task) • \(blocker.state ?? "FAILED")"
         case "ci_job":
             return "CI: \(blocker.job ?? "job") • \(blocker.status ?? "failure")"
+        case "build_step":
+            return "خطوة بناء: \(blocker.job ?? "build") • \(blocker.status ?? "failure")"
+        case "test_step":
+            return "خطوة اختبار: \(blocker.job ?? "test") • \(blocker.status ?? "failure")"
+        case "ci_identity":
+            return "هوية البناء وCI غير مكتملة"
         case "ci_metadata":
             return blocker.state == "stale" ? "بيانات CI قديمة" : "بيانات CI غير موثوقة"
         case "ci_evidence":

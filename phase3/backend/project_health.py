@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 import json
 import math
 import os
+import re
+from urllib.parse import urlparse
 
 ACTIVE_TASK_STATES = frozenset({"QUEUED", "RUNNING", "PROCESSING"})
 FAILED_TASK_STATES = frozenset({"FAILED", "ERROR"})
@@ -36,7 +38,10 @@ _MAX_OWNER_ACTION_FIELD_LENGTH = 240
 _MAX_OWNER_EXPIRY_ABS = 10 ** 20
 _MAX_TASK_STATE_LENGTH = 64
 _MAX_RUNTIME_FIELD_LENGTH = 240
-_MAX_BUILD_SHA_LENGTH = 64
+_MAX_BUILD_SHA_LENGTH = 40
+_BUILD_SHA_RE = re.compile(r"^[0-9a-fA-F]{7,40}$")
+_REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+_GITHUB_RUN_PATH_RE = re.compile(r"^/([^/]+/[^/]+)/actions/runs/([0-9]+)/?$")
 _MILESTONE_SOURCES = frozenset({"github_repository_variables", "version_controlled_plan", "mixed", "unknown"})
 _OWNER_ACTION_SOURCES = frozenset({"version_controlled_plan", "unknown"})
 
@@ -144,12 +149,51 @@ def _ci_success_evidence_present(ci):
     return False
 
 
+def _valid_build_sha(value):
+    """Return a bounded Git commit identity or fail closed to an empty value."""
+    text = _bounded_runtime_text(value, max_length=_MAX_BUILD_SHA_LENGTH)
+    return text if _BUILD_SHA_RE.fullmatch(text) else ""
+
+
 def _ci_run_identity_present(ci):
-    """A green CI claim must be tied to an inspectable GitHub Actions run."""
-    return bool(ci.get("run_id") and ci.get("run_url"))
+    """Require one coherent public GitHub Actions run identity before showing green.
+
+    A run id + URL pair is not enough: the URL repository, reported repository,
+    branch, and run id must all be present and agree. This keeps a copied or
+    partially stripped CI artifact from proving the wrong repository as healthy.
+    """
+    run_id = str(ci.get("run_id") or "").strip()
+    run_url = str(ci.get("run_url") or "").strip()
+    branch = str(ci.get("branch") or "").strip()
+    repository = str(ci.get("repository") or "").strip()
+    if (
+        not run_id.isdigit()
+        or not branch
+        or "\n" in branch
+        or "\r" in branch
+        or not _REPOSITORY_RE.fullmatch(repository)
+    ):
+        return False
+
+    parsed = urlparse(run_url)
+    if (
+        parsed.scheme != "https"
+        or parsed.netloc != "github.com"
+        or parsed.params
+        or parsed.query
+        or parsed.fragment
+    ):
+        return False
+    match = _GITHUB_RUN_PATH_RE.fullmatch(parsed.path)
+    return bool(match and match.group(1) == repository and match.group(2) == run_id)
 
 
-def _evidence_gated_status(status, freshness_state, ci, required_jobs, job_statuses=None):
+def _ci_identity_complete(ci, build_sha):
+    """Return true only when green CI is anchored to an exact build and run."""
+    return bool(_valid_build_sha(build_sha) and _ci_run_identity_present(ci))
+
+
+def _evidence_gated_status(status, freshness_state, ci, required_jobs, job_statuses=None, build_sha=""):
     """Fail closed when aggregate success disagrees with its required evidence.
 
     Freshness alone is not sufficient proof of green: a successful aggregate
@@ -165,7 +209,7 @@ def _evidence_gated_status(status, freshness_state, ci, required_jobs, job_statu
     gated = _freshness_gated_status(status, freshness_state)
     if gated != "success":
         return gated
-    if not _ci_run_identity_present(ci):
+    if not _ci_identity_complete(ci, build_sha):
         return "unknown"
     if not required or not all(job_status == "success" for job_status in required):
         return "unknown"
@@ -371,16 +415,18 @@ def build_project_health(
             blocker_items.append(blocker)
 
     ci = _ci_snapshot(env)
+    build_sha = _valid_build_sha(_text(env, "JARVIS_BUILD_SHA"))
+    identity_complete = _ci_identity_complete(ci, build_sha)
     freshness = _ci_metadata_freshness(ci["metadata_generated_at"], now=now)
     effective_ci_status = _evidence_gated_status(
-        ci["status"], freshness["state"], ci, tuple(CI_JOB_ENV)
+        ci["status"], freshness["state"], ci, tuple(CI_JOB_ENV), build_sha=build_sha
     )
     effective_build_status = _evidence_gated_status(
-        ci["build_status"], freshness["state"], ci, tuple(BUILD_JOB_ENV), ci["build_jobs"]
+        ci["build_status"], freshness["state"], ci, tuple(BUILD_JOB_ENV), ci["build_jobs"], build_sha
     )
     test_evidence_jobs = ci["test_jobs"] if ci["has_test_job_evidence"] else ci["jobs"]
     effective_tests_status = _evidence_gated_status(
-        ci["tests_status"], freshness["state"], ci, TEST_JOB_NAMES, test_evidence_jobs
+        ci["tests_status"], freshness["state"], ci, TEST_JOB_NAMES, test_evidence_jobs, build_sha
     )
     failed_ci_jobs = []
     for job, status in ci["jobs"].items():
@@ -434,10 +480,16 @@ def build_project_health(
             blocker["run_url"] = ci["run_url"]
         blocker_items.append(blocker)
 
-    # Even fresh metadata cannot be called green when an aggregate success lacks
-    # run identity or its exact required job/step evidence. A post-build screenshot
-    # failure may make CI red while build/tests remain independently truthful.
-    if freshness["state"] == "fresh" and not failed_ci_jobs and (
+    # Fresh green claims must be tied to one exact build + coherent GitHub run.
+    # Surface identity loss separately from missing job/step evidence so the owner
+    # can distinguish a deployment-handoff problem from an actual test/build gap.
+    if freshness["state"] == "fresh" and _ci_success_evidence_present(ci) and not identity_complete:
+        blocker_items.append({"type": "ci_identity", "state": "incomplete"})
+
+    # Even with coherent identity, aggregate success still needs every exact
+    # required job/step. A post-build screenshot failure may make CI red while
+    # build/tests remain independently truthful.
+    if freshness["state"] == "fresh" and identity_complete and not failed_ci_jobs and (
         (ci["status"] == "success" and effective_ci_status != "success")
         or (ci["build_status"] == "success" and effective_build_status != "success")
         or (ci["tests_status"] == "success" and effective_tests_status != "success")
@@ -469,10 +521,6 @@ def build_project_health(
     next_milestone = _bounded_runtime_text(
         _text(env, "JARVIS_NEXT_MILESTONE", "unknown"), default="unknown"
     )
-    build_sha = _bounded_runtime_text(
-        _text(env, "JARVIS_BUILD_SHA"), max_length=_MAX_BUILD_SHA_LENGTH
-    )
-
     return {
         "ok": True,
         "phase": phase,
@@ -514,7 +562,8 @@ def build_project_health(
             "build": _reported(build_sha),
             "ci": _reported(ci["status"]),
             "tests": _reported(ci["tests_status"]),
-            "ci_run": "reported" if ci["run_id"] and ci["run_url"] else "unknown",
+            "ci_run": "reported" if _ci_run_identity_present(ci) else "unknown",
+            "ci_identity": "reported" if identity_complete else "unknown",
             "ci_freshness": freshness["state"],
             "milestones": _planning_evidence(phase, current_milestone, next_milestone),
             "milestone_source": milestone_source,

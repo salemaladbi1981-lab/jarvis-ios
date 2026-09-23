@@ -32,6 +32,7 @@ env = {
     "JARVIS_CI_RUN_NUMBER": "287",
     "JARVIS_CI_RUN_URL": "https://github.com/salemaladbi1981-lab/jarvis-ios/actions/runs/35616993206",
     "JARVIS_CI_BRANCH": "chatgpt-overnight-2",
+    "JARVIS_CI_REPOSITORY": "salemaladbi1981-lab/jarvis-ios",
     "JARVIS_CI_METADATA_GENERATED_AT": "2026-09-21T15:20:00Z",
     "JARVIS_CI_BACKEND_STATUS": "success",
     "JARVIS_CI_IOS_STATUS": "failure",
@@ -119,7 +120,7 @@ check("owner action count stays backward-compatible while sanitized details are 
 check("evidence labels distinguish reported build/CI/tests/run/freshness/milestones",
       snapshot["evidence"] == {
           "build": "reported", "ci": "reported", "tests": "reported",
-          "ci_run": "reported", "ci_freshness": "fresh", "milestones": "reported",
+          "ci_run": "reported", "ci_identity": "reported", "ci_freshness": "fresh", "milestones": "reported",
           "milestone_source": "unknown", "owner_actions": "runtime_approvals",
       })
 

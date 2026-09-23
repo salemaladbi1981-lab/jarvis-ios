@@ -43,9 +43,12 @@ check(
 )
 
 check(
-    "blocker details distinguish CI, task, metadata, and kill-switch evidence",
+    "blocker details distinguish CI identity, exact build/test steps, task, metadata, and kill-switch evidence",
     'case "task_failure"' in home
     and 'case "ci_job"' in home
+    and 'case "build_step"' in home
+    and 'case "test_step"' in home
+    and 'case "ci_identity"' in home
     and 'case "ci_metadata"' in home
     and 'case "ci_evidence"' in home
     and 'case "kill_switch"' in home

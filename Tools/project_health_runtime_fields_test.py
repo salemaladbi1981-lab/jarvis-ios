@@ -66,10 +66,10 @@ boundary = snapshot({
     "JARVIS_CURRENT_PHASE": "p" * 240,
     "JARVIS_CURRENT_MILESTONE": "m" * 240,
     "JARVIS_NEXT_MILESTONE": "n" * 240,
-    "JARVIS_BUILD_SHA": "c" * 64,
+    "JARVIS_BUILD_SHA": "c" * 40,
 })
 check("documented runtime field boundary remains accepted", boundary["current_milestone"] == "m" * 240)
-check("build identity boundary remains accepted", boundary["build_sha"] == "c" * 64)
+check("build identity boundary remains accepted", boundary["build_sha"] == "c" * 40)
 
 print(f"\n== RESULT: {PASS} PASS / {FAIL} FAIL ==")
 sys.exit(1 if FAIL else 0)

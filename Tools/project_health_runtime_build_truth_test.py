@@ -32,6 +32,7 @@ def snapshot(overrides=None):
         "JARVIS_CI_RUN_NUMBER": "401",
         "JARVIS_CI_RUN_URL": "https://github.com/salemaladbi1981-lab/jarvis-ios/actions/runs/401",
         "JARVIS_CI_BRANCH": "chatgpt-overnight-2",
+        "JARVIS_CI_REPOSITORY": "salemaladbi1981-lab/jarvis-ios",
         "JARVIS_CI_METADATA_GENERATED_AT": "2026-09-22T22:20:00Z",
         "JARVIS_CI_BACKEND_STATUS": "success",
         "JARVIS_CI_IOS_STATUS": "success",
@@ -128,6 +129,8 @@ legacy_env = {
     "JARVIS_CI_RUN_ID": "399",
     "JARVIS_CI_RUN_NUMBER": "399",
     "JARVIS_CI_RUN_URL": "https://github.com/salemaladbi1981-lab/jarvis-ios/actions/runs/399",
+    "JARVIS_CI_BRANCH": "chatgpt-overnight-2",
+    "JARVIS_CI_REPOSITORY": "salemaladbi1981-lab/jarvis-ios",
     "JARVIS_CI_METADATA_GENERATED_AT": "2026-09-22T22:20:00Z",
     "JARVIS_CI_BACKEND_STATUS": "success",
     "JARVIS_CI_IOS_STATUS": "success",
@@ -145,6 +148,46 @@ check(
     and legacy["build_status"] == "unknown"
     and legacy["build_jobs"] == {"ios": "unknown", "mac": "unknown"}
     and legacy["test_jobs"] == {"backend_tests": "unknown", "mac": "unknown"},
+)
+
+
+missing_repository = snapshot({"JARVIS_CI_REPOSITORY": ""})
+check(
+    "green evidence without repository identity fails closed with an identity blocker",
+    missing_repository["ci_status"] == "unknown"
+    and missing_repository["build_status"] == "unknown"
+    and missing_repository["tests_status"] == "unknown"
+    and missing_repository["evidence"]["ci_run"] == "unknown"
+    and missing_repository["evidence"]["ci_identity"] == "unknown"
+    and any(item.get("type") == "ci_identity" for item in missing_repository["blocker_items"]),
+)
+
+mismatched_repository = snapshot({"JARVIS_CI_REPOSITORY": "other-owner/other-repo"})
+check(
+    "run URL and reported repository must agree before CI can be green",
+    mismatched_repository["ci_status"] == "unknown"
+    and mismatched_repository["evidence"]["ci_run"] == "unknown"
+    and any(item.get("type") == "ci_identity" for item in mismatched_repository["blocker_items"]),
+)
+
+missing_build_identity = snapshot({"JARVIS_BUILD_SHA": ""})
+check(
+    "green CI without an exact build SHA fails closed instead of proving an unknown build",
+    missing_build_identity["build_sha"] == ""
+    and missing_build_identity["ci_status"] == "unknown"
+    and missing_build_identity["build_status"] == "unknown"
+    and missing_build_identity["tests_status"] == "unknown"
+    and missing_build_identity["evidence"]["ci_run"] == "reported"
+    and missing_build_identity["evidence"]["ci_identity"] == "unknown"
+    and any(item.get("type") == "ci_identity" for item in missing_build_identity["blocker_items"]),
+)
+
+malformed_build_identity = snapshot({"JARVIS_BUILD_SHA": "not-a-sha"})
+check(
+    "malformed build identity is removed at the runtime response boundary",
+    malformed_build_identity["build_sha"] == ""
+    and malformed_build_identity["evidence"]["build"] == "unknown"
+    and malformed_build_identity["ci_status"] == "unknown",
 )
 
 stale = snapshot({"JARVIS_CI_METADATA_GENERATED_AT": "2026-09-20T22:20:00Z"})

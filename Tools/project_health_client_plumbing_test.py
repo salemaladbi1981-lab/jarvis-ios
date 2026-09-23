@@ -19,6 +19,7 @@ check(
         "let ciRunNumber: String?",
         "let ciRunUrl: String?",
         "let ciBranch: String?",
+        "let ciRepository: String?",
         "let ciMetadataGeneratedAt: String?",
         "let ciMetadataState: String?",
         "let ciMetadataAgeSeconds: Int?",
