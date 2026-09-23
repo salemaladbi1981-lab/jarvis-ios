@@ -53,6 +53,21 @@ final class AppleEventKitProvider {
         catch { return .denied }
     }
 
+    // MARK: Evidence logging (diagnostic only — never affects returned data)
+
+    /// ISO8601 with timezone offset, so a log line proves which wall-clock time
+    /// EventKit actually handed us (device timezone, not UTC-normalised).
+    private static let diagFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        f.timeZone = .current
+        return f
+    }()
+
+    private static func diagStamp(_ d: Date) -> String { diagFormatter.string(from: d) }
+
+    private static func diagLog(_ msg: String) { print("[JARVIS-DIAG][eventkit] \(msg)") }
+
     func events(dayOffset: Int = 0, now: Date = Date()) async throws -> [JarvisCalendarEvent] {
         let cal = Calendar.current
         let today = cal.startOfDay(for: now)
@@ -65,7 +80,12 @@ final class AppleEventKitProvider {
     }
 
     func todayEvents() async throws -> [JarvisCalendarEvent] {
-        try await events(dayOffset: 0)
+        let list = try await events(dayOffset: 0)
+        Self.diagLog("todayEvents count=\(list.count) tz=\(TimeZone.current.identifier)")
+        for e in list {
+            Self.diagLog("todayEvents item title=\(e.title) start=\(Self.diagStamp(e.start)) allDay=\(e.isAllDay)")
+        }
+        return list
     }
 
     func nextEvent() async throws -> JarvisCalendarEvent? {
@@ -73,11 +93,17 @@ final class AppleEventKitProvider {
         let now = Date()
         guard let horizon = cal.date(byAdding: .day, value: 30, to: now) else { return nil }
         let predicate = store.predicateForEvents(withStart: now, end: horizon, calendars: nil)
-        return store.events(matching: predicate)
+        let next = store.events(matching: predicate)
             .filter { $0.startDate >= now }
             .sorted { $0.startDate < $1.startDate }
             .first
             .map { JarvisCalendarEvent(ek: $0) }
+        if let e = next {
+            Self.diagLog("nextEvent title=\(e.title) start=\(Self.diagStamp(e.start)) tz=\(TimeZone.current.identifier)")
+        } else {
+            Self.diagLog("nextEvent none tz=\(TimeZone.current.identifier)")
+        }
+        return next
     }
 
     /// Read-only discovery for joinable meetings already present in Apple Calendar.

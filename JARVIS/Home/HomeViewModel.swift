@@ -38,6 +38,10 @@ enum JarvisAlarmScheduler {
             )
             let id = UUID()
             _ = try await manager.schedule(id: id, configuration: configuration)
+            print("[JARVIS-DIAG][alarm] schedule returned id=\(id) requested=\(date)")
+            for a in try manager.alarms {
+                print("[JARVIS-DIAG][alarm] AlarmManager.alarms id=\(a.id) state=\(String(describing: a.state))")
+            }
             // Never claim success until AlarmKit itself reports the same alarm as scheduled.
             let scheduled = try manager.alarms.first { $0.id == id && $0.state == .scheduled }
             guard scheduled != nil else { return "تعذر التحقق من المنبه — لم يتم اعتماده في النظام" }
@@ -378,6 +382,19 @@ final class HomeViewModel: ObservableObject {
         }
     }
 
+    // MARK: Evidence logging (diagnostic only — no behaviour change)
+
+    /// Which local route/tool claimed a transcript.
+    private static func diagRoute(_ route: String, _ text: String) {
+        print("[JARVIS-DIAG][route] route=\(route) transcript=\(text)")
+    }
+
+    /// The exact grounded payload handed to Realtime, in full.
+    private static func diagGrounded(_ site: String, request: String, result: String) {
+        print("[JARVIS-DIAG][grounded] site=\(site) request=\(request)")
+        print("[JARVIS-DIAG][grounded] site=\(site) result=\(result)")
+    }
+
     /// Voice transcript → local tool route → spoken result.
     /// V1.1: إضافة إنشاء تذكير (بتأكيد) + أسئلة شخصية تعتمد على الذاكرة.
     func routeVoiceTranscript(_ text: String) async {
@@ -389,14 +406,20 @@ final class HomeViewModel: ObservableObject {
         #endif
         // أسئلة البريد يعالجها الـ backend LLM عبر function calling — لا نعترضها محلياً
         // (يمنع «وش أهم إيميلاتي اليوم؟» من الوصول لمسار التقويم بسبب كلمة «اليوم»)
-        if Self.isEmailQuestion(t) { voiceSession.requestResponse(); return }
+        if Self.isEmailQuestion(t) {
+            Self.diagRoute("backend-email", text)
+            voiceSession.requestResponse()
+            return
+        }
 
         // Agent inventory is authoritative on-device from the bundled registry.
         // This bypasses stale backend/model memory for questions such as
         // "هل عندي وكيل اسمه معمار؟" / "من هو المدرب؟".
         if Self.isAgentInventoryQuestion(t) {
+            Self.diagRoute("agent-inventory", text)
             let grounded = groundedAgentInventoryAnswer(for: t)
             calendarMessage = grounded
+            Self.diagGrounded("agent-inventory", request: text, result: grounded)
             voiceSession.sendGroundedDeviceResult(userRequest: text, result: grounded)
             return
         }
@@ -404,34 +427,40 @@ final class HomeViewModel: ObservableObject {
         // Meeting discovery is authoritative on-device from EventKit. This avoids a stale
         // backend claiming it has no meeting access while Calendar access is already granted.
         if Self.isMeetingQuestion(t) {
+            Self.diagRoute("meetings", text)
             await runMeetings(userRequest: text)
             return
         }
         // المنبه: AlarmKit على الجهاز — لا نعتمد على النموذج أو السيرفر.
         if Self.isAlarmRequest(t), let fireDate = Self.parseAlarmDate(t) {
+            Self.diagRoute("alarm", text)
             await runAlarm(at: fireDate, userRequest: text)
             return
         }
 
         // 1) إنشاء تذكير (يتطلب تأكيد)
         if let reminderTitle = Self.parseCreateReminder(t) {
+            Self.diagRoute("reminder-create", text)
             requestReminderCreate(title: reminderTitle)
             return
         }
         // 2) قراءة التذكيرات (أداة محلية) — تُعرض على الشاشة فقط، لا sendText (لا رد منافس)
         if t.contains("تذكير") || t.contains("reminder") {
+            Self.diagRoute("reminders-read", text)
             await runReminders()
             return
         }
         // 3) قراءة التقويم (أداة محلية) — تُعرض على الشاشة فقط، لا sendText
         if t.contains("جدول") || t.contains("موعد") || t.contains("مواعيد") || t.contains("اليوم") || t.contains("بكرة") || t.contains("غد") || t.contains("تقويم") || t.contains("كلندر") || t.contains("calendar") || t.contains("tomorrow") {
             let wantsTomorrow = t.contains("بكرة") || t.contains("غد") || t.contains("tomorrow")
+            Self.diagRoute(wantsTomorrow ? "calendar-tomorrow" : "calendar-today", text)
             await runCalendar(kind: wantsTomorrow ? "tomorrow" : "today")
             return
         }
         // 4) الذاكرة الشخصية — الدماغ الوحيد = backend (memory_tools عبر function calling).
         //    لا مسار محلي (MemoryStore.seeded) ولا sendText — يمنع الرد المزدوج/القفز.
         // 5) محادثة مباشرة/أدوات backend — بعد أن أخذت أدوات الجهاز أول حق في التوجيه.
+        Self.diagRoute("backend-conversation", text)
         voiceSession.requestResponse()
     }
 
@@ -469,6 +498,8 @@ final class HomeViewModel: ObservableObject {
         if result.ok {
             let grounded = Self.formatEvents(result.events, dayLabel: isTomorrow ? "بكرة" : "اليوم")
             calendarMessage = grounded
+            Self.diagGrounded(isTomorrow ? "calendar-tomorrow" : "calendar-today",
+                              request: isTomorrow ? "calendar tomorrow" : "calendar today", result: grounded)
             voiceSession.sendGroundedDeviceResult(userRequest: isTomorrow ? "calendar tomorrow" : "calendar today", result: grounded)
         } else {
             state = .alert
@@ -499,6 +530,7 @@ final class HomeViewModel: ObservableObject {
         if result.ok {
             let grounded = Self.formatReminders(result.reminders)
             calendarMessage = grounded
+            Self.diagGrounded("reminders", request: "upcoming reminders", result: grounded)
             voiceSession.sendGroundedDeviceResult(userRequest: "upcoming reminders", result: grounded)
         } else {
             state = .alert
@@ -578,8 +610,10 @@ final class HomeViewModel: ObservableObject {
         await refreshMeetings(requestPermissionIfNeeded: true)
         let grounded = Self.formatMeetings(meetingTargets)
         if meetingAccessState == .authorized {
+            Self.diagGrounded("meetings", request: userRequest, result: grounded)
             voiceSession.sendGroundedDeviceResult(userRequest: userRequest, result: grounded)
         } else if let calendarMessage {
+            Self.diagGrounded("meetings-unauthorized", request: userRequest, result: calendarMessage)
             voiceSession.sendGroundedDeviceResult(userRequest: userRequest, result: calendarMessage)
         }
     }
@@ -671,6 +705,7 @@ final class HomeViewModel: ObservableObject {
             let result = await JarvisAlarmScheduler.schedule(at: date)
             calendarMessage = result
             state = result.hasPrefix("تم") ? .idle : .alert
+            Self.diagGrounded("alarm", request: userRequest, result: result)
             voiceSession.sendGroundedDeviceResult(userRequest: userRequest, result: result)
             return
         }
