@@ -101,11 +101,41 @@ check("failing tests remain visible", "tests" in verdict(bad_tests)["failed_chec
 blocked = dict(base, blockers=1, blocker_items=[{"type": "ci_job"}])
 check("live blockers prevent readiness", "blockers" in verdict(blocked)["failed_checks"])
 
+missing_blocker_contract = dict(base)
+missing_blocker_contract.pop("blockers")
+missing_blocker_contract.pop("blocker_items")
+missing_blocker_verdict = verdict(missing_blocker_contract)
+check(
+    "missing blocker plumbing fails closed",
+    "blocker_coherence" in missing_blocker_verdict["failed_checks"]
+    and "blockers" in missing_blocker_verdict["failed_checks"],
+)
+
+string_blocker_count = dict(base, blockers="0")
+check(
+    "string blocker count cannot impersonate runtime contract",
+    "blocker_coherence" in verdict(string_blocker_count)["failed_checks"],
+)
+
 missing_evidence = dict(base, evidence={"build": "reported"})
 check("missing runtime evidence fails closed", "reported_evidence" in verdict(missing_evidence)["failed_checks"])
 
 owner_mismatch = dict(base, owner_actions=2)
 check("owner-action count must match sanitized items", "owner_action_coherence" in verdict(owner_mismatch)["failed_checks"])
+
+missing_owner_contract = dict(base)
+missing_owner_contract.pop("owner_actions")
+missing_owner_contract.pop("owner_action_items")
+check(
+    "missing owner-action plumbing fails closed",
+    "owner_action_coherence" in verdict(missing_owner_contract)["failed_checks"],
+)
+
+bool_owner_count = dict(base, owner_actions=False, owner_action_items=[])
+check(
+    "boolean owner-action count cannot impersonate integer contract",
+    "owner_action_coherence" in verdict(bool_owner_count)["failed_checks"],
+)
 
 no_milestone_source = dict(base, evidence=dict(base["evidence"], milestone_source="unknown"))
 check(
@@ -123,6 +153,19 @@ empty_owner = dict(base, owner_actions=0, owner_action_items=[], evidence=dict(b
 check(
     "no owner actions does not require invented provenance",
     verdict(empty_owner)["ok"],
+)
+
+missing_owner_evidence_map = dict(base["evidence"])
+missing_owner_evidence_map.pop("owner_actions")
+missing_owner_evidence = dict(
+    base,
+    owner_actions=0,
+    owner_action_items=[],
+    evidence=missing_owner_evidence_map,
+)
+check(
+    "zero owner actions still requires an explicit provenance state",
+    "owner_action_provenance" in verdict(missing_owner_evidence)["failed_checks"],
 )
 
 result = verdict(base)

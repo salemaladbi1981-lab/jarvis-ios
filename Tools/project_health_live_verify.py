@@ -85,14 +85,21 @@ def assess_snapshot(
     blocker_items = snapshot.get("blocker_items") if isinstance(snapshot.get("blocker_items"), list) else []
     owner_items = snapshot.get("owner_action_items") if isinstance(snapshot.get("owner_action_items"), list) else []
 
-    try:
-        blockers = int(snapshot.get("blockers") or 0)
-    except (TypeError, ValueError):
-        blockers = -1
-    try:
-        owner_actions = int(snapshot.get("owner_actions") or 0)
-    except (TypeError, ValueError):
-        owner_actions = -1
+    blocker_count = snapshot.get("blockers")
+    owner_action_count = snapshot.get("owner_actions")
+    blockers = blocker_count if type(blocker_count) is int else -1
+    owner_actions = owner_action_count if type(owner_action_count) is int else -1
+    blocker_coherent = (
+        blockers >= 0
+        and isinstance(snapshot.get("blocker_items"), list)
+        and blockers == len(blocker_items)
+    )
+    owner_action_coherent = (
+        owner_actions >= 0
+        and isinstance(snapshot.get("owner_action_items"), list)
+        and owner_actions == len(owner_items)
+    )
+    owner_action_source = evidence.get("owner_actions")
 
     checks = {
         "expected_identity": bool(
@@ -112,17 +119,18 @@ def assess_snapshot(
         "build": snapshot.get("build_status") == "success",
         "tests": snapshot.get("tests_status") == "success",
         "freshness": snapshot.get("ci_metadata_state") == "fresh",
-        "blockers": blockers == 0 and not blocker_items,
+        "blocker_coherence": blocker_coherent,
+        "blockers": blocker_coherent and blockers == 0,
         "milestones": all(_nonempty(snapshot.get(key)) for key in ("phase", "current_milestone", "next_milestone")),
         "reported_evidence": all(evidence.get(key) == "reported" for key in _REQUIRED_REPORTED_EVIDENCE),
         "freshness_evidence": evidence.get("ci_freshness") == "fresh",
         "milestone_provenance": evidence.get("milestone_source") in {
             "github_repository_variables", "version_controlled_plan", "mixed"
         },
-        "owner_action_coherence": owner_actions >= 0 and owner_actions == len(owner_items),
-        "owner_action_provenance": owner_actions == 0 or evidence.get("owner_actions") in {
-            "version_controlled_plan", "runtime_approvals", "mixed"
-        },
+        "owner_action_coherence": owner_action_coherent,
+        "owner_action_provenance": owner_action_source in {
+            "version_controlled_plan", "runtime_approvals", "mixed", "unknown"
+        } and (owner_actions == 0 or owner_action_source != "unknown"),
     }
     failed = [name for name, passed in checks.items() if not passed]
 
