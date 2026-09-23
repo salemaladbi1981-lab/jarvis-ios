@@ -41,6 +41,14 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     private var currentContentIndex = 0
     /// تنفيذ تسلسلي واحد لحالة الجلسة وحراسة أحداثها.
     private let stateQueue = DispatchQueue(label: "jarvis.session.state")
+    /// A response.create this client wants to originate.
+    private enum PendingResponseCreate {
+        case plain              // requestResponse(): answer the committed audio turn
+        case text(String)       // sendText(_:): inject a user message, then answer
+    }
+    /// Held while a response is still active. Newest request replaces the older one,
+    /// so a stale turn is never spoken after a newer one.
+    private var pendingResponseCreate: PendingResponseCreate?
 
     func connect(baseURL: URL) async throws {
         eventPublisher.send(.connecting)
@@ -110,6 +118,7 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
         stateQueue.sync {
             self.guardState.onStop()   // إبطال الجلسة + الرد (منع أحداث الدورة الموقوفة)
             self.isSpeaking = false
+            self.dropPendingResponseCreateOnStateQueue()
         }
         audio.stop()   // يوقف المحرك + يصفّر المستوى + يبطل generation
     }
@@ -162,23 +171,72 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
         stateQueue.sync {
             self.guardState.onBarge()
             self.isSpeaking = false
+            self.dropPendingResponseCreateOnStateQueue()
         }
         bargeIn()
+    }
+
+    // MARK: response.create serialisation
+
+    /// The single gate every client-originated response.create passes through.
+    /// Realtime rejects a second create while one is running
+    /// (conversation_already_has_active_response), so when a response is active — or
+    /// JARVIS is still speaking — the request is queued and replayed once the slot
+    /// frees. Device results keep their own immediate path (cancel, then create) in
+    /// sendGroundedDeviceResult: authoritative on-device data still interrupts.
+    private func gateResponseCreate(_ request: PendingResponseCreate) {
+        let sendNow: Bool = stateQueue.sync {
+            if self.guardState.currentResponseID != nil || self.isSpeaking {
+                self.pendingResponseCreate = request   // newest wins
+                return false
+            }
+            self.pendingResponseCreate = nil
+            return true
+        }
+        if sendNow {
+            transmitResponseCreate(request)
+        } else {
+            trace("response.create queued — active response in progress")
+        }
+    }
+
+    /// Put one request on the wire. Never consults the gate itself.
+    private func transmitResponseCreate(_ request: PendingResponseCreate) {
+        if case .text(let body) = request {
+            let item = #"{"type":"conversation.item.create","item":{"type":"message","role":"user","content":[{"type":"input_text","text":"\#(body)"}]}}"#
+            ws?.send(.string(item)) { _ in }
+        }
+        ws?.send(.string(#"{"type":"response.create"}"#)) { _ in }
+        eventPublisher.send(.thinking)
+    }
+
+    /// Replay a queued request once the active response finished or was cancelled.
+    /// Already runs on stateQueue (called from handleServer) — never re-enters sync.
+    private func flushPendingResponseCreateOnStateQueue() {
+        guard guardState.currentResponseID == nil, !isSpeaking,
+              let request = pendingResponseCreate else { return }
+        pendingResponseCreate = nil
+        trace("response.create replayed from queue")
+        transmitResponseCreate(request)
+    }
+
+    /// Drop a queued request that must not be spoken later (stop, manual interrupt,
+    /// or a realtime error), so the queue can never stick.
+    /// Already runs on stateQueue.
+    private func dropPendingResponseCreateOnStateQueue() {
+        guard pendingResponseCreate != nil else { return }
+        pendingResponseCreate = nil
+        trace("response.create queue cleared")
     }
 
     /// Ask Realtime to answer the already-committed user turn. Server VAD commits audio
     /// but does not auto-create a response; local device tools get first right of refusal.
     func requestResponse() {
-        ws?.send(.string(#"{"type":"response.create"}"#)) { _ in }
-        eventPublisher.send(.thinking)
+        gateResponseCreate(.plain)
     }
 
     func sendText(_ text: String) {
-        let item = #"{"type":"conversation.item.create","item":{"type":"message","role":"user","content":[{"type":"input_text","text":"\#(text)"}]}}"#
-        ws?.send(.string(item)) { _ in }
-        let resp = #"{"type":"response.create"}"#
-        ws?.send(.string(resp)) { _ in }
-        eventPublisher.send(.thinking)
+        gateResponseCreate(.text(text))
     }
 
     /// Replace any speculative model answer with authoritative on-device data
@@ -364,6 +422,13 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                     trace("response.done — لا صوت، نشر فوري")
                     emitCompletion(completion)
                 }
+                // The response slot is free now — speak the turn that had to wait.
+                flushPendingResponseCreateOnStateQueue()
+            case "response.cancelled":
+                // Server confirmed the active response is gone: free the slot so a
+                // queued turn cannot wait forever, then replay it.
+                guardState.onBarge()
+                flushPendingResponseCreateOnStateQueue()
             case "response.function_call_arguments.done":
                 eventPublisher.send(.toolExecuting)
             case "agent_runtime":
@@ -398,6 +463,8 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
             case "error":
                 // تسجيل الـ error code/message كاملاً (كان مخفياً).
                 trace("recv error payload: \(text)")
+                // Never replay a queued turn into a broken one — and never let it stick.
+                dropPendingResponseCreateOnStateQueue()
                 eventPublisher.send(.error("realtime_error"))
             default: break
             }
