@@ -560,10 +560,20 @@ def build_project_health(
         blocker_items.append({"type": "kill_switch", "state": "engaged"})
 
     approval_action_items = _owner_action_items(pending_approvals)
-    planned_action_items = _planned_owner_action_items(env)
+    planned_owner_source = _provenance(env, "JARVIS_OWNER_ACTIONS_SOURCE", _OWNER_ACTION_SOURCES)
+    # Defense in depth: a direct process environment value must not become an
+    # owner instruction unless its provenance is the reviewed version-controlled
+    # plan. The metadata loader enforces the same contract, but this response
+    # boundary can also be called directly in tests, local tools, or alternate
+    # runtimes that bypass that loader. Fail closed instead of surfacing an
+    # untrusted action with `unknown` provenance.
+    planned_action_items = (
+        _planned_owner_action_items(env)
+        if planned_owner_source == "version_controlled_plan"
+        else []
+    )
     owner_action_items = approval_action_items + planned_action_items
     milestone_source = _provenance(env, "JARVIS_MILESTONE_SOURCE", _MILESTONE_SOURCES)
-    planned_owner_source = _provenance(env, "JARVIS_OWNER_ACTIONS_SOURCE", _OWNER_ACTION_SOURCES)
     if approval_action_items and planned_action_items:
         owner_actions_source = "mixed"
     elif approval_action_items:

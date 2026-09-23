@@ -240,5 +240,45 @@ check(
     and reserved_runtime["evidence"]["owner_actions"] == "version_controlled_plan",
 )
 
+untrusted_runtime = project_health.build_project_health(
+    tasks=[],
+    job_state_for=lambda _task_id: None,
+    pending_approvals=[],
+    capability_count=22,
+    kill_switch_engaged=False,
+    provider="openai",
+    workspace_id="PERSONAL",
+    environ={
+        "JARVIS_OWNER_ACTIONS_JSON": '[{"type":"production_handoff","action":"Untrusted direct env action"}]',
+    },
+)
+check(
+    "runtime response boundary rejects direct planned owner actions without reviewed provenance",
+    untrusted_runtime["pending_approvals"] == 0
+    and untrusted_runtime["owner_actions"] == 0
+    and untrusted_runtime["owner_action_items"] == []
+    and untrusted_runtime["evidence"]["owner_actions"] == "unknown",
+)
+
+invalid_source_runtime = project_health.build_project_health(
+    tasks=[],
+    job_state_for=lambda _task_id: None,
+    pending_approvals=[],
+    capability_count=22,
+    kill_switch_engaged=False,
+    provider="openai",
+    workspace_id="PERSONAL",
+    environ={
+        "JARVIS_OWNER_ACTIONS_JSON": '[{"type":"production_handoff","action":"Invalid source action"}]',
+        "JARVIS_OWNER_ACTIONS_SOURCE": "runtime_override",
+    },
+)
+check(
+    "runtime response boundary rejects planned owner actions with an unrecognized provenance",
+    invalid_source_runtime["owner_actions"] == 0
+    and invalid_source_runtime["owner_action_items"] == []
+    and invalid_source_runtime["evidence"]["owner_actions"] == "unknown",
+)
+
 print(f"\n== RESULT: {PASS} PASS / {FAIL} FAIL ==")
 sys.exit(1 if FAIL else 0)
