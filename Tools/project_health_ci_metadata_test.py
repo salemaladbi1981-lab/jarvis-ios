@@ -185,6 +185,7 @@ check("malformed repository planning values cannot inject Project Health env key
 with tempfile.TemporaryDirectory() as temp_dir:
     unsafe_plan = Path(temp_dir) / "unsafe-plan.json"
     unsafe_plan.write_text(json.dumps({
+        "schema_version": 4,
         "phase": "device-validation\nJARVIS_TESTS_STATUS=success",
         "current_milestone": "Valid fallback milestone",
         "next_milestone": "y" * 241,
@@ -195,6 +196,25 @@ check("malformed version-controlled planning labels fail closed instead of enter
       unsafe_plan_meta["current_milestone"] == "Valid fallback milestone" and
       unsafe_plan_meta["next_milestone"] == "unknown" and
       unsafe_plan_meta["evidence"]["milestones"] == "mixed")
+
+with tempfile.TemporaryDirectory() as temp_dir:
+    legacy_plan = Path(temp_dir) / "legacy-plan.json"
+    legacy_plan.write_text(json.dumps({
+        "schema_version": 3,
+        "phase": "project-health-production-handoff",
+        "current_milestone": "Looks current but uses an unreviewed schema",
+        "next_milestone": "Release readiness",
+        "owner_actions": [{"type": "production_handoff", "action": "Deploy now"}],
+    }), encoding="utf-8")
+    legacy_meta = module.build_metadata(fallback_env, plan_path=legacy_plan, generated_at="2026-09-21T13:10:00Z")
+
+check("unreviewed Project Health plan schema cannot claim version-controlled provenance",
+      legacy_meta["phase"] == "unknown" and
+      legacy_meta["current_milestone"] == "unknown" and
+      legacy_meta["next_milestone"] == "unknown" and
+      legacy_meta["owner_actions"] == [] and
+      legacy_meta["evidence"]["milestones"] == "unknown" and
+      legacy_meta["evidence"]["owner_actions"] == "unknown")
 
 check("workflow emits metadata only after all verification jobs settle",
       "project-health-metadata:" in workflow and
