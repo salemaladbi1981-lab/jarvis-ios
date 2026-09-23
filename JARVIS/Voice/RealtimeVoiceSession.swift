@@ -338,10 +338,12 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
             case "session.created":
                 // حدث بدء الجلسة — لا يشترط isSessionReady؛ الـ receiveLoop يتحقق من جيل الاتصال.
                 trace("session.created received")
+                print("[JARVIS-DIAG][session] session.created payload: \(text)")
                 guardState.sessionCreated()
                 eventPublisher.send(.connected)   // الآن فقط بعد نجاح handshake
             case "session.updated":
                 trace("session.updated received")
+                print("[JARVIS-DIAG][session] session.updated payload: \(text)")
             case "response.created":
                 currentOutputItemID = nil   // رد جديد — لا item صوتي بعد
                 currentContentIndex = 0
@@ -394,6 +396,9 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                 }
             case "response.output_audio_transcript.done":
                 // نص رد جارفس — لا يُعاد توجيهه (يمنع الـ loop).
+                if let spoken = SessionEventParser.transcript(text) {
+                    print("[JARVIS-DIAG][spoken] \(spoken)")
+                }
                 break
             case "response.output_item.done":
                 // تتبع هوية item الصوت الحالي للـ conversation.item.truncate عند المقاطعة.
@@ -406,6 +411,10 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                 break
             case "response.done":
                 // الرد انتهى.
+                let doneStatus = SessionEventParser.nested(text, "response", "status") ?? "?"
+                if doneStatus == "failed" || doneStatus == "cancelled" || doneStatus == "incomplete" {
+                    print("[JARVIS-DIAG][response] response.done status=\(doneStatus) payload: \(text)")
+                }
                 // هوية دورة التشغيل من المحرك (وليست هوية الرد الحالي عند وصول الـ callback).
                 let cycle = audio.currentGeneration
                 // قرار الإنهاء حسب وجود صوت للرد (stale/بصوت/بلا صوت).
