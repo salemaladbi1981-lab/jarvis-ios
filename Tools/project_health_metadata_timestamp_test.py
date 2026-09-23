@@ -25,6 +25,7 @@ def load_with_timestamp(timestamp):
     with tempfile.TemporaryDirectory() as td:
         handoff = Path(td) / "project-health.env"
         handoff.write_text(
+            "JARVIS_PROJECT_HEALTH_METADATA_SCHEMA=1\n"
             "JARVIS_CI_STATUS=success\n"
             f"JARVIS_CI_METADATA_GENERATED_AT={timestamp}\n",
             encoding="utf-8",

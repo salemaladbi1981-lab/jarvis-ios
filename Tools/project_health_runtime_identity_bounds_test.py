@@ -80,6 +80,7 @@ check("malformed timestamp surfaces metadata blocker", any(x.get("type") == "ci_
 with tempfile.TemporaryDirectory() as td:
     handoff = Path(td) / "project-health.env"
     handoff.write_text(
+        "JARVIS_PROJECT_HEALTH_METADATA_SCHEMA=1\n"
         "JARVIS_CI_RUN_ID=" + ("9" * 33) + "\n"
         "JARVIS_CI_RUN_NUMBER=" + ("8" * 33) + "\n"
         "JARVIS_CI_REPOSITORY=" + (("r" * 190) + "/" + ("x" * 20)) + "\n"

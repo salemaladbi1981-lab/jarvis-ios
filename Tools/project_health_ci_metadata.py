@@ -19,6 +19,7 @@ _MAX_BRANCH_LENGTH = 200
 _MAX_CI_ID_LENGTH = 32
 _MAX_REPOSITORY_LENGTH = 200
 _PLAN_SCHEMA_VERSION = 4
+_METADATA_SCHEMA_VERSION = 1
 _SHA_RE = re.compile(r"^[0-9a-fA-F]{7,40}$")
 _DIGITS_RE = re.compile(r"^[0-9]+$")
 _REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
@@ -223,6 +224,7 @@ def build_metadata(env=None, plan_path=DEFAULT_PLAN_PATH, generated_at=None):
     precise_mac_test = bool(str(env.get("JARVIS_MAC_TEST_RESULT") or "").strip())
 
     return {
+        "metadata_schema_version": _METADATA_SCHEMA_VERSION,
         "build_sha": build_sha,
         "build_status": build_status,
         "ci_status": _aggregate(jobs.values()),
@@ -260,6 +262,7 @@ def _write_env(path, metadata):
     owner_actions_json = json.dumps(metadata.get("owner_actions") or [], ensure_ascii=False, separators=(",", ":"))
     evidence = metadata.get("evidence") or {}
     lines = [
+        f"JARVIS_PROJECT_HEALTH_METADATA_SCHEMA={metadata.get('metadata_schema_version', _METADATA_SCHEMA_VERSION)}",
         f"JARVIS_BUILD_SHA={metadata['build_sha']}",
         f"JARVIS_BUILD_STATUS={metadata.get('build_status', 'unknown')}",
         f"JARVIS_CI_STATUS={metadata['ci_status']}",

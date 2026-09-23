@@ -81,6 +81,7 @@ check(
 with tempfile.TemporaryDirectory() as td:
     handoff = Path(td) / "project-health.env"
     handoff.write_text(
+        "JARVIS_PROJECT_HEALTH_METADATA_SCHEMA=1\n"
         "JARVIS_BUILD_SHA=ab57842584e1606142fb72a9fcfee745617c3d28\n"
         "JARVIS_CI_STATUS=success\n"
         "JARVIS_TESTS_STATUS=success\n"
@@ -162,6 +163,7 @@ with tempfile.TemporaryDirectory() as td:
 
     bad = Path(td) / "bad.env"
     bad.write_text(
+        "JARVIS_PROJECT_HEALTH_METADATA_SCHEMA=1\n"
         "JARVIS_BUILD_SHA=not-a-sha\n"
         "JARVIS_CI_STATUS=definitely-green\n"
         "JARVIS_TESTS_STATUS=success\n"
@@ -184,6 +186,7 @@ with tempfile.TemporaryDirectory() as td:
 
     foreign = Path(td) / "foreign-run-url.env"
     foreign.write_text(
+        "JARVIS_PROJECT_HEALTH_METADATA_SCHEMA=1\n"
         "JARVIS_CI_RUN_ID=35603375966\n"
         "JARVIS_CI_RUN_URL=https://example.com/salemaladbi1981-lab/jarvis-ios/actions/runs/35603375966\n",
         encoding="utf-8",
@@ -201,6 +204,7 @@ with tempfile.TemporaryDirectory() as td:
 
     mismatch = Path(td) / "mismatched-run.env"
     mismatch.write_text(
+        "JARVIS_PROJECT_HEALTH_METADATA_SCHEMA=1\n"
         "JARVIS_CI_RUN_ID=35603375966\n"
         "JARVIS_CI_RUN_URL=https://github.com/salemaladbi1981-lab/jarvis-ios/actions/runs/99999999999\n",
         encoding="utf-8",

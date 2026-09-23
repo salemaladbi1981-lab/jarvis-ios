@@ -32,6 +32,7 @@ NOW = datetime(2026, 9, 23, 0, 0, 0, tzinfo=timezone.utc)
 
 def metadata_text(**overrides):
     values = {
+        "JARVIS_PROJECT_HEALTH_METADATA_SCHEMA": "1",
         "JARVIS_BUILD_SHA": SHA,
         "JARVIS_BUILD_STATUS": "success",
         "JARVIS_CI_STATUS": "success",

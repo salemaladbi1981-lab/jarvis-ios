@@ -14,7 +14,7 @@ def load(lines, explicit=None):
     env = dict(explicit or {})
     with tempfile.TemporaryDirectory() as td:
         path = Path(td) / "project-health.env"
-        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        path.write_text("JARVIS_PROJECT_HEALTH_METADATA_SCHEMA=1\n" + "\n".join(lines) + "\n", encoding="utf-8")
         accepted = load_health_metadata(path, env)
     return accepted, env
 

@@ -11,7 +11,10 @@ import re
 from pathlib import Path
 from urllib.parse import urlparse
 
+PROJECT_HEALTH_METADATA_SCHEMA_VERSION = "1"
+
 HEALTH_KEYS = {
+    "JARVIS_PROJECT_HEALTH_METADATA_SCHEMA",
     "JARVIS_BUILD_SHA",
     "JARVIS_BUILD_STATUS",
     "JARVIS_CI_STATUS",
@@ -140,6 +143,8 @@ def _valid_generated_at(value):
 
 
 def _valid_value(key, value):
+    if key == "JARVIS_PROJECT_HEALTH_METADATA_SCHEMA":
+        return value == PROJECT_HEALTH_METADATA_SCHEMA_VERSION
     if key in STATUS_KEYS:
         return value.lower() in VALID_STATUSES
     if key == "JARVIS_BUILD_SHA":
@@ -252,6 +257,13 @@ def load_health_metadata(path, environ=None):
         if key not in HEALTH_KEYS or not _valid_value(key, value):
             continue
         staged[key] = value
+
+    # The handoff contract is versioned. Missing, future, or malformed schemas
+    # are rejected as a unit so deployment never mixes incompatible CI metadata.
+    if staged.get("JARVIS_PROJECT_HEALTH_METADATA_SCHEMA") != PROJECT_HEALTH_METADATA_SCHEMA_VERSION:
+        return False
+    if not (set(staged) - {"JARVIS_PROJECT_HEALTH_METADATA_SCHEMA"}):
+        return False
 
     _drop_inconsistent_run_identity(staged, env)
 

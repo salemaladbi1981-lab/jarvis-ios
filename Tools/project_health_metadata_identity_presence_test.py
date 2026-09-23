@@ -24,7 +24,7 @@ def check(name, condition):
 
 
 def write_handoff(path, *, build=True, branch=True):
-    lines = []
+    lines = ["JARVIS_PROJECT_HEALTH_METADATA_SCHEMA=1"]
     if build:
         lines.append(f"JARVIS_BUILD_SHA={BUILD}")
     if branch:
@@ -72,6 +72,7 @@ with tempfile.TemporaryDirectory() as td:
 
     malformed_build = td / "malformed-build.env"
     malformed_build.write_text(
+        "JARVIS_PROJECT_HEALTH_METADATA_SCHEMA=1\n"
         "JARVIS_BUILD_SHA=not-a-sha\n"
         f"JARVIS_CI_BRANCH={BRANCH}\n"
         "JARVIS_CI_STATUS=success\n",
@@ -87,8 +88,8 @@ with tempfile.TemporaryDirectory() as td:
     write_handoff(legacy, build=False, branch=False)
     legacy_env = {}
     loaded = project_health_metadata.load_health_metadata(legacy, legacy_env)
-    check("artifact loading stays backward-compatible when deployment declares no identity", loaded)
-    check("legacy artifact still requires normal field validation",
+    check("schema-compatible artifact loads when deployment declares no explicit identity", loaded)
+    check("identity-optional artifact still requires normal field validation",
           legacy_env.get("JARVIS_CI_STATUS") == "success"
           and legacy_env.get("JARVIS_CI_RUN_URL", "").endswith("/35745992096"))
 
