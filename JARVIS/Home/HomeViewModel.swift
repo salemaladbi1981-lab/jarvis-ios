@@ -8,6 +8,7 @@ import AlarmKit
 #endif
 
 
+#if canImport(AlarmKit)
 @available(iOS 26.0, *)
 private struct JarvisAlarmMetadata: AlarmMetadata {}
 
@@ -51,6 +52,7 @@ enum JarvisAlarmScheduler {
         }
     }
 }
+#endif
 
 
 /// ViewModel bridging views → provider abstractions + registry policy.
