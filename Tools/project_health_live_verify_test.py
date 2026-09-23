@@ -53,6 +53,9 @@ expected_branch = "chatgpt-overnight-2"
 
 check("green exact live snapshot passes", assess_snapshot(base, expected_sha, expected_branch)["ok"])
 
+missing_expected = assess_snapshot(base, "", expected_branch)
+check("caller must provide an explicit expected build identity", "expected_identity" in missing_expected["failed_checks"])
+
 wrong_sha = dict(base, build_sha="b" * 40)
 check("wrong deployed SHA fails closed", "build_identity" in assess_snapshot(wrong_sha, expected_sha, expected_branch)["failed_checks"])
 
