@@ -62,9 +62,11 @@ async def openai_realtime_proxy(client_ws, session_config: dict):
         session.setdefault("type", "realtime")
         session.setdefault("audio", {}).setdefault("output", {})["voice"] = config.REALTIME_VOICE
         inp = session.setdefault("audio", {}).setdefault("input", {})
-        inp["transcription"] = {"model": "whisper-1"}
-        # VAD ثابت: semantic_vad + interrupt_response=False (المقاطعة تُدار عبر response.cancel من العميل)
-        inp["turn_detection"] = {"type": "semantic_vad", "interrupt_response": False, "create_response": False}
+        inp["transcription"] = {"model": "whisper-1", "language": "ar"}
+        # VAD: server_vad لأن semantic_vad تجاهل create_response=false وأعاده true في
+        # session.updated (دليل console-session5) — فكان السيرفر يُنشئ رداً بعد كل commit.
+        # الرد يُطلب صراحةً من العميل بعد أن تأخذ أدوات الجهاز حقها، والمقاطعة عبر response.cancel.
+        inp["turn_detection"] = {"type": "server_vad", "threshold": 0.6, "prefix_padding_ms": 300, "silence_duration_ms": 500, "create_response": False, "interrupt_response": False}
         session.setdefault("instructions", config.REALTIME_INSTRUCTIONS)
         session["tools"] = build_email_tools() + TELEGRAM_TOOLS + YOUTUBE_TOOLS + INSTAGRAM_TOOLS + MAPS_TOOLS + BRAIN_TOOLS + MEMORY_TOOLS + CAPABILITIES_TOOLS + AGENT_TOOLS
         session["tool_choice"] = "auto"
