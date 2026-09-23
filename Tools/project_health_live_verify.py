@@ -85,7 +85,13 @@ def assess_snapshot(snapshot, expected_sha, expected_branch):
         "milestones": all(_nonempty(snapshot.get(key)) for key in ("phase", "current_milestone", "next_milestone")),
         "reported_evidence": all(evidence.get(key) == "reported" for key in _REQUIRED_REPORTED_EVIDENCE),
         "freshness_evidence": evidence.get("ci_freshness") == "fresh",
+        "milestone_provenance": evidence.get("milestone_source") in {
+            "github_repository_variables", "version_controlled_plan", "mixed"
+        },
         "owner_action_coherence": owner_actions >= 0 and owner_actions == len(owner_items),
+        "owner_action_provenance": owner_actions == 0 or evidence.get("owner_actions") in {
+            "version_controlled_plan", "runtime_approvals", "mixed"
+        },
     }
     failed = [name for name, passed in checks.items() if not passed]
 
@@ -105,6 +111,8 @@ def assess_snapshot(snapshot, expected_sha, expected_branch):
         "phase": str(snapshot.get("phase") or "unknown"),
         "current_milestone": str(snapshot.get("current_milestone") or "unknown"),
         "next_milestone": str(snapshot.get("next_milestone") or "unknown"),
+        "milestone_source": str(evidence.get("milestone_source") or "unknown"),
+        "owner_actions_source": str(evidence.get("owner_actions") or "unknown"),
     }
 
 

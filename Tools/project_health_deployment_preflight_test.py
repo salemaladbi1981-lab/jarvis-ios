@@ -38,7 +38,9 @@ def metadata_text(**overrides):
         "JARVIS_CURRENT_PHASE": "project-health-production-handoff",
         "JARVIS_CURRENT_MILESTONE": "Project Health production handoff",
         "JARVIS_NEXT_MILESTONE": "Release readiness",
-        "JARVIS_OWNER_ACTIONS_JSON": "[]",
+        "JARVIS_OWNER_ACTIONS_JSON": '[{"type":"production_handoff","action":"verify deployment"}]',
+        "JARVIS_MILESTONE_SOURCE": "version_controlled_plan",
+        "JARVIS_OWNER_ACTIONS_SOURCE": "version_controlled_plan",
         "JARVIS_CI_RUN_ID": RUN_ID,
         "JARVIS_CI_RUN_NUMBER": "406",
         "JARVIS_CI_RUN_URL": f"https://github.com/salemaladbi1981-lab/jarvis-ios/actions/runs/{RUN_ID}",
@@ -69,7 +71,10 @@ with tempfile.TemporaryDirectory() as temp_dir:
         and good["build_status"] == "success"
         and good["tests_status"] == "success"
         and good["ci_metadata_state"] == "fresh"
-        and good["blockers"] == 0,
+        and good["blockers"] == 0
+        and good["owner_actions"] == 1
+        and good["milestone_source"] == "version_controlled_plan"
+        and good["owner_actions_source"] == "version_controlled_plan",
     )
 
     mismatch = module.preflight(path, "b" * 40, BRANCH, now=NOW)
@@ -114,6 +119,31 @@ with tempfile.TemporaryDirectory() as temp_dir:
         and "run_identity" in missing_run["failed_checks"]
         and missing_run["ci_status"] == "unknown"
         and missing_run["blockers"] >= 1,
+    )
+
+    path.write_text(metadata_text(JARVIS_MILESTONE_SOURCE="unknown"), encoding="utf-8")
+    missing_milestone_source = module.preflight(path, SHA, BRANCH, now=NOW)
+    check(
+        "reported milestones without provenance cannot pass deployment preflight",
+        missing_milestone_source["ok"] is False
+        and "milestone_provenance" in missing_milestone_source["failed_checks"],
+    )
+
+    path.write_text(metadata_text(JARVIS_OWNER_ACTIONS_SOURCE="unknown"), encoding="utf-8")
+    missing_owner_source = module.preflight(path, SHA, BRANCH, now=NOW)
+    check(
+        "planned owner actions without provenance cannot pass deployment preflight",
+        missing_owner_source["ok"] is False
+        and "owner_action_provenance" in missing_owner_source["failed_checks"]
+        and missing_owner_source["owner_actions"] == 1,
+    )
+
+    path.write_text(metadata_text(JARVIS_CURRENT_MILESTONE="unknown"), encoding="utf-8")
+    missing_plan = module.preflight(path, SHA, BRANCH, now=NOW)
+    check(
+        "incomplete planning evidence blocks deployment readiness",
+        missing_plan["ok"] is False
+        and "planning_evidence" in missing_plan["failed_checks"],
     )
 
 

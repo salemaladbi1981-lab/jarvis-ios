@@ -43,6 +43,8 @@ def green_snapshot():
             "ci_run": "reported",
             "ci_freshness": "fresh",
             "milestones": "reported",
+            "milestone_source": "version_controlled_plan",
+            "owner_actions": "version_controlled_plan",
         },
     }
 
@@ -76,6 +78,24 @@ check("missing runtime evidence fails closed", "reported_evidence" in assess_sna
 
 owner_mismatch = dict(base, owner_actions=2)
 check("owner-action count must match sanitized items", "owner_action_coherence" in assess_snapshot(owner_mismatch, expected_sha, expected_branch)["failed_checks"])
+
+no_milestone_source = dict(base, evidence=dict(base["evidence"], milestone_source="unknown"))
+check(
+    "live milestones need trusted provenance",
+    "milestone_provenance" in assess_snapshot(no_milestone_source, expected_sha, expected_branch)["failed_checks"],
+)
+
+no_owner_source = dict(base, evidence=dict(base["evidence"], owner_actions="unknown"))
+check(
+    "live owner actions need trusted provenance",
+    "owner_action_provenance" in assess_snapshot(no_owner_source, expected_sha, expected_branch)["failed_checks"],
+)
+
+empty_owner = dict(base, owner_actions=0, owner_action_items=[], evidence=dict(base["evidence"], owner_actions="unknown"))
+check(
+    "no owner actions does not require invented provenance",
+    assess_snapshot(empty_owner, expected_sha, expected_branch)["ok"],
+)
 
 result = assess_snapshot(base, expected_sha, expected_branch)
 check(

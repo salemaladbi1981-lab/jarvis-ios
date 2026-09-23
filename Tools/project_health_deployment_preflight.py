@@ -60,6 +60,11 @@ def preflight(metadata_path, expected_sha, expected_branch, now=None):
         now=now,
     )
 
+    evidence = snapshot.get("evidence") if isinstance(snapshot.get("evidence"), dict) else {}
+    owner_actions = int(snapshot.get("owner_actions") or 0)
+    milestone_source = evidence.get("milestone_source", "unknown")
+    owner_actions_source = evidence.get("owner_actions", "unknown")
+
     checks = {
         "build_identity": snapshot.get("build_sha") == expected_sha,
         "branch_identity": snapshot.get("ci_branch") == expected_branch,
@@ -67,7 +72,14 @@ def preflight(metadata_path, expected_sha, expected_branch, now=None):
         "build": snapshot.get("build_status") == "success",
         "tests": snapshot.get("tests_status") == "success",
         "freshness": snapshot.get("ci_metadata_state") == "fresh",
-        "run_identity": (snapshot.get("evidence") or {}).get("ci_run") == "reported",
+        "run_identity": evidence.get("ci_run") == "reported",
+        "planning_evidence": evidence.get("milestones") == "reported",
+        "milestone_provenance": milestone_source in {
+            "github_repository_variables", "version_controlled_plan", "mixed"
+        },
+        "owner_action_provenance": owner_actions == 0 or owner_actions_source in {
+            "version_controlled_plan", "runtime_approvals", "mixed"
+        },
         "blockers": int(snapshot.get("blockers") or 0) == 0,
     }
     failed_checks = [name for name, passed in checks.items() if not passed]
@@ -84,9 +96,12 @@ def preflight(metadata_path, expected_sha, expected_branch, now=None):
         "tests_status": snapshot.get("tests_status") or "unknown",
         "ci_metadata_state": snapshot.get("ci_metadata_state") or "unknown",
         "blockers": int(snapshot.get("blockers") or 0),
+        "owner_actions": owner_actions,
         "phase": snapshot.get("phase") or "unknown",
         "current_milestone": snapshot.get("current_milestone") or "unknown",
         "next_milestone": snapshot.get("next_milestone") or "unknown",
+        "milestone_source": milestone_source,
+        "owner_actions_source": owner_actions_source,
     }
 
 
