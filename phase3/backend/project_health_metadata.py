@@ -26,6 +26,7 @@ HEALTH_KEYS = {
     "JARVIS_CI_RUN_NUMBER",
     "JARVIS_CI_RUN_URL",
     "JARVIS_CI_BRANCH",
+    "JARVIS_CI_REPOSITORY",
     "JARVIS_CI_METADATA_GENERATED_AT",
     "JARVIS_CI_BACKEND_STATUS",
     "JARVIS_CI_IOS_STATUS",
@@ -54,7 +55,8 @@ PROVENANCE_VALUES = {
 }
 _SHA_RE = re.compile(r"^[0-9a-fA-F]{7,40}$")
 _DIGITS_RE = re.compile(r"^[0-9]+$")
-_GITHUB_RUN_PATH_RE = re.compile(r"^/[^/]+/[^/]+/actions/runs/([0-9]+)/?$")
+_GITHUB_RUN_PATH_RE = re.compile(r"^/([^/]+/[^/]+)/actions/runs/([0-9]+)/?$")
+_REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 _GENERATED_AT_RE = re.compile(
     r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,6})?Z$"
 )
@@ -90,8 +92,8 @@ def _valid_owner_actions_json(value):
     return True
 
 
-def _github_run_id_from_url(value):
-    """Return the GitHub Actions run id only for the expected canonical HTTPS shape."""
+def _github_run_identity_from_url(value):
+    """Return (repository, run id) only for the canonical public GitHub Actions URL."""
     if not value:
         return None
     parsed = urlparse(value)
@@ -104,7 +106,12 @@ def _github_run_id_from_url(value):
     ):
         return None
     match = _GITHUB_RUN_PATH_RE.fullmatch(parsed.path)
-    return match.group(1) if match else None
+    return (match.group(1), match.group(2)) if match else None
+
+
+def _github_run_id_from_url(value):
+    identity = _github_run_identity_from_url(value)
+    return identity[1] if identity else None
 
 
 def _valid_generated_at(value):
@@ -133,6 +140,8 @@ def _valid_value(key, value):
         return _valid_generated_at(value)
     if key == "JARVIS_CI_BRANCH":
         return "\n" not in value and "\r" not in value and len(value) <= 200
+    if key == "JARVIS_CI_REPOSITORY":
+        return not value or bool(_REPOSITORY_RE.fullmatch(value))
     if key == "JARVIS_OWNER_ACTIONS_JSON":
         return _valid_owner_actions_json(value)
     if key in PROVENANCE_VALUES:
@@ -148,18 +157,27 @@ def _drop_inconsistent_run_identity(staged, env):
     """
     staged_url = staged.get("JARVIS_CI_RUN_URL")
     staged_id = staged.get("JARVIS_CI_RUN_ID")
+    staged_repo = staged.get("JARVIS_CI_REPOSITORY")
     explicit_url = (env.get("JARVIS_CI_RUN_URL") or "").strip()
     explicit_id = (env.get("JARVIS_CI_RUN_ID") or "").strip()
+    explicit_repo = (env.get("JARVIS_CI_REPOSITORY") or "").strip()
 
     if staged_url:
+        identity = _github_run_identity_from_url(staged_url)
         expected_id = explicit_id or staged_id or ""
-        if expected_id and _github_run_id_from_url(staged_url) != expected_id:
+        expected_repo = explicit_repo or staged_repo or ""
+        if identity and (
+            (expected_id and identity[1] != expected_id)
+            or (expected_repo and identity[0] != expected_repo)
+        ):
             staged.pop("JARVIS_CI_RUN_URL", None)
 
-    if staged_id and explicit_url:
-        explicit_url_id = _github_run_id_from_url(explicit_url)
-        if explicit_url_id and staged_id != explicit_url_id:
+    if explicit_url:
+        identity = _github_run_identity_from_url(explicit_url)
+        if identity and staged_id and staged_id != identity[1]:
             staged.pop("JARVIS_CI_RUN_ID", None)
+        if identity and staged_repo and staged_repo != identity[0]:
+            staged.pop("JARVIS_CI_REPOSITORY", None)
 
 
 def _matches_explicit_build_identity(staged, env):
@@ -171,7 +189,7 @@ def _matches_explicit_build_identity(staged, env):
     artifact with its identity omitted could be mixed with the current deployment
     identity and falsely appear to prove the wrong build.
     """
-    for key in ("JARVIS_BUILD_SHA", "JARVIS_CI_BRANCH"):
+    for key in ("JARVIS_BUILD_SHA", "JARVIS_CI_BRANCH", "JARVIS_CI_REPOSITORY"):
         staged_value = (staged.get(key) or "").strip()
         explicit_value = (env.get(key) or "").strip()
         if explicit_value and (not staged_value or staged_value != explicit_value):

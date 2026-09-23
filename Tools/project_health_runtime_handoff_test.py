@@ -19,6 +19,7 @@ HEALTH_KEYS = (
     "JARVIS_CI_RUN_NUMBER",
     "JARVIS_CI_RUN_URL",
     "JARVIS_CI_BRANCH",
+    "JARVIS_CI_REPOSITORY",
     "JARVIS_CI_METADATA_GENERATED_AT",
     "JARVIS_CI_BACKEND_STATUS",
     "JARVIS_CI_IOS_STATUS",
@@ -64,6 +65,7 @@ check(
     and "JARVIS_CI_RUN_URL" in loader_source
     and "_github_run_id_from_url" in loader_source
     and "_GITHUB_RUN_PATH_RE" in loader_source
+    and "JARVIS_CI_REPOSITORY" in loader_source
     and "parsed.netloc != \"github.com\"" in loader_source,
 )
 check(
@@ -73,7 +75,7 @@ check(
 check(
     "runtime loader fail-closes on deployed build or branch identity conflicts",
     "_matches_explicit_build_identity(staged, env)" in loader_source
-    and 'for key in ("JARVIS_BUILD_SHA", "JARVIS_CI_BRANCH")' in loader_source,
+    and 'for key in ("JARVIS_BUILD_SHA", "JARVIS_CI_BRANCH", "JARVIS_CI_REPOSITORY")' in loader_source,
 )
 
 with tempfile.TemporaryDirectory() as td:
@@ -89,6 +91,7 @@ with tempfile.TemporaryDirectory() as td:
         "JARVIS_CI_RUN_NUMBER=277\n"
         "JARVIS_CI_RUN_URL=https://github.com/salemaladbi1981-lab/jarvis-ios/actions/runs/35603375966\n"
         "JARVIS_CI_BRANCH=chatgpt-overnight-2\n"
+        "JARVIS_CI_REPOSITORY=salemaladbi1981-lab/jarvis-ios\n"
         "JARVIS_CI_METADATA_GENERATED_AT=2026-09-21T13:10:00Z\n"
         "JARVIS_CI_BACKEND_STATUS=success\n"
         "JARVIS_CI_IOS_STATUS=success\n"
@@ -114,7 +117,8 @@ with tempfile.TemporaryDirectory() as td:
             "https://github.com/salemaladbi1981-lab/jarvis-ios/actions/runs/35603375966",
             "chatgpt-overnight-2",
         ]
-        and parts[10:] == ["2026-09-21T13:10:00Z", "success", "success", "success"],
+        and parts[10] == "salemaladbi1981-lab/jarvis-ios"
+        and parts[11:] == ["2026-09-21T13:10:00Z", "success", "success", "success"],
     )
     check("metadata handoff cannot inject non-health secrets", secret != "must-not-be-injected")
 
@@ -176,7 +180,7 @@ with tempfile.TemporaryDirectory() as td:
     check("invalid CI status is rejected instead of reported", invalid_parts[1] == "")
     check("valid fields from a partially malformed handoff remain usable", invalid_parts[2] == "success")
     check("invalid CI run identity is rejected", invalid_parts[6] == "" and invalid_parts[8] == "")
-    check("invalid per-job status is rejected", invalid_parts[11] == "")
+    check("invalid per-job status is rejected", invalid_parts[12] == "")
 
     foreign = Path(td) / "foreign-run-url.env"
     foreign.write_text(

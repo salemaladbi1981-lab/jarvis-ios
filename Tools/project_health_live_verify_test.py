@@ -23,6 +23,7 @@ def green_snapshot():
     return {
         "build_sha": "a" * 40,
         "ci_branch": "chatgpt-overnight-2",
+        "ci_repository": "salemaladbi1981-lab/jarvis-ios",
         "ci_run_id": "123456",
         "ci_run_number": "409",
         "ci_status": "success",
@@ -63,6 +64,9 @@ check("wrong deployed SHA fails closed", "build_identity" in assess_snapshot(wro
 
 wrong_branch = dict(base, ci_branch="main")
 check("wrong deployed branch fails closed", "branch_identity" in assess_snapshot(wrong_branch, expected_sha, expected_branch)["failed_checks"])
+
+wrong_repo = dict(base, ci_repository="other/repo")
+check("wrong deployed repository fails closed", "repository_identity" in assess_snapshot(wrong_repo, expected_sha, expected_branch)["failed_checks"])
 
 stale = dict(base, ci_metadata_state="stale")
 check("stale CI metadata cannot pass", "freshness" in assess_snapshot(stale, expected_sha, expected_branch)["failed_checks"])

@@ -19,6 +19,8 @@ if str(BACKEND) not in sys.path:
 from project_health import build_project_health  # noqa: E402
 from project_health_metadata import load_health_metadata  # noqa: E402
 
+EXPECTED_REPOSITORY = "salemaladbi1981-lab/jarvis-ios"
+
 
 def _parse_now(value):
     text = str(value or "").strip()
@@ -31,13 +33,15 @@ def _parse_now(value):
     return parsed.astimezone(timezone.utc)
 
 
-def preflight(metadata_path, expected_sha, expected_branch, now=None):
+def preflight(metadata_path, expected_sha, expected_branch, now=None, expected_repository=EXPECTED_REPOSITORY):
     """Return a sanitized readiness verdict for one candidate deployment."""
     expected_sha = str(expected_sha or "").strip()
     expected_branch = str(expected_branch or "").strip()
+    expected_repository = str(expected_repository or "").strip()
     env = {
         "JARVIS_BUILD_SHA": expected_sha,
         "JARVIS_CI_BRANCH": expected_branch,
+        "JARVIS_CI_REPOSITORY": expected_repository,
     }
 
     if not load_health_metadata(metadata_path, env):
@@ -68,6 +72,7 @@ def preflight(metadata_path, expected_sha, expected_branch, now=None):
     checks = {
         "build_identity": snapshot.get("build_sha") == expected_sha,
         "branch_identity": snapshot.get("ci_branch") == expected_branch,
+        "repository_identity": snapshot.get("ci_repository") == expected_repository,
         "ci": snapshot.get("ci_status") == "success",
         "build": snapshot.get("build_status") == "success",
         "tests": snapshot.get("tests_status") == "success",
@@ -89,6 +94,7 @@ def preflight(metadata_path, expected_sha, expected_branch, now=None):
         "failed_checks": failed_checks,
         "build_sha": snapshot.get("build_sha") or "",
         "ci_branch": snapshot.get("ci_branch") or "",
+        "ci_repository": snapshot.get("ci_repository") or "",
         "ci_run_id": snapshot.get("ci_run_id") or "",
         "ci_run_number": snapshot.get("ci_run_number") or "",
         "ci_status": snapshot.get("ci_status") or "unknown",
@@ -110,6 +116,7 @@ def main():
     parser.add_argument("--metadata", required=True)
     parser.add_argument("--expected-sha", required=True)
     parser.add_argument("--expected-branch", required=True)
+    parser.add_argument("--expected-repository", default=EXPECTED_REPOSITORY)
     parser.add_argument("--now", default="")
     args = parser.parse_args()
 
@@ -124,6 +131,7 @@ def main():
         args.expected_sha,
         args.expected_branch,
         now=now,
+        expected_repository=args.expected_repository,
     )
     print(json.dumps(result, ensure_ascii=False, sort_keys=True))
     return 0 if result["ok"] else 1

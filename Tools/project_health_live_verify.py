@@ -16,6 +16,7 @@ from urllib.request import Request, urlopen
 
 _MAX_RESPONSE_BYTES = 1_048_576
 _REQUIRED_REPORTED_EVIDENCE = ("build", "ci", "tests", "ci_run", "milestones")
+EXPECTED_REPOSITORY = "salemaladbi1981-lab/jarvis-ios"
 
 
 def _nonempty(value):
@@ -53,13 +54,14 @@ def fetch_snapshot(url, bearer_token="", timeout=10.0):
     return payload
 
 
-def assess_snapshot(snapshot, expected_sha, expected_branch):
+def assess_snapshot(snapshot, expected_sha, expected_branch, expected_repository=EXPECTED_REPOSITORY):
     """Return a sanitized, fail-closed verdict for one live health snapshot."""
     if not isinstance(snapshot, dict):
         return {"ok": False, "failed_checks": ["response_object"]}
 
     expected_sha = str(expected_sha or "").strip()
     expected_branch = str(expected_branch or "").strip()
+    expected_repository = str(expected_repository or "").strip()
     evidence = snapshot.get("evidence") if isinstance(snapshot.get("evidence"), dict) else {}
     blocker_items = snapshot.get("blocker_items") if isinstance(snapshot.get("blocker_items"), list) else []
     owner_items = snapshot.get("owner_action_items") if isinstance(snapshot.get("owner_action_items"), list) else []
@@ -74,9 +76,10 @@ def assess_snapshot(snapshot, expected_sha, expected_branch):
         owner_actions = -1
 
     checks = {
-        "expected_identity": bool(expected_sha and expected_branch),
+        "expected_identity": bool(expected_sha and expected_branch and expected_repository),
         "build_identity": snapshot.get("build_sha") == expected_sha,
         "branch_identity": snapshot.get("ci_branch") == expected_branch,
+        "repository_identity": snapshot.get("ci_repository") == expected_repository,
         "ci": snapshot.get("ci_status") == "success",
         "build": snapshot.get("build_status") == "success",
         "tests": snapshot.get("tests_status") == "success",
@@ -100,6 +103,7 @@ def assess_snapshot(snapshot, expected_sha, expected_branch):
         "failed_checks": failed,
         "build_sha": str(snapshot.get("build_sha") or ""),
         "ci_branch": str(snapshot.get("ci_branch") or ""),
+        "ci_repository": str(snapshot.get("ci_repository") or ""),
         "ci_run_id": str(snapshot.get("ci_run_id") or ""),
         "ci_run_number": str(snapshot.get("ci_run_number") or ""),
         "ci_status": str(snapshot.get("ci_status") or "unknown"),
@@ -121,6 +125,7 @@ def main():
     parser.add_argument("--url", required=True)
     parser.add_argument("--expected-sha", required=True)
     parser.add_argument("--expected-branch", required=True)
+    parser.add_argument("--expected-repository", default=EXPECTED_REPOSITORY)
     parser.add_argument("--token-env", default="JARVIS_SESSION_TOKEN")
     parser.add_argument("--timeout", type=float, default=10.0)
     args = parser.parse_args()
@@ -128,7 +133,7 @@ def main():
     try:
         token = os.environ.get(args.token_env, "") if args.token_env else ""
         snapshot = fetch_snapshot(args.url, bearer_token=token, timeout=args.timeout)
-        result = assess_snapshot(snapshot, args.expected_sha, args.expected_branch)
+        result = assess_snapshot(snapshot, args.expected_sha, args.expected_branch, args.expected_repository)
     except Exception as exc:  # CLI boundary: return only a sanitized error class/message.
         result = {"ok": False, "failed_checks": ["live_fetch"], "error": str(exc)}
 

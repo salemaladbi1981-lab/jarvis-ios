@@ -25,6 +25,7 @@ spec.loader.exec_module(module)
 
 SHA = "a" * 40
 BRANCH = "chatgpt-overnight-2"
+REPOSITORY = "salemaladbi1981-lab/jarvis-ios"
 RUN_ID = "35794818108"
 NOW = datetime(2026, 9, 23, 0, 0, 0, tzinfo=timezone.utc)
 
@@ -45,6 +46,7 @@ def metadata_text(**overrides):
         "JARVIS_CI_RUN_NUMBER": "406",
         "JARVIS_CI_RUN_URL": f"https://github.com/salemaladbi1981-lab/jarvis-ios/actions/runs/{RUN_ID}",
         "JARVIS_CI_BRANCH": BRANCH,
+        "JARVIS_CI_REPOSITORY": REPOSITORY,
         "JARVIS_CI_METADATA_GENERATED_AT": "2026-09-22T23:04:56Z",
         "JARVIS_CI_BACKEND_STATUS": "success",
         "JARVIS_CI_IOS_STATUS": "success",
@@ -75,6 +77,12 @@ with tempfile.TemporaryDirectory() as temp_dir:
         and good["owner_actions"] == 1
         and good["milestone_source"] == "version_controlled_plan"
         and good["owner_actions_source"] == "version_controlled_plan",
+    )
+
+    wrong_repo = module.preflight(path, SHA, BRANCH, now=NOW, expected_repository="other/repo")
+    check(
+        "candidate repository identity mismatch is rejected before cutover",
+        wrong_repo["ok"] is False and wrong_repo["failed_checks"] == ["metadata_rejected"],
     )
 
     mismatch = module.preflight(path, "b" * 40, BRANCH, now=NOW)

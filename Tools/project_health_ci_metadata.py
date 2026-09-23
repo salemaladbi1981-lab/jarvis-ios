@@ -209,6 +209,7 @@ def build_metadata(env=None, plan_path=DEFAULT_PLAN_PATH, generated_at=None):
     run_id = _safe_ci_digits(env.get("GITHUB_RUN_ID", ""))
     run_number = _safe_ci_digits(env.get("GITHUB_RUN_NUMBER", ""))
     branch = _safe_branch(env.get("GITHUB_REF_NAME", ""))
+    repository = _safe_repository(env.get("GITHUB_REPOSITORY", ""))
     precise_build_steps = all(str(env.get(key) or "").strip() for key in ("JARVIS_IOS_BUILD_RESULT", "JARVIS_MAC_BUILD_RESULT"))
     precise_mac_test = bool(str(env.get("JARVIS_MAC_TEST_RESULT") or "").strip())
 
@@ -225,6 +226,7 @@ def build_metadata(env=None, plan_path=DEFAULT_PLAN_PATH, generated_at=None):
         "ci_run_number": run_number,
         "ci_run_url": _run_url(env, run_id=run_id),
         "ci_branch": branch,
+        "ci_repository": repository,
         "metadata_generated_at": generated_at,
         "jobs": jobs,
         "build_jobs": build_jobs,
@@ -236,7 +238,7 @@ def build_metadata(env=None, plan_path=DEFAULT_PLAN_PATH, generated_at=None):
             "tests": "github_actions_steps" if precise_mac_test else "github_actions_jobs_fallback",
             "milestones": milestone_source,
             "owner_actions": "version_controlled_plan" if owner_actions else "unknown",
-            "run": "github_actions" if run_id and _run_url(env, run_id=run_id) else "unknown",
+            "run": "github_actions" if run_id and repository and _run_url(env, run_id=run_id) else "unknown",
         },
     }
 
@@ -263,6 +265,7 @@ def _write_env(path, metadata):
         f"JARVIS_CI_RUN_NUMBER={metadata.get('ci_run_number', '')}",
         f"JARVIS_CI_RUN_URL={metadata.get('ci_run_url', '')}",
         f"JARVIS_CI_BRANCH={metadata.get('ci_branch', '')}",
+        f"JARVIS_CI_REPOSITORY={metadata.get('ci_repository', '')}",
         f"JARVIS_CI_METADATA_GENERATED_AT={metadata.get('metadata_generated_at', '')}",
         f"JARVIS_CI_BACKEND_STATUS={jobs.get('backend_tests', 'unknown')}",
         f"JARVIS_CI_IOS_STATUS={jobs.get('ios', 'unknown')}",
