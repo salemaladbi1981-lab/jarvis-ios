@@ -54,6 +54,8 @@
     <string>يحتاج جارفس الوصول إلى التذكيرات لعرض مهامك عند طلبك.</string>
     <key>NSRemindersFullAccessUsageDescription</key>
     <string>يحتاج جارفس وصولاً كاملاً للتذكيرات لعرض مهامك وتحديثها بعد موافقتك.</string>
+    <key>NSAlarmKitUsageDescription</key>
+    <string>يستخدم جارفس المنبه لتذكيرك في الوقت الذي تطلبه.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>يحتاج جارفس الميكروفون للمحادثة الصوتية معك.</string>
     <key>NSCameraUsageDescription</key>

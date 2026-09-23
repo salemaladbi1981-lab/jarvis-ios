@@ -166,6 +166,13 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
         bargeIn()
     }
 
+    /// Ask Realtime to answer the already-committed user turn. Server VAD commits audio
+    /// but does not auto-create a response; local device tools get first right of refusal.
+    func requestResponse() {
+        ws?.send(.string(#"{"type":"response.create"}"#)) { _ in }
+        eventPublisher.send(.thinking)
+    }
+
     func sendText(_ text: String) {
         let item = #"{"type":"conversation.item.create","item":{"type":"message","role":"user","content":[{"type":"input_text","text":"\#(text)"}]}}"#
         ws?.send(.string(item)) { _ in }
@@ -177,7 +184,7 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     /// Replace any speculative model answer with authoritative on-device data
     /// (e.g. EventKit calendar/reminders), then ask Realtime to speak only from that result.
     func sendGroundedDeviceResult(userRequest: String, result: String) {
-        let payload = "Authoritative device result for my previous request. Use ONLY this result; do not claim lack of access and do not invent anything. Request: \(userRequest)\nResult: \(result)"
+        let payload = "Authoritative device result. SPEAK THE RESULT VERBATIM, character-for-character in meaning and numbers. Do not paraphrase times, dates, titles, or access status. Do not add another topic. Request: \(userRequest)\nVERBATIM RESULT: \(result)"
         let escaped = payload
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "\"", with: "\\\"")
@@ -204,8 +211,11 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
         // Gate: لا PCM قبل نجاح handshake/session.created (تحت التسلسل نفسه)
         let ready = stateQueue.sync { self.guardState.isSessionReady }
         guard ready else { return }
-        // After local playback drains, suppress only the tiny acoustic tail window.
-        // This does not affect spoken barge-in during assistant speech.
+        // Do not stream room audio while JARVIS is speaking. Nearby voices must never
+        // cancel or contaminate the active response. Explicit mic-button interruption
+        // remains immediate: interrupt() sets isSpeaking=false, then PCM resumes.
+        let speakingNow = stateQueue.sync { self.isSpeaking }
+        if speakingNow { return }
         if Date().timeIntervalSinceReferenceDate < suppressMicUntil { return }
         pcmAppendCount += 1
         if pcmAppendCount == 1 {
@@ -305,8 +315,10 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                     break
                 }
                 if isSpeaking {
-                    trace("speech_started while speaking → confirm voice barge-in")
-                    scheduleConfirmedVoiceBargeIn()
+                    // Ignore acoustic/nearby speech while JARVIS is talking. Manual mic
+                    // interruption is the intentional barge-in path and preserves context.
+                    trace("speech_started while speaking ignored — protected playback")
+                    cancelPendingVoiceBargeIn()
                 } else {
                     audio.flush()
                     eventPublisher.send(.listening)   // انتقال الواجهة إلى Listening

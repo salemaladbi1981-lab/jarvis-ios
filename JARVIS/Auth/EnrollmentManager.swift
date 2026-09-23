@@ -29,6 +29,23 @@ final class EnrollmentManager: ObservableObject {
         }
     }
 
+    func validateSession() async {
+        guard let token = sessionToken else { return }
+        var req = URLRequest(url: baseURL.appendingPathComponent("/project/health"))
+        req.setValue(token, forHTTPHeaderField: "X-Jarvis-Session")
+        req.setValue("PERSONAL", forHTTPHeaderField: "X-Jarvis-Workspace")
+        do {
+            let (_, resp) = try await URLSession.shared.data(for: req)
+            if (resp as? HTTPURLResponse)?.statusCode == 401 {
+                KeychainStore.clear()
+                sessionToken = nil
+                isEnrolled = false
+                uploadManager = nil
+                api = nil
+            }
+        } catch { }
+    }
+
     /// يُدخل الرمز → يستلم token → يخزّنه في Keychain → يربط UploadManager.
     func enroll(code: String) async -> Bool {
         let trimmed = code.trimmingCharacters(in: .whitespacesAndNewlines)

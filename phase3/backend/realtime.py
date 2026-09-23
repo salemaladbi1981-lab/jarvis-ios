@@ -64,7 +64,7 @@ async def openai_realtime_proxy(client_ws, session_config: dict):
         inp = session.setdefault("audio", {}).setdefault("input", {})
         inp["transcription"] = {"model": "whisper-1"}
         # VAD ثابت: semantic_vad + interrupt_response=False (المقاطعة تُدار عبر response.cancel من العميل)
-        inp["turn_detection"] = {"type": "semantic_vad", "interrupt_response": False, "create_response": True}
+        inp["turn_detection"] = {"type": "semantic_vad", "interrupt_response": False, "create_response": False}
         session.setdefault("instructions", config.REALTIME_INSTRUCTIONS)
         session["tools"] = build_email_tools() + TELEGRAM_TOOLS + YOUTUBE_TOOLS + INSTAGRAM_TOOLS + MAPS_TOOLS + BRAIN_TOOLS + MEMORY_TOOLS + CAPABILITIES_TOOLS + AGENT_TOOLS
         session["tool_choice"] = "auto"

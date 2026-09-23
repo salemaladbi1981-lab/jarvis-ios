@@ -29,6 +29,7 @@ struct JARVISApp: App {
                     .environment(\.layoutDirection, .rightToLeft)
                     .preferredColorScheme(.dark)
                     .environmentObject(enrollment)
+                    .task { await enrollment.validateSession() }
             } else {
                 PairingView()
                     .environmentObject(enrollment)

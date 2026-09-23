@@ -3,6 +3,55 @@ import Combine
 #if canImport(UIKit)
 import UIKit
 #endif
+#if canImport(AlarmKit)
+import AlarmKit
+#endif
+
+
+@available(iOS 26.0, *)
+private struct JarvisAlarmMetadata: AlarmMetadata {}
+
+@available(iOS 26.0, *)
+enum JarvisAlarmScheduler {
+    static func schedule(at date: Date) async -> String {
+        do {
+            let manager = AlarmManager.shared
+            var authorization = manager.authorizationState
+            if authorization == .notDetermined {
+                authorization = try await manager.requestAuthorization()
+            }
+            guard authorization == .authorized else {
+                return "صلاحية المنبه غير مفعلة — فعّل Alarm access لجارفس من الإعدادات"
+            }
+
+            let stop = AlarmButton(text: "إيقاف", textColor: .white, systemImageName: "stop.circle")
+            let alert = AlarmPresentation.Alert(title: "تذكير من جارفس", stopButton: stop)
+            let presentation = AlarmPresentation(alert: alert)
+            let attributes = AlarmAttributes<JarvisAlarmMetadata>(
+                presentation: presentation,
+                tintColor: .yellow
+            )
+            let configuration = AlarmManager.AlarmConfiguration<JarvisAlarmMetadata>.alarm(
+                schedule: .fixed(date),
+                attributes: attributes
+            )
+            let id = UUID()
+            _ = try await manager.schedule(id: id, configuration: configuration)
+            // Never claim success until AlarmKit itself reports the same alarm as scheduled.
+            let scheduled = try manager.alarms.first { $0.id == id && $0.state == .scheduled }
+            guard scheduled != nil else { return "تعذر التحقق من المنبه — لم يتم اعتماده في النظام" }
+
+            let f = DateFormatter()
+            f.locale = Locale(identifier: "ar_QA")
+            f.timeZone = .current
+            f.dateFormat = "h:mm a"
+            return "تم ضبط المنبه والتحقق منه في النظام على \(f.string(from: date))"
+        } catch {
+            return "تعذر ضبط المنبه: \(error.localizedDescription)"
+        }
+    }
+}
+
 
 /// ViewModel bridging views → provider abstractions + registry policy.
 /// Views never construct domain mock data directly.
@@ -338,7 +387,7 @@ final class HomeViewModel: ObservableObject {
         #endif
         // أسئلة البريد يعالجها الـ backend LLM عبر function calling — لا نعترضها محلياً
         // (يمنع «وش أهم إيميلاتي اليوم؟» من الوصول لمسار التقويم بسبب كلمة «اليوم»)
-        if Self.isEmailQuestion(t) { return }
+        if Self.isEmailQuestion(t) { voiceSession.requestResponse(); return }
 
         // Agent inventory is authoritative on-device from the bundled registry.
         // This bypasses stale backend/model memory for questions such as
@@ -356,6 +405,12 @@ final class HomeViewModel: ObservableObject {
             await runMeetings(userRequest: text)
             return
         }
+        // المنبه: AlarmKit على الجهاز — لا نعتمد على النموذج أو السيرفر.
+        if Self.isAlarmRequest(t), let fireDate = Self.parseAlarmDate(t) {
+            await runAlarm(at: fireDate, userRequest: text)
+            return
+        }
+
         // 1) إنشاء تذكير (يتطلب تأكيد)
         if let reminderTitle = Self.parseCreateReminder(t) {
             requestReminderCreate(title: reminderTitle)
@@ -374,7 +429,8 @@ final class HomeViewModel: ObservableObject {
         }
         // 4) الذاكرة الشخصية — الدماغ الوحيد = backend (memory_tools عبر function calling).
         //    لا مسار محلي (MemoryStore.seeded) ولا sendText — يمنع الرد المزدوج/القفز.
-        // 5) محادثة مباشرة — النموذج (الدماغ الواحد) رد بالفعل من الصوت.
+        // 5) محادثة مباشرة/أدوات backend — بعد أن أخذت أدوات الجهاز أول حق في التوجيه.
+        voiceSession.requestResponse()
     }
 
     // MARK: Quick commands (typed routing — no fragile text matching)
@@ -575,6 +631,50 @@ final class HomeViewModel: ObservableObject {
         return matches.prefix(5).map { agent in
             "\(agent.name) — \(agent.role) [\(agent.id)]"
         }.joined(separator: "\n")
+    }
+
+    private static func isAlarmRequest(_ t: String) -> Bool {
+        t.contains("منبه") || t.contains("المنبه") || t.contains("alarm") || t.contains("صحني") || t.contains("صحّني")
+    }
+
+    private static func parseAlarmDate(_ raw: String, now: Date = Date()) -> Date? {
+        let eastern = ["٠":"0","١":"1","٢":"2","٣":"3","٤":"4","٥":"5","٦":"6","٧":"7","٨":"8","٩":"9"]
+        var t = raw
+        for (a,b) in eastern { t = t.replacingOccurrences(of: a, with: b) }
+        if let r = t.range(of: #"بعد\s+(\d+)\s*(دقيقة|دقايق|دقائق)"#, options: .regularExpression) {
+            let x = String(t[r]).split(separator: " ").compactMap { Int($0) }.first ?? 0
+            return x > 0 ? now.addingTimeInterval(Double(x * 60)) : nil
+        }
+        if let r = t.range(of: #"بعد\s+(\d+)\s*(ساعة|ساعه|ساعات)"#, options: .regularExpression) {
+            let x = String(t[r]).split(separator: " ").compactMap { Int($0) }.first ?? 0
+            return x > 0 ? now.addingTimeInterval(Double(x * 3600)) : nil
+        }
+        guard let r = t.range(of: #"(?:الساعة|الساعه|ساعة|ساعه)\s*(\d{1,2})(?::(\d{1,2}))?"#, options: .regularExpression) else { return nil }
+        let nums = String(t[r]).split(whereSeparator: { !$0.isNumber }).compactMap { Int($0) }
+        guard var hour = nums.first, (0...23).contains(hour) else { return nil }
+        let minute = nums.count > 1 ? nums[1] : 0
+        if (t.contains("مساء") || t.contains("بالليل")) && hour < 12 { hour += 12 }
+        if t.contains("صباح") && hour == 12 { hour = 0 }
+        var c = Calendar.current.dateComponents([.year,.month,.day], from: now)
+        c.hour = hour; c.minute = minute; c.second = 0
+        guard var d = Calendar.current.date(from: c) else { return nil }
+        if d <= now { d = Calendar.current.date(byAdding: .day, value: 1, to: d) ?? d }
+        return d
+    }
+
+    private func runAlarm(at date: Date, userRequest: String) async {
+        state = .executing
+        #if canImport(AlarmKit)
+        if #available(iOS 26.0, *) {
+            let result = await JarvisAlarmScheduler.schedule(at: date)
+            calendarMessage = result
+            state = result.hasPrefix("تم") ? .idle : .alert
+            voiceSession.sendGroundedDeviceResult(userRequest: userRequest, result: result)
+            return
+        }
+        #endif
+        state = .alert
+        calendarMessage = "المنبه يتطلب iOS 26 أو أحدث"
     }
 
     private static func parseCreateReminder(_ t: String) -> String? {
