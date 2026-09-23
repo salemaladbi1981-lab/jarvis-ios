@@ -198,15 +198,21 @@ def _drop_inconsistent_run_identity(staged, env):
 
 
 def _matches_explicit_build_identity(staged, env):
-    """Reject CI artifacts that cannot prove the deployed build and branch identity.
+    """Reject CI artifacts that cannot prove the deployed build and run identity.
 
     Explicit deployment identity is authoritative. If deployment supplies a build
-    SHA or branch, the staged artifact must carry the same field and value. Missing
-    identity is therefore rejected just like a conflict; otherwise a fresh green
-    artifact with its identity omitted could be mixed with the current deployment
-    identity and falsely appear to prove the wrong build.
+    SHA, branch, repository, run id, or run number, the staged artifact must carry
+    the same field and value. Missing identity is rejected just like a conflict;
+    otherwise a fresh green artifact from a different rerun could be mixed with the
+    current deployment identity and falsely appear to prove the intended release.
     """
-    for key in ("JARVIS_BUILD_SHA", "JARVIS_CI_BRANCH", "JARVIS_CI_REPOSITORY"):
+    for key in (
+        "JARVIS_BUILD_SHA",
+        "JARVIS_CI_BRANCH",
+        "JARVIS_CI_REPOSITORY",
+        "JARVIS_CI_RUN_ID",
+        "JARVIS_CI_RUN_NUMBER",
+    ):
         staged_value = (staged.get(key) or "").strip()
         explicit_value = (env.get(key) or "").strip()
         if explicit_value and (not staged_value or staged_value != explicit_value):

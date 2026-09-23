@@ -33,15 +33,34 @@ def _parse_now(value):
     return parsed.astimezone(timezone.utc)
 
 
-def preflight(metadata_path, expected_sha, expected_branch, now=None, expected_repository=EXPECTED_REPOSITORY):
-    """Return a sanitized readiness verdict for one candidate deployment."""
+def preflight(
+    metadata_path,
+    expected_sha,
+    expected_branch,
+    now=None,
+    expected_repository=EXPECTED_REPOSITORY,
+    expected_run_id="",
+    expected_run_number="",
+):
+    """Return a sanitized readiness verdict for one exact candidate CI run."""
     expected_sha = str(expected_sha or "").strip()
     expected_branch = str(expected_branch or "").strip()
     expected_repository = str(expected_repository or "").strip()
+    expected_run_id = str(expected_run_id or "").strip()
+    expected_run_number = str(expected_run_number or "").strip()
+    if not expected_run_id.isdigit() or not expected_run_number.isdigit():
+        return {
+            "ok": False,
+            "failed_checks": ["expected_run_identity"],
+            "build_sha": expected_sha,
+            "ci_branch": expected_branch,
+        }
     env = {
         "JARVIS_BUILD_SHA": expected_sha,
         "JARVIS_CI_BRANCH": expected_branch,
         "JARVIS_CI_REPOSITORY": expected_repository,
+        "JARVIS_CI_RUN_ID": expected_run_id,
+        "JARVIS_CI_RUN_NUMBER": expected_run_number,
     }
 
     if not load_health_metadata(metadata_path, env):
@@ -117,6 +136,8 @@ def main():
     parser.add_argument("--expected-sha", required=True)
     parser.add_argument("--expected-branch", required=True)
     parser.add_argument("--expected-repository", default=EXPECTED_REPOSITORY)
+    parser.add_argument("--expected-run-id", required=True)
+    parser.add_argument("--expected-run-number", required=True)
     parser.add_argument("--now", default="")
     args = parser.parse_args()
 
@@ -132,6 +153,8 @@ def main():
         args.expected_branch,
         now=now,
         expected_repository=args.expected_repository,
+        expected_run_id=args.expected_run_id,
+        expected_run_number=args.expected_run_number,
     )
     print(json.dumps(result, ensure_ascii=False, sort_keys=True))
     return 0 if result["ok"] else 1

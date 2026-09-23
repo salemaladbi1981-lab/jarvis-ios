@@ -73,9 +73,13 @@ check(
     "_drop_inconsistent_run_identity(staged, env)" in loader_source,
 )
 check(
-    "runtime loader fail-closes on deployed build or branch identity conflicts",
+    "runtime loader fail-closes on explicit build and exact CI run identity conflicts",
     "_matches_explicit_build_identity(staged, env)" in loader_source
-    and 'for key in ("JARVIS_BUILD_SHA", "JARVIS_CI_BRANCH", "JARVIS_CI_REPOSITORY")' in loader_source,
+    and '"JARVIS_BUILD_SHA",' in loader_source
+    and '"JARVIS_CI_BRANCH",' in loader_source
+    and '"JARVIS_CI_REPOSITORY",' in loader_source
+    and '"JARVIS_CI_RUN_ID",' in loader_source
+    and '"JARVIS_CI_RUN_NUMBER",' in loader_source,
 )
 
 with tempfile.TemporaryDirectory() as td:
@@ -159,6 +163,32 @@ with tempfile.TemporaryDirectory() as td:
         and wrong_branch_parts[6] == ""
         and wrong_branch_parts[8] == ""
         and wrong_branch_parts[9] == "main",
+    )
+
+    wrong_run_id = clean.copy()
+    wrong_run_id["JARVIS_CI_RUN_ID"] = "99999999999"
+    wrong_run_id_values, _ = probe(wrong_run_id)
+    wrong_run_id_parts = wrong_run_id_values.split("|")
+    check(
+        "artifact is rejected as a unit when explicit CI run id disagrees",
+        wrong_run_id_parts[0] == ""
+        and wrong_run_id_parts[1] == ""
+        and wrong_run_id_parts[6] == "99999999999"
+        and wrong_run_id_parts[7] == ""
+        and wrong_run_id_parts[8] == "",
+    )
+
+    wrong_run_number = clean.copy()
+    wrong_run_number["JARVIS_CI_RUN_NUMBER"] = "999"
+    wrong_run_number_values, _ = probe(wrong_run_number)
+    wrong_run_number_parts = wrong_run_number_values.split("|")
+    check(
+        "artifact is rejected as a unit when explicit CI run number disagrees",
+        wrong_run_number_parts[0] == ""
+        and wrong_run_number_parts[1] == ""
+        and wrong_run_number_parts[6] == ""
+        and wrong_run_number_parts[7] == "999"
+        and wrong_run_number_parts[8] == "",
     )
 
     bad = Path(td) / "bad.env"

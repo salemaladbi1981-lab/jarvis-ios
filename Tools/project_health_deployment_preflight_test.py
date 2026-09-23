@@ -27,7 +27,14 @@ SHA = "a" * 40
 BRANCH = "chatgpt-overnight-2"
 REPOSITORY = "salemaladbi1981-lab/jarvis-ios"
 RUN_ID = "35794818108"
+RUN_NUMBER = "406"
 NOW = datetime(2026, 9, 23, 0, 0, 0, tzinfo=timezone.utc)
+
+
+def preflight(path, sha=SHA, branch=BRANCH, **kwargs):
+    kwargs.setdefault("expected_run_id", RUN_ID)
+    kwargs.setdefault("expected_run_number", RUN_NUMBER)
+    return module.preflight(path, sha, branch, **kwargs)
 
 
 def metadata_text(**overrides):
@@ -44,7 +51,7 @@ def metadata_text(**overrides):
         "JARVIS_MILESTONE_SOURCE": "version_controlled_plan",
         "JARVIS_OWNER_ACTIONS_SOURCE": "version_controlled_plan",
         "JARVIS_CI_RUN_ID": RUN_ID,
-        "JARVIS_CI_RUN_NUMBER": "406",
+        "JARVIS_CI_RUN_NUMBER": RUN_NUMBER,
         "JARVIS_CI_RUN_URL": f"https://github.com/salemaladbi1981-lab/jarvis-ios/actions/runs/{RUN_ID}",
         "JARVIS_CI_BRANCH": BRANCH,
         "JARVIS_CI_REPOSITORY": REPOSITORY,
@@ -64,7 +71,7 @@ def metadata_text(**overrides):
 with tempfile.TemporaryDirectory() as temp_dir:
     path = Path(temp_dir) / "project-health.env"
     path.write_text(metadata_text(), encoding="utf-8")
-    good = module.preflight(path, SHA, BRANCH, now=NOW)
+    good = preflight(path, now=NOW)
 
     check(
         "fresh green metadata for exact build and branch passes preflight",
@@ -80,23 +87,41 @@ with tempfile.TemporaryDirectory() as temp_dir:
         and good["owner_actions_source"] == "version_controlled_plan",
     )
 
-    wrong_repo = module.preflight(path, SHA, BRANCH, now=NOW, expected_repository="other/repo")
+    wrong_repo = preflight(path, now=NOW, expected_repository="other/repo")
     check(
         "candidate repository identity mismatch is rejected before cutover",
         wrong_repo["ok"] is False and wrong_repo["failed_checks"] == ["metadata_rejected"],
     )
 
-    mismatch = module.preflight(path, "b" * 40, BRANCH, now=NOW)
+    mismatch = preflight(path, sha="b" * 40, now=NOW)
     check(
         "candidate build identity mismatch is rejected before cutover",
         mismatch["ok"] is False
         and mismatch["failed_checks"] == ["metadata_rejected"],
     )
 
-    stale = module.preflight(
+    path.write_text(metadata_text(), encoding="utf-8")
+    wrong_run_id = preflight(path, now=NOW, expected_run_id="99999999999")
+    check(
+        "artifact from a different GitHub Actions run id is rejected before cutover",
+        wrong_run_id["ok"] is False and wrong_run_id["failed_checks"] == ["metadata_rejected"],
+    )
+
+    wrong_run_number = preflight(path, now=NOW, expected_run_number="999")
+    check(
+        "artifact from a different GitHub Actions run number is rejected before cutover",
+        wrong_run_number["ok"] is False and wrong_run_number["failed_checks"] == ["metadata_rejected"],
+    )
+
+    missing_expected_run = module.preflight(path, SHA, BRANCH, now=NOW)
+    check(
+        "deployment preflight requires the intended GitHub Actions run identity",
+        missing_expected_run["ok"] is False
+        and missing_expected_run["failed_checks"] == ["expected_run_identity"],
+    )
+
+    stale = preflight(
         path,
-        SHA,
-        BRANCH,
         now=datetime(2026, 9, 25, 0, 0, 0, tzinfo=timezone.utc),
     )
     check(
@@ -111,7 +136,7 @@ with tempfile.TemporaryDirectory() as temp_dir:
         metadata_text(JARVIS_MAC_TEST_STATUS="failure"),
         encoding="utf-8",
     )
-    failed_test = module.preflight(path, SHA, BRANCH, now=NOW)
+    failed_test = preflight(path, now=NOW)
     check(
         "exact failing test step blocks readiness even if aggregate metadata claims success",
         failed_test["ok"] is False
@@ -121,7 +146,7 @@ with tempfile.TemporaryDirectory() as temp_dir:
     )
 
     path.write_text(metadata_text(JARVIS_CI_RUN_URL=""), encoding="utf-8")
-    missing_run = module.preflight(path, SHA, BRANCH, now=NOW)
+    missing_run = preflight(path, now=NOW)
     check(
         "green metadata without inspectable run identity fails closed",
         missing_run["ok"] is False
@@ -131,7 +156,7 @@ with tempfile.TemporaryDirectory() as temp_dir:
     )
 
     path.write_text(metadata_text(JARVIS_MILESTONE_SOURCE="unknown"), encoding="utf-8")
-    missing_milestone_source = module.preflight(path, SHA, BRANCH, now=NOW)
+    missing_milestone_source = preflight(path, now=NOW)
     check(
         "reported milestones without provenance cannot pass deployment preflight",
         missing_milestone_source["ok"] is False
@@ -139,7 +164,7 @@ with tempfile.TemporaryDirectory() as temp_dir:
     )
 
     path.write_text(metadata_text(JARVIS_OWNER_ACTIONS_SOURCE="unknown"), encoding="utf-8")
-    missing_owner_source = module.preflight(path, SHA, BRANCH, now=NOW)
+    missing_owner_source = preflight(path, now=NOW)
     check(
         "planned owner actions without provenance are rejected at metadata handoff",
         missing_owner_source["ok"] is False
@@ -147,7 +172,7 @@ with tempfile.TemporaryDirectory() as temp_dir:
     )
 
     path.write_text(metadata_text(JARVIS_CURRENT_MILESTONE="unknown"), encoding="utf-8")
-    missing_plan = module.preflight(path, SHA, BRANCH, now=NOW)
+    missing_plan = preflight(path, now=NOW)
     check(
         "incomplete planning evidence blocks deployment readiness",
         missing_plan["ok"] is False
