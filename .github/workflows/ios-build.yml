@@ -190,7 +190,7 @@ jobs:
             project-health.env \
             project-health-ci.json
 
-      - uses: actions/upload-artifaact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: project-health-metadata
           path: |

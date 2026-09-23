@@ -224,5 +224,10 @@ check("workflow publishes a secret-free deployment handoff artifact",
       "project-health-ci.json" in workflow and
       "project-health.env" in workflow)
 
+health_job = workflow.split("  project-health-metadata:", 1)[1]
+check("Project Health handoff uses the valid GitHub artifact uploader action",
+      "- uses: actions/upload-artifact@v4" in health_job and
+      "actions/upload-artifaact" not in health_job)
+
 print(f"\n== RESULT: {PASS} PASS / {FAIL} FAIL ==")
 sys.exit(1 if FAIL else 0)
