@@ -20,6 +20,8 @@ HEALTH_KEYS = {
     "JARVIS_CURRENT_MILESTONE",
     "JARVIS_NEXT_MILESTONE",
     "JARVIS_OWNER_ACTIONS_JSON",
+    "JARVIS_MILESTONE_SOURCE",
+    "JARVIS_OWNER_ACTIONS_SOURCE",
     "JARVIS_CI_RUN_ID",
     "JARVIS_CI_RUN_NUMBER",
     "JARVIS_CI_RUN_URL",
@@ -46,6 +48,10 @@ STATUS_KEYS = {
     "JARVIS_MAC_TEST_STATUS",
 }
 VALID_STATUSES = {"success", "failure", "unknown"}
+PROVENANCE_VALUES = {
+    "JARVIS_MILESTONE_SOURCE": {"github_repository_variables", "version_controlled_plan", "mixed", "unknown"},
+    "JARVIS_OWNER_ACTIONS_SOURCE": {"version_controlled_plan", "unknown"},
+}
 _SHA_RE = re.compile(r"^[0-9a-fA-F]{7,40}$")
 _DIGITS_RE = re.compile(r"^[0-9]+$")
 _GITHUB_RUN_PATH_RE = re.compile(r"^/[^/]+/[^/]+/actions/runs/([0-9]+)/?$")
@@ -129,6 +135,8 @@ def _valid_value(key, value):
         return "\n" not in value and "\r" not in value and len(value) <= 200
     if key == "JARVIS_OWNER_ACTIONS_JSON":
         return _valid_owner_actions_json(value)
+    if key in PROVENANCE_VALUES:
+        return value in PROVENANCE_VALUES[key]
     return True
 
 

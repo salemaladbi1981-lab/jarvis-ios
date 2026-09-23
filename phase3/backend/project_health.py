@@ -37,6 +37,8 @@ _MAX_OWNER_EXPIRY_ABS = 10 ** 20
 _MAX_TASK_STATE_LENGTH = 64
 _MAX_RUNTIME_FIELD_LENGTH = 240
 _MAX_BUILD_SHA_LENGTH = 64
+_MILESTONE_SOURCES = frozenset({"github_repository_variables", "version_controlled_plan", "mixed", "unknown"})
+_OWNER_ACTION_SOURCES = frozenset({"version_controlled_plan", "unknown"})
 
 
 def _text(env, key, default=""):
@@ -59,6 +61,11 @@ def _status(env, key):
 def _reported(value):
     value = str(value or "").strip().lower()
     return "reported" if value and value != "unknown" else "unknown"
+
+
+def _provenance(env, key, allowed):
+    value = _text(env, key, "unknown").lower()
+    return value if value in allowed else "unknown"
 
 
 def _planning_evidence(phase, current_milestone, next_milestone):
@@ -442,6 +449,16 @@ def build_project_health(
     approval_action_items = _owner_action_items(pending_approvals)
     planned_action_items = _planned_owner_action_items(env)
     owner_action_items = approval_action_items + planned_action_items
+    milestone_source = _provenance(env, "JARVIS_MILESTONE_SOURCE", _MILESTONE_SOURCES)
+    planned_owner_source = _provenance(env, "JARVIS_OWNER_ACTIONS_SOURCE", _OWNER_ACTION_SOURCES)
+    if approval_action_items and planned_action_items:
+        owner_actions_source = "mixed"
+    elif approval_action_items:
+        owner_actions_source = "runtime_approvals"
+    elif planned_action_items:
+        owner_actions_source = planned_owner_source
+    else:
+        owner_actions_source = "unknown"
     phase = _bounded_runtime_text(
         _text(env, "JARVIS_CURRENT_PHASE", "unknown"), default="unknown"
     )
@@ -498,5 +515,7 @@ def build_project_health(
             "ci_run": "reported" if ci["run_id"] and ci["run_url"] else "unknown",
             "ci_freshness": freshness["state"],
             "milestones": _planning_evidence(phase, current_milestone, next_milestone),
+            "milestone_source": milestone_source,
+            "owner_actions": owner_actions_source,
         },
     }

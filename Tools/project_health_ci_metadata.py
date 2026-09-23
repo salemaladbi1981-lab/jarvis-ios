@@ -247,6 +247,7 @@ def _write_env(path, metadata):
     build_jobs = metadata.get("build_jobs") or {}
     test_jobs = metadata.get("test_jobs") or {}
     owner_actions_json = json.dumps(metadata.get("owner_actions") or [], ensure_ascii=False, separators=(",", ":"))
+    evidence = metadata.get("evidence") or {}
     lines = [
         f"JARVIS_BUILD_SHA={metadata['build_sha']}",
         f"JARVIS_BUILD_STATUS={metadata.get('build_status', 'unknown')}",
@@ -256,6 +257,8 @@ def _write_env(path, metadata):
         f"JARVIS_CURRENT_MILESTONE={metadata['current_milestone']}",
         f"JARVIS_NEXT_MILESTONE={metadata['next_milestone']}",
         f"JARVIS_OWNER_ACTIONS_JSON={owner_actions_json}",
+        f"JARVIS_MILESTONE_SOURCE={evidence.get('milestones', 'unknown')}",
+        f"JARVIS_OWNER_ACTIONS_SOURCE={evidence.get('owner_actions', 'unknown')}",
         f"JARVIS_CI_RUN_ID={metadata.get('ci_run_id', '')}",
         f"JARVIS_CI_RUN_NUMBER={metadata.get('ci_run_number', '')}",
         f"JARVIS_CI_RUN_URL={metadata.get('ci_run_url', '')}",

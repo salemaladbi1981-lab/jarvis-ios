@@ -120,6 +120,7 @@ check("evidence labels distinguish reported build/CI/tests/run/freshness/milesto
       snapshot["evidence"] == {
           "build": "reported", "ci": "reported", "tests": "reported",
           "ci_run": "reported", "ci_freshness": "fresh", "milestones": "reported",
+          "milestone_source": "unknown", "owner_actions": "runtime_approvals",
       })
 
 stale = project_health.build_project_health(
