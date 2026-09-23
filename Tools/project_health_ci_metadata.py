@@ -204,7 +204,22 @@ def build_metadata(env=None, plan_path=DEFAULT_PLAN_PATH, generated_at=None):
     next_milestone, next_source = _planning_value(
         env, "JARVIS_NEXT_MILESTONE", plan, "next_milestone"
     )
-    owner_actions = list(plan.get("owner_actions") or [])
+    # Planned owner actions are meaningful only while the effective planning
+    # context still matches the reviewed plan that supplied them. Repository
+    # variables remain authoritative for phase/milestones, but if they advance
+    # or otherwise diverge from the checked-in plan, suppress its owner action
+    # instead of showing stale instructions beside a newer milestone.
+    plan_context = (
+        _safe_planning_text(plan.get("phase", "")),
+        _safe_planning_text(plan.get("current_milestone", "")),
+        _safe_planning_text(plan.get("next_milestone", "")),
+    )
+    effective_context = (phase, current_milestone, next_milestone)
+    owner_actions = (
+        list(plan.get("owner_actions") or [])
+        if all(plan_context) and effective_context == plan_context
+        else []
+    )
     planning_sources = {phase_source, current_source, next_source}
     if planning_sources == {"github_repository_variables"}:
         milestone_source = "github_repository_variables"
