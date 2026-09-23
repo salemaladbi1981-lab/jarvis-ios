@@ -61,6 +61,7 @@ _GENERATED_AT_RE = re.compile(
     r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,6})?Z$"
 )
 _OWNER_ACTION_FIELDS = {"type", "action", "agent", "task_id"}
+_RESERVED_OWNER_ACTION_TYPES = {"approval"}
 _MAX_OWNER_ACTIONS = 20
 _MAX_OWNER_ACTION_FIELD_LENGTH = 240
 _MAX_OWNER_ACTIONS_JSON_LENGTH = 8192
@@ -84,6 +85,9 @@ def _valid_owner_actions_json(value):
         if not isinstance(item, dict) or not item or not item.keys() <= _OWNER_ACTION_FIELDS:
             return False
         if not isinstance(item.get("action"), str) or not item["action"].strip():
+            return False
+        item_type = str(item.get("type") or "").strip().lower()
+        if item_type in _RESERVED_OWNER_ACTION_TYPES:
             return False
         for field_value in item.values():
             if not isinstance(field_value, str):

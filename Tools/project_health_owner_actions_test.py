@@ -180,5 +180,65 @@ check(
     and "must-not-leak" not in repr(sanitized),
 )
 
+
+# `approval` is a reserved runtime-only owner-action type. A checked-in plan
+# must never be able to make a project action look like a live approval.
+with tempfile.TemporaryDirectory() as td:
+    reserved_plan = Path(td) / "reserved-plan.json"
+    reserved_plan.write_text(json.dumps({
+        "schema_version": 4,
+        "phase": "project-health-production-handoff",
+        "current_milestone": "Project Health production handoff",
+        "next_milestone": "Release readiness",
+        "owner_actions": [{"type": "approval", "action": "Connect production host"}],
+    }), encoding="utf-8")
+    reserved_metadata = generator.build_metadata(
+        base, plan_path=reserved_plan, generated_at="2026-09-22T01:00:00Z"
+    )
+
+check(
+    "version-controlled plans cannot mint runtime approval owner actions",
+    reserved_metadata["owner_actions"] == [
+        {"type": "project_action", "action": "Connect production host"}
+    ]
+    and reserved_metadata["evidence"]["owner_actions"] == "version_controlled_plan",
+)
+
+with tempfile.TemporaryDirectory() as td:
+    reserved_env = Path(td) / "reserved.env"
+    reserved_env.write_text(
+        'JARVIS_OWNER_ACTIONS_JSON=[{"type":"approval","action":"Fake runtime approval"}]\n',
+        encoding="utf-8",
+    )
+    reserved_loaded = {}
+    reserved_accepted = load_health_metadata(reserved_env, reserved_loaded)
+
+check(
+    "metadata loader rejects plan payloads using the reserved runtime approval type",
+    not reserved_accepted and "JARVIS_OWNER_ACTIONS_JSON" not in reserved_loaded,
+)
+
+reserved_runtime = project_health.build_project_health(
+    tasks=[],
+    job_state_for=lambda _task_id: None,
+    pending_approvals=[],
+    capability_count=22,
+    kill_switch_engaged=False,
+    provider="openai",
+    workspace_id="PERSONAL",
+    environ={
+        "JARVIS_OWNER_ACTIONS_JSON": '[{"type":"approval","action":"Direct env action"}]',
+        "JARVIS_OWNER_ACTIONS_SOURCE": "version_controlled_plan",
+    },
+)
+check(
+    "runtime response boundary downgrades any direct planned approval claim",
+    reserved_runtime["pending_approvals"] == 0
+    and reserved_runtime["owner_action_items"] == [
+        {"type": "project_action", "action": "Direct env action"}
+    ]
+    and reserved_runtime["evidence"]["owner_actions"] == "version_controlled_plan",
+)
+
 print(f"\n== RESULT: {PASS} PASS / {FAIL} FAIL ==")
 sys.exit(1 if FAIL else 0)

@@ -33,6 +33,7 @@ VALID_STATUSES = frozenset({"success", "failure", "unknown"})
 CI_METADATA_FRESHNESS_SECONDS = 24 * 60 * 60
 CI_METADATA_FUTURE_SKEW_SECONDS = 5 * 60
 _OWNER_ACTION_FIELDS = ("type", "action", "agent", "task_id")
+_RESERVED_PLANNED_OWNER_ACTION_TYPES = frozenset({"approval"})
 _MAX_OWNER_ACTIONS = 20
 _MAX_OWNER_ACTION_FIELD_LENGTH = 240
 _MAX_OWNER_EXPIRY_ABS = 10 ** 20
@@ -387,6 +388,8 @@ def _planned_owner_action_items(env):
                 item[key] = field
         if item.get("action"):
             item.setdefault("type", "project_action")
+            if item.get("type", "").lower() in _RESERVED_PLANNED_OWNER_ACTION_TYPES:
+                item["type"] = "project_action"
             items.append(item)
     return items
 

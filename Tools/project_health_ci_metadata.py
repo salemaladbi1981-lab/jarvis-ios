@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_PLAN_PATH = ROOT / "docs" / "PROJECT-HEALTH-PLAN.json"
 _FAILURE_RESULTS = {"failure", "cancelled", "timed_out", "action_required"}
 _OWNER_ACTION_FIELDS = ("type", "action", "agent", "task_id")
+_RESERVED_OWNER_ACTION_TYPES = frozenset({"approval"})
 _MAX_OWNER_ACTIONS = 20
 _MAX_OWNER_ACTION_FIELD_LENGTH = 240
 _MAX_PLANNING_FIELD_LENGTH = 240
@@ -118,6 +119,8 @@ def _safe_owner_actions(value):
             item[key] = text
         if item.get("action"):
             item.setdefault("type", "project_action")
+            if item.get("type", "").lower() in _RESERVED_OWNER_ACTION_TYPES:
+                item["type"] = "project_action"
             actions.append(item)
     return actions
 
