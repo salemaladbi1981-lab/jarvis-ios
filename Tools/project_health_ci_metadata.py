@@ -8,7 +8,7 @@ from pathlib import Path
 import re
 
 ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_PLAN_PATH = ROOT / "Docs" / "PROJECT-HEALTH-PLAN.json"
+DEFAULT_PLAN_PATH = ROOT / "docs" / "PROJECT-HEALTH-PLAN.json"
 _FAILURE_RESULTS = {"failure", "cancelled", "timed_out", "action_required"}
 _OWNER_ACTION_FIELDS = ("type", "action", "agent", "task_id")
 _RESERVED_OWNER_ACTION_TYPES = frozenset({"approval"})

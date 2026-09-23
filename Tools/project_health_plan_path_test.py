@@ -11,7 +11,7 @@ import project_health_ci_metadata as metadata  # noqa: E402
 
 
 def main():
-    expected = ROOT / "Docs" / "PROJECT-HEALTH-PLAN.json"
+    expected = ROOT / "docs" / "PROJECT-HEALTH-PLAN.json"
     assert metadata.DEFAULT_PLAN_PATH == expected, (
         f"default plan path casing drifted: {metadata.DEFAULT_PLAN_PATH!s}"
     )
