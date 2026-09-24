@@ -25,8 +25,11 @@ check("no bare except: pass", re.search(r"except\s*:\s*\n\s*pass", rt) is None)
 check("no except Exception: pass", re.search(r"except\s+Exception\s*:\s*\n\s*pass", rt) is None)
 check("structured trace logging (_trace)", "_trace" in rt)
 
-# D) VAD ثابت — لا قلب عشوائي لـ interrupt_response
-check("semantic_vad kept", '"type": "semantic_vad"' in rt)
+# D) VAD ثابت — server_vad لأن semantic_vad تجاهل create_response=false وأعاده true
+#    في session.updated (دليل console-session5)، فكان السيرفر يردّ بعد كل commit.
+check("server_vad kept", '"type": "server_vad"' in rt)
+check("semantic_vad not restored", '"type": "semantic_vad"' not in rt)
+check("create_response=False kept (server must not answer on its own)", '"create_response": False' in rt)
 check("interrupt_response=False kept (documented)", '"interrupt_response": False' in rt)
 
 # E) التوزيع بالبادئة سليم (لا كسر للرفع/الأدوات الأخرى)
