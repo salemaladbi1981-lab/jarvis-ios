@@ -49,7 +49,11 @@ check("flush (barge-in)", 'func flush()' in vae and 'player.reset()' in vae)
 check("session uses VoiceAudioEngine", 'VoiceAudioEngine()' in rvs)
 check("no MicrophoneCapture/AudioPlayback (merged)", 'MicrophoneCapture' not in rvs and 'AudioPlayback' not in rvs)
 check("full-duplex: no pauseMic/resumeMic", 'pauseMic' not in rvs and 'resumeMic' not in rvs)
-check("barge-in: speech_started → bargeIn when isSpeaking", 'speech_started' in rvs and 'if isSpeaking' in rvs and 'bargeIn()' in rvs)
+# bargeIn now carries the active-response fact (see barge_cancel_guard_test.py):
+# a cancel for a finished response returned response_cancel_not_active and raised a
+# red alert. Manual interrupt remains the barge path (AA.7: nearby speech never barges).
+check("barge-in: manual interrupt goes through bargeIn with the active-response fact",
+      'speech_started' in rvs and 'if isSpeaking' in rvs and 'bargeIn(hadActiveResponse:' in rvs)
 check("barge-in مرة واحدة (isSpeaking=false قبل flush)", 'isSpeaking = false' in rvs)
 check("barge-in latency trace (ms)", 'BARGE playback stopped' in rvs and 'latency=' in rvs)
 check("barge-in: flush يمسح playback فقط (لا mic input)", 'response.cancel' in rvs and 'audio.flush()' in rvs)
