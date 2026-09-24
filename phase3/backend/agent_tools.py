@@ -48,9 +48,25 @@ AGENT_TOOLS = [
 def execute_agent_tool(name, args):
     if name == "jarvis_agent_lookup":
         q = " ".join((args.get("query") or "").lower().replace("_", " ").replace("-", " ").split())
-        if not q:
-            return {"ok": False, "error": "missing_query"}
         agents = _load_registry().get("agents", [])
+        if not q:
+            # A lookup without a query used to fail closed (observed twice on hermes-new:
+            # jarvis_agent_lookup ok=False, and JARVIS told the owner it had no details).
+            # The roster is not sensitive and is the useful answer to "who do I have?".
+            return {
+                "ok": True,
+                "count": len(agents),
+                "query": "",
+                "matches": [
+                    {
+                        "id": a.get("id"),
+                        "name": a.get("name"),
+                        "group": a.get("group"),
+                        "role": a.get("role"),
+                    }
+                    for a in agents[:25]
+                ],
+            }
         matches = []
         for agent in agents:
             hay = " ".join([
