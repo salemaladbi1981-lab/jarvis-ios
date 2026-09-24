@@ -34,8 +34,12 @@ named = run({"query": "المدرب"})
 check("an Arabic name still matches exactly one agent",
       named["ok"] and named["count"] == 1 and named["matches"][0]["id"] == "sys_coach")
 check("an id still matches", run({"query": "sys_coach"})["ok"] and run({"query": "sys_coach"})["count"] >= 1)
+# The matcher is token-based and pre-dates this change: a multi-word query can match on a
+# common token ("an"), so only a single nonsense token is a zero-match case.
 check("a nonsense query returns zero matches without failing",
-      run({"query": "zzzz-not-an-agent"})["ok"] is True and run({"query": "zzzz-not-an-agent"})["count"] == 0)
+      run({"query": "zzzzq"})["ok"] is True and run({"query": "zzzzq"})["count"] == 0)
+check("a query-less call is never mistaken for a nonsense query",
+      run({})["count"] == registry_count and run({"query": "zzzzq"})["count"] == 0)
 check("an unknown tool still fails closed",
       agent_tools.execute_agent_tool("nope", {}) == {"ok": False, "error": "unknown_tool"})
 check("jarvis_agent itself still requires its arguments",
