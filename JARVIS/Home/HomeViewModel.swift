@@ -754,8 +754,12 @@ final class HomeViewModel: ObservableObject {
     /// numbers, fractions of an hour, Arabic-Indic digits, HH:MM and the meridiem words.
     static func parseAlarmDate(_ raw: String, now: Date = Date()) -> Date? {
         let t = normalizedDigits(raw)
+        // "بعد ..." is the only phrasing that means a delay. Otherwise a clock reading wins:
+        // "الساعة 5 و 6 دقائق" is 5:06, not "in 6 minutes" (device evidence, session 18).
+        if t.contains("بعد"), let offset = relativeOffset(in: t) { return now.addingTimeInterval(offset) }
+        if let clock = clockDate(in: t, now: now) { return clock }
         if let offset = relativeOffset(in: t) { return now.addingTimeInterval(offset) }
-        return clockDate(in: t, now: now)
+        return nil
     }
 
     /// Arabic-Indic digits → ASCII, and tatweel/diacritics dropped.
@@ -822,8 +826,13 @@ final class HomeViewModel: ObservableObject {
             guard let h = nums.first, nums.count > 1 else { return nil }
             hour = h
             minute = nums[1]
-        } else if let h = firstInt(t, pattern: "(?:الساعة|الساعه|ساعة|ساعه|على|عند)\\s*\\d{1,2}") {
+        } else if let r = t.range(of: "(?:الساعة|الساعه|ساعة|ساعه|على|عند)\\s*\\d{1,2}(?:\\s*و\\s*\\d{1,2}(?:\\s*(?:دقيقة|دقيقه|دقايق|دقائق))?)?",
+                                  options: .regularExpression) {
+            // "الساعة 4 و 56" / "الساعة 5 و 6 دقائق" → hour + minutes spoken with و
+            let nums = String(t[r]).split(whereSeparator: { !$0.isNumber }).compactMap { Int($0) }
+            guard let h = nums.first else { return nil }
             hour = h
+            if nums.count > 1, (0...59).contains(nums[1]) { minute = nums[1] }
         } else {
             return nil
         }
@@ -847,9 +856,17 @@ final class HomeViewModel: ObservableObject {
         c.hour = hour
         c.minute = minute
         c.second = 0
-        guard var d = Calendar.current.date(from: c) else { return nil }
-        if d <= now { d = Calendar.current.date(byAdding: .day, value: 1, to: d) ?? d }
-        return d
+        guard let first = Calendar.current.date(from: c) else { return nil }
+        if first > now { return first }
+
+        // A 12-hour time with no صباح/مساء marker is ambiguous: take the nearest future
+        // reading, so "الساعة 4 و 56" said at 10:00 means 16:56 today, not 04:56 tomorrow.
+        if !isPM, !isAM, hour < 12 {
+            var pm = c
+            pm.hour = hour + 12
+            if let later = Calendar.current.date(from: pm), later > now { return later }
+        }
+        return Calendar.current.date(byAdding: .day, value: 1, to: first)
     }
 
     private func runAlarm(at date: Date, userRequest: String) async {

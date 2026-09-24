@@ -80,9 +80,11 @@ def clock_date(t, now):
         if len(nums) < 2: return None
         hour, minute = nums[0], nums[1]
     else:
-        m = re.search(r"(?:الساعة|الساعه|ساعة|ساعه|على|عند)\s*\d{1,2}", t)
+        m = re.search(r"(?:الساعة|الساعه|ساعة|ساعه|على|عند)\s*\d{1,2}(?:\s*و\s*\d{1,2}(?:\s*(?:دقيقة|دقيقه|دقايق|دقائق))?)?", t)
         if not m: return None
-        hour, minute = int(re.search(r"\d+", m.group()).group()), 0
+        nums = [int(x) for x in re.findall(r"\d+", m.group())]
+        hour, minute = nums[0], 0
+        if len(nums) > 1 and 0 <= nums[1] <= 59: minute = nums[1]
     if not (0 <= hour <= 23 and 0 <= minute <= 59): return None
     if re.search(r"(?:ونص|و نص|ونصف|و نصف)", t) and minute == 0: minute = 30
     if re.search(r"(?:وربع|و ربع)", t) and minute == 0: minute = 15
@@ -91,14 +93,21 @@ def clock_date(t, now):
     if is_pm and hour < 12: hour += 12
     if is_am and hour == 12: hour = 0
     d = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
-    if d <= now: d += timedelta(days=1)
-    return d
+    if d > now: return d
+    if not is_pm and not is_am and hour < 12:
+        later = now.replace(hour=hour + 12, minute=minute, second=0, microsecond=0)
+        if later > now: return later
+    return d + timedelta(days=1)
 
 def parse_alarm_date(raw, now):
     t = norm(raw)
+    if "بعد" in t:
+        off = relative_offset(t)
+        if off is not None: return now + timedelta(seconds=off)
+    d = clock_date(t, now)
+    if d is not None: return d
     off = relative_offset(t)
-    if off is not None: return now + timedelta(seconds=off)
-    return clock_date(t, now)
+    return None if off is None else now + timedelta(seconds=off)
 
 # --- the contract itself, mirrored so the vocabulary cannot regress silently ---
 NOW = datetime(2026, 9, 24, 17, 10, 0)
@@ -117,19 +126,37 @@ CASES = [
     ("المنبه بعد ساعة ونص",                   "18:40"),
     ("اضبط المنبه بعد 10 دقائق",              "17:20"),
     ("المنبه بعد عشرين دقيقة",                "17:30"),
-    ("اضبط المنبه الساعة 7",                  "07:00"),  # already passed today → tomorrow
+    ("اضبط المنبه الساعة 7",                  "19:00"),  # said at 17:10 with no meridiem:
+                                                          # the nearest future 7 o'clock is 19:00
     ("المنبه الساعة ٨ ونص مساءً",             "20:30"),
     ("المنبه الساعة 8 وربع مساء",             "20:15"),
     ("صحني الفجر الساعة 5",                   "05:00"),
     ("المنبه الساعة 12 صباحا",                "00:00"),
     ("المنبه على الساعة 4 العصر",             "16:00"),
     ("المنبه 6:05 am",                        "06:05"),
+    ("اضغط المنبه على ساعة 4 و 56",           "04:56"),   # session 18 read it as 04:00; the
+                                                           # minutes are now read, and with no
+                                                           # مساء/pm the nearest future 4:56
+                                                           # at 17:10 is tomorrow morning
+    ("اضبط المنبه على الساعة 5 و 6 دقائق p.m.", "17:06"),  # session 18: set 17:10 by mistake
+    ("اضبط المنبه الساعة 4 و 56 مساء",        "16:56"),
+    ("المنبه بعد 6 دقائق",                    "17:16"),   # "بعد" still means a delay
     ("المنبه الساعة 9 م",                     "21:00"),
     ("المنبه الساعة 9 ص",                     "09:00"),
 ]
 for raw, want in CASES:
     got = hhmm(raw)
     check(f"{want} ← {raw}", got == want)
+
+# the same sentence said in the morning resolves to the afternoon reading
+NOON = datetime(2026, 9, 24, 10, 0, 0)
+def hhmm_at(raw, when):
+    d = parse_alarm_date(raw, when)
+    return None if d is None else d.strftime("%H:%M")
+check("ambiguous 4 و 56 said at 10:00 → 16:56 today",
+      hhmm_at("اضغط المنبه على ساعة 4 و 56", NOON) == "16:56")
+check("explicit صباحاً is respected, not shifted",
+      hhmm_at("المنبه الساعة 4 و 56 صباحا", NOON) == "04:56")
 
 for raw in ["اضبط المنبه", "المنبه من فضلك", "شغل المنبه بكرة"]:
     check(f"unreadable stays nil ← {raw}", hhmm(raw) is None)
