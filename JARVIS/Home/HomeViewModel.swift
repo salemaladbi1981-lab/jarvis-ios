@@ -445,10 +445,86 @@ final class HomeViewModel: ObservableObject {
         print("[JARVIS-DIAG][grounded] site=\(site) result=\(result)")
     }
 
+    // MARK: Transcript admission
+
+    /// Whisper fills silence with stock phrases (subtitle credits, "thank you",
+    /// "Transcribed by ...") and a TV in the room produces courtesy fragments. Every
+    /// transcript used to reach the backend and ask for an answer, so JARVIS talked to
+    /// the room. These never carry a request, so they are dropped before routing.
+    private static let fillerTranscripts: Set<String> = Set(fillerPhrases.map(normalizedTranscript))
+
+    private static let fillerPhrases: [String] = [
+        "شكرا", "شكرا لكم", "شكرا جزيلا", "شكرا على المشاهدة", "شكرا للمشاهدة",
+        "اشتركوا في القناة", "اشترك في القناة", "لا تنسى الاشتراك", "اشتركوا بالقناة",
+        "ترجمة", "ترجمه", "الترجمة", "اراكم على خير", "الى اللقاء", "مع السلامة",
+        "thank you", "thanks", "thank you for watching", "bye", "bye bye",
+        "subscribe", "please subscribe", "you", "okay", "ok",
+    ]
+
+    /// Prefixes that mark a transcription artefact rather than speech.
+    private static let fillerPrefixes: [String] = ["transcribed by", "ترجمة نانسي", "ترجمه نانسي",
+                                                   "subtitles by", "amara.org"].map(normalizedTranscript)
+
+    /// Repeats of the same utterance inside this window are the same turn arriving twice
+    /// (echo, or the room saying it again) and must not produce a second answer.
+    private static let repeatWindow: TimeInterval = 10
+
+    private var lastRoutedTranscript = ""
+    private var lastRoutedAt: Date = .distantPast
+
+    /// Lowercased, diacritic-free, punctuation-free form used for both checks.
+    static func normalizedTranscript(_ text: String) -> String {
+        let stripped = text.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "ar"))
+        let cleaned = stripped.unicodeScalars.filter { scalar in
+            !CharacterSet.punctuationCharacters.contains(scalar)
+                && !CharacterSet.symbols.contains(scalar)
+        }
+        var out = String(String.UnicodeScalarView(cleaned))
+        out = out.replacingOccurrences(of: "أ", with: "ا")
+            .replacingOccurrences(of: "إ", with: "ا")
+            .replacingOccurrences(of: "آ", with: "ا")
+            .replacingOccurrences(of: "ى", with: "ي")
+        out = out.split(separator: " ", omittingEmptySubsequences: true).joined(separator: " ")
+        return out.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    /// A transcript that carries no request: empty, letterless, stock filler, or artefact.
+    static func isFillerTranscript(_ text: String) -> Bool {
+        let n = normalizedTranscript(text)
+        if n.isEmpty { return true }
+        if !n.contains(where: { $0.isLetter }) { return true }
+        if fillerTranscripts.contains(n) { return true }
+        return fillerPrefixes.contains { n.hasPrefix($0) }
+    }
+
+    /// Device tools stay reachable even when the owner repeats himself.
+    private static func isDeviceToolRequest(_ t: String) -> Bool {
+        if isAgentInventoryQuestion(t) || isMeetingQuestion(t) { return true }
+        if isAlarmRequest(t) { return true }
+        if parseCreateReminder(t) != nil { return true }
+        if t.contains("تذكير") || t.contains("reminder") { return true }
+        return isCalendarQuestion(t)
+    }
+
     /// Voice transcript → local tool route → spoken result.
     /// V1.1: إضافة إنشاء تذكير (بتأكيد) + أسئلة شخصية تعتمد على الذاكرة.
     func routeVoiceTranscript(_ text: String) async {
         let t = text.lowercased()
+        // Admission: drop what carries no request before anything asks for an answer.
+        if Self.isFillerTranscript(text) {
+            Self.diagRoute("ignored-filler", text)
+            return
+        }
+        let normalized = Self.normalizedTranscript(text)
+        let now = Date()
+        if normalized == lastRoutedTranscript,
+           now.timeIntervalSince(lastRoutedAt) < Self.repeatWindow,
+           !Self.isDeviceToolRequest(t) {
+            Self.diagRoute("ignored-repeat", text)
+            return
+        }
+        lastRoutedTranscript = normalized
+        lastRoutedAt = now
         // OBSERVATION MODE ONLY: log the router's decision without acting on it.
         let routedAgentID = AgentRouter.route(text)
         #if DEBUG
@@ -501,7 +577,7 @@ final class HomeViewModel: ObservableObject {
             return
         }
         // 3) قراءة التقويم (أداة محلية) — تُعرض على الشاشة فقط، لا sendText
-        if t.contains("جدول") || t.contains("موعد") || t.contains("مواعيد") || t.contains("اليوم") || t.contains("بكرة") || t.contains("غد") || t.contains("تقويم") || t.contains("كلندر") || t.contains("calendar") || t.contains("tomorrow") {
+        if Self.isCalendarQuestion(t) {
             let wantsTomorrow = t.contains("بكرة") || t.contains("غد") || t.contains("tomorrow")
             Self.diagRoute(wantsTomorrow ? "calendar-tomorrow" : "calendar-today", text)
             await runCalendar(kind: wantsTomorrow ? "tomorrow" : "today")
@@ -622,6 +698,14 @@ final class HomeViewModel: ObservableObject {
 
     private static func isAgentInventoryQuestion(_ t: String) -> Bool {
         let markers = ["وكيل", "وكلاء", "ايجنت", "إيجنت", "agent", "agents", "معمار", "المدرب"]
+        return markers.contains { t.contains($0) }
+    }
+
+    /// Calendar triggers. "الكالندر" (with the extra alif) used to miss every marker and
+    /// fall through to the backend, so "كالندر" is listed alongside "كلندر".
+    static func isCalendarQuestion(_ t: String) -> Bool {
+        let markers = ["جدول", "موعد", "مواعيد", "اليوم", "بكرة", "غد",
+                       "تقويم", "كلندر", "كالندر", "calendar", "tomorrow"]
         return markers.contains { t.contains($0) }
     }
 
