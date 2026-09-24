@@ -1,7 +1,13 @@
 """Regression: Project Health bounds CI identity at both handoff and response boundaries."""
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import sys
 import tempfile
+
+# project_health treats CI metadata older than 24h as stale, which changes which
+# blockers are raised. A hardcoded timestamp therefore turned this suite red one day
+# after it was written, on every commit. Generate a fresh stamp instead.
+FRESH_GENERATED_AT = (datetime.now(timezone.utc) - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "phase3" / "backend"
@@ -49,7 +55,7 @@ base = {
     "JARVIS_CI_RUN_URL": "https://github.com/salemaladbi1981-lab/jarvis-ios/actions/runs/35822449946",
     "JARVIS_CI_BRANCH": "chatgpt-overnight-2",
     "JARVIS_CI_REPOSITORY": "salemaladbi1981-lab/jarvis-ios",
-    "JARVIS_CI_METADATA_GENERATED_AT": "2026-09-23T05:36:44Z",
+    "JARVIS_CI_METADATA_GENERATED_AT": FRESH_GENERATED_AT,
 }
 
 valid = snapshot(base)
@@ -72,7 +78,7 @@ check("corrupt identity cannot prove green CI", bad["ci_status"] == "unknown" an
 check("corrupt green identity surfaces an owner-safe blocker", any(x.get("type") == "ci_identity" for x in bad["blocker_items"]))
 
 timestamp_poisoned = dict(base)
-timestamp_poisoned["JARVIS_CI_METADATA_GENERATED_AT"] = "2026-09-23T05:36:44Z" + ("x" * 64)
+timestamp_poisoned["JARVIS_CI_METADATA_GENERATED_AT"] = FRESH_GENERATED_AT + ("x" * 64)
 bad_timestamp = snapshot(timestamp_poisoned)
 check("malformed CI timestamp is bounded and not reflected", bad_timestamp["ci_metadata_generated_at"] == "" and bad_timestamp["ci_metadata_state"] == "unknown")
 check("malformed timestamp surfaces metadata blocker", any(x.get("type") == "ci_metadata" and x.get("state") == "unknown" for x in bad_timestamp["blocker_items"]))
