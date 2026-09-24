@@ -124,7 +124,9 @@ async def openai_realtime_proxy(client_ws, session_config: dict):
             except Exception as e:
                 output = {"ok": False, "error": type(e).__name__}
                 _trace("tool", f"{name} raised {type(e).__name__}")
-            _trace("tool", f"end {name} ok={output.get('ok')} in {int((time.monotonic()-t0)*1000)}ms")
+            # سبب الفشل (رمز فقط، لا محتوى) — بدونه كان "ما قدر أوصل" بلا أثر في أي لوق.
+            reason = "" if output.get("ok") else f" error={output.get('error') or 'unspecified'}"
+            _trace("tool", f"end {name} ok={output.get('ok')}{reason} in {int((time.monotonic()-t0)*1000)}ms")
             # finished + handoff-back (واجهة العميل)
             await client_ws.send_text(json.dumps(
                 runtime.event_payload("finished", specialist, tool=name), ensure_ascii=False))
