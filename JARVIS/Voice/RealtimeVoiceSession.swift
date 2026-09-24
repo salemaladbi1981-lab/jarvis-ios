@@ -124,11 +124,21 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     }
 
     /// Barge-in: إلغاء الرد الجاري + مسح الـ playback (الـ mic يبقى شغّالاً).
-    /// (لا يغيّر الحالة — المتصلون يبطلون الرد عبر onBarge قبل النداء).
-    private func bargeIn() {
-        trace("BARGE manual interrupt → response.cancel + truncate + flush")
-        let cancel = #"{"type":"response.cancel"}"#
-        ws?.send(.string(cancel)) { _ in }
+    /// (لا يغيّر الحالة — المتصلون يبطلون الرد عبر onBarge قبل النداء.)
+    ///
+    /// `hadActiveResponse` is read by the caller *before* onBarge clears the response
+    /// id: cancelling a response the server has already finished returns
+    /// response_cancel_not_active, which used to surface as a red alert and cut the
+    /// conversation. The local side of the barge (truncate, flush, .interrupted)
+    /// always runs — it is what actually stops playback.
+    private func bargeIn(hadActiveResponse: Bool) {
+        if hadActiveResponse {
+            trace("BARGE manual interrupt → response.cancel + truncate + flush")
+            let cancel = #"{"type":"response.cancel"}"#
+            ws?.send(.string(cancel)) { _ in }
+        } else {
+            trace("BARGE manual interrupt → local flush only (no active response to cancel)")
+        }
         // قطع الجزء غير المسموع من item الصوت الحالي (item_id + content_index + مدة الصوت المشغّل فعلاً)
         if let itemID = currentOutputItemID {
             let playedMs = audio.playedDurationMs
@@ -150,9 +160,10 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                 guard self.isSpeaking else { return }
                 self.trace("BARGE confirmed voice interruption")
                 self.bargeStartTime = Date().timeIntervalSinceReferenceDate
+                let active = self.guardState.currentResponseID != nil
                 self.guardState.onBarge()
                 self.isSpeaking = false
-                self.bargeIn()
+                self.bargeIn(hadActiveResponse: active)
             }
         }
         pendingBargeWorkItem = work
@@ -168,12 +179,14 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     /// separately through semantic VAD to avoid room-noise false positives.
     func interrupt() {
         bargeStartTime = Date().timeIntervalSinceReferenceDate
-        stateQueue.sync {
+        let hadActiveResponse: Bool = stateQueue.sync {
+            let active = self.guardState.currentResponseID != nil
             self.guardState.onBarge()
             self.isSpeaking = false
             self.dropPendingResponseCreateOnStateQueue()
+            return active
         }
-        bargeIn()
+        bargeIn(hadActiveResponse: hadActiveResponse)
     }
 
     // MARK: response.create serialisation
@@ -472,6 +485,15 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
             case "error":
                 // تسجيل الـ error code/message كاملاً (كان مخفياً).
                 trace("recv error payload: \(text)")
+                let errorCode = SessionEventParser.nested(text, "error", "code") ?? ""
+                if errorCode == "response_cancel_not_active" {
+                    // We asked to cancel a response the server had already finished.
+                    // Nothing is broken and nothing was lost: diagnostic only, no
+                    // .error event, so the UI never raises the red alert for it and the
+                    // queued turn stays queued.
+                    print("[JARVIS-DIAG][error] ignored benign response_cancel_not_active")
+                    break
+                }
                 // Never replay a queued turn into a broken one — and never let it stick.
                 dropPendingResponseCreateOnStateQueue()
                 eventPublisher.send(.error("realtime_error"))
