@@ -482,9 +482,20 @@ final class HomeViewModel: ObservableObject {
             return
         }
         // المنبه: AlarmKit على الجهاز — لا نعتمد على النموذج أو السيرفر.
-        if Self.isAlarmRequest(t), let fireDate = Self.parseAlarmDate(t) {
-            Self.diagRoute("alarm", text)
-            await runAlarm(at: fireDate, userRequest: text)
+        if Self.isAlarmRequest(t) {
+            if let fireDate = Self.parseAlarmDate(t) {
+                Self.diagRoute("alarm", text)
+                await runAlarm(at: fireDate, userRequest: text)
+                return
+            }
+            // Alarm intent with a time we could not read: answer from the device instead of
+            // letting the model invent a reason (it claimed it lacked permission).
+            Self.diagRoute("alarm-time-unclear", text)
+            let ask = "ما فهمت الوقت، قلّه مرة ثانية"
+            calendarMessage = ask
+            state = .alert
+            Self.diagGrounded("alarm-time-unclear", request: text, result: ask)
+            voiceSession.sendGroundedDeviceResult(userRequest: text, result: ask)
             return
         }
 
@@ -737,26 +748,105 @@ final class HomeViewModel: ObservableObject {
         t.contains("منبه") || t.contains("المنبه") || t.contains("alarm") || t.contains("صحني") || t.contains("صحّني")
     }
 
-    private static func parseAlarmDate(_ raw: String, now: Date = Date()) -> Date? {
-        let eastern = ["٠":"0","١":"1","٢":"2","٣":"3","٤":"4","٥":"5","٦":"6","٧":"7","٨":"8","٩":"9"]
-        var t = raw
-        for (a,b) in eastern { t = t.replacingOccurrences(of: a, with: b) }
-        if let r = t.range(of: #"بعد\s+(\d+)\s*(دقيقة|دقايق|دقائق)"#, options: .regularExpression) {
-            let x = String(t[r]).split(separator: " ").compactMap { Int($0) }.first ?? 0
-            return x > 0 ? now.addingTimeInterval(Double(x * 60)) : nil
+    /// Spoken Arabic time for an alarm. Device evidence: "بعد دقيقتين" and
+    /// "على ٤:٥٦ pm" both returned nil, the request fell through to the model, and it
+    /// invented an excuse about permissions. The parser now covers the dual form, spelled
+    /// numbers, fractions of an hour, Arabic-Indic digits, HH:MM and the meridiem words.
+    static func parseAlarmDate(_ raw: String, now: Date = Date()) -> Date? {
+        let t = normalizedDigits(raw)
+        if let offset = relativeOffset(in: t) { return now.addingTimeInterval(offset) }
+        return clockDate(in: t, now: now)
+    }
+
+    /// Arabic-Indic digits → ASCII, and tatweel/diacritics dropped.
+    private static func normalizedDigits(_ raw: String) -> String {
+        let eastern = ["٠": "0", "١": "1", "٢": "2", "٣": "3", "٤": "4",
+                       "٥": "5", "٦": "6", "٧": "7", "٨": "8", "٩": "9"]
+        var t = raw.lowercased()
+        for (a, b) in eastern { t = t.replacingOccurrences(of: a, with: b) }
+        return t.replacingOccurrences(of: "ـ", with: "")
+    }
+
+    /// Spelled numbers that can precede دقائق/ساعات. Longest first so "خمسة عشر" wins.
+    private static let spelledNumbers: [(String, Int)] = [
+        ("خمسة عشر", 15), ("خمس عشرة", 15), ("عشرين", 20), ("عشرة", 10), ("عشر", 10),
+        ("تسعة", 9), ("تسع", 9), ("ثمانية", 8), ("ثماني", 8), ("ثمان", 8),
+        ("سبعة", 7), ("سبع", 7), ("ستة", 6), ("ست", 6), ("خمسة", 5), ("خمس", 5),
+        ("أربعة", 4), ("اربعة", 4), ("أربع", 4), ("اربع", 4),
+        ("ثلاثة", 3), ("ثلاث", 3), ("اثنتين", 2), ("اثنين", 2), ("ثنتين", 2),
+    ]
+
+    private static func firstInt(_ text: String, pattern: String) -> Int? {
+        guard let r = text.range(of: pattern, options: .regularExpression) else { return nil }
+        return String(text[r]).split(whereSeparator: { !$0.isNumber }).compactMap { Int($0) }.first
+    }
+
+    /// "بعد دقيقتين" · "بعد خمس دقايق" · "ربع ساعة" · "ساعة ونص" · "بعد 10 دقائق"
+    private static func relativeOffset(in t: String) -> TimeInterval? {
+        let minuteWord = "(?:دقيقة|دقيقه|دقايق|دقائق)"
+        let hourWord = "(?:ساعة|ساعه|ساعات)"
+
+        // fractions and compounds first — "ساعة ونص" must not read as a bare hour
+        if t.range(of: "(?:ساعة|ساعه)\\s*و\\s*(?:نص|نصف)", options: .regularExpression) != nil { return 5400 }
+        if t.range(of: "(?:ربع)\\s*(?:ساعة|ساعه)", options: .regularExpression) != nil { return 900 }
+        if t.range(of: "(?:نص|نصف)\\s*(?:ساعة|ساعه)", options: .regularExpression) != nil { return 1800 }
+        if t.range(of: "(?:ثلث)\\s*(?:ساعة|ساعه)", options: .regularExpression) != nil { return 1200 }
+
+        // dual: two minutes / two hours, written as one word
+        if t.contains("دقيقتين") || t.contains("دقيقتان") { return 120 }
+        if t.contains("ساعتين") || t.contains("ساعتان") { return 7200 }
+
+        // digits + unit
+        if let n = firstInt(t, pattern: "\\d{1,3}\\s*" + minuteWord), n > 0 { return Double(n * 60) }
+        if let n = firstInt(t, pattern: "\\d{1,2}\\s*" + hourWord), n > 0 { return Double(n * 3600) }
+
+        // spelled number + unit
+        for (word, value) in spelledNumbers {
+            if t.range(of: word + "\\s*" + minuteWord, options: .regularExpression) != nil { return Double(value * 60) }
+            if t.range(of: word + "\\s*" + hourWord, options: .regularExpression) != nil { return Double(value * 3600) }
         }
-        if let r = t.range(of: #"بعد\s+(\d+)\s*(ساعة|ساعه|ساعات)"#, options: .regularExpression) {
-            let x = String(t[r]).split(separator: " ").compactMap { Int($0) }.first ?? 0
-            return x > 0 ? now.addingTimeInterval(Double(x * 3600)) : nil
+
+        // bare single unit, only with a "بعد" so a clock time is never swallowed
+        if t.range(of: "بعد\\s*" + minuteWord, options: .regularExpression) != nil { return 60 }
+        if t.range(of: "بعد\\s*" + hourWord, options: .regularExpression) != nil { return 3600 }
+        return nil
+    }
+
+    /// "الساعة 7" · "على 4:56 pm" · "الساعة ٨ ونص مساءً" · "الفجر" markers.
+    private static func clockDate(in t: String, now: Date) -> Date? {
+        var hour: Int
+        var minute = 0
+
+        if let r = t.range(of: "\\d{1,2}\\s*[:.]\\s*\\d{2}", options: .regularExpression) {
+            let nums = String(t[r]).split(whereSeparator: { !$0.isNumber }).compactMap { Int($0) }
+            guard let h = nums.first, nums.count > 1 else { return nil }
+            hour = h
+            minute = nums[1]
+        } else if let h = firstInt(t, pattern: "(?:الساعة|الساعه|ساعة|ساعه|على|عند)\\s*\\d{1,2}") {
+            hour = h
+        } else {
+            return nil
         }
-        guard let r = t.range(of: #"(?:الساعة|الساعه|ساعة|ساعه)\s*(\d{1,2})(?::(\d{1,2}))?"#, options: .regularExpression) else { return nil }
-        let nums = String(t[r]).split(whereSeparator: { !$0.isNumber }).compactMap { Int($0) }
-        guard var hour = nums.first, (0...23).contains(hour) else { return nil }
-        let minute = nums.count > 1 ? nums[1] : 0
-        if (t.contains("مساء") || t.contains("بالليل")) && hour < 12 { hour += 12 }
-        if t.contains("صباح") && hour == 12 { hour = 0 }
-        var c = Calendar.current.dateComponents([.year,.month,.day], from: now)
-        c.hour = hour; c.minute = minute; c.second = 0
+        guard (0...23).contains(hour), (0...59).contains(minute) else { return nil }
+
+        if t.range(of: "(?:ونص|و نص|ونصف|و نصف)", options: .regularExpression) != nil, minute == 0 { minute = 30 }
+        if t.range(of: "(?:وربع|و ربع)", options: .regularExpression) != nil, minute == 0 { minute = 15 }
+
+        let pmWords = ["مساء", "مساءً", "مساءا", "بالليل", "الليل", "العصر", "المغرب", "العشاء", "الظهر", "بعد الظهر"]
+        let amWords = ["صباح", "صباحاً", "صباحا", "الصبح", "الفجر"]
+        let isPM = t.contains("pm") || t.contains("p.m")
+            || t.range(of: "\\d\\s*م(?:\\b|$)", options: .regularExpression) != nil
+            || pmWords.contains { t.contains($0) }
+        let isAM = t.contains("am") || t.contains("a.m")
+            || t.range(of: "\\d\\s*ص(?:\\b|$)", options: .regularExpression) != nil
+            || amWords.contains { t.contains($0) }
+        if isPM, hour < 12 { hour += 12 }
+        if isAM, hour == 12 { hour = 0 }
+
+        var c = Calendar.current.dateComponents([.year, .month, .day], from: now)
+        c.hour = hour
+        c.minute = minute
+        c.second = 0
         guard var d = Calendar.current.date(from: c) else { return nil }
         if d <= now { d = Calendar.current.date(byAdding: .day, value: 1, to: d) ?? d }
         return d
