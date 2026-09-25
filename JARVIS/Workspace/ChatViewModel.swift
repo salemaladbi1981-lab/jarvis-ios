@@ -28,126 +28,98 @@ final class ChatViewModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var conversationId: String = ""
 
-    private enum RetryTarget {
-        case load(String)
-        case send(String)
-    }
-
+    @Published private(set) var isSending = false
+    @Published private(set) var isLoading = false
+    private var pendingText: String?
+    private var pendingRequestID: String?
+    private var terminalReceived = false
     private let api: JarvisAPI
-    private var retryTarget: RetryTarget?
-    private var requestInFlight = false
 
     init(api: JarvisAPI) { self.api = api }
 
     func load(_ id: String) async {
+        guard !isSending, !isLoading else { return }
+        isLoading = true
+        defer { isLoading = false }
+        if conversationId != id {
+            pendingText = nil
+            pendingRequestID = nil
+            messages = []
+        }
         conversationId = id
         errorMessage = nil
         do {
             let detail: ConversationDetail = try await api.getObject("conversations/\(id)")
             messages = detail.messages ?? []
-            status = .idle
-            statusLabel = ""
-            retryTarget = nil
         } catch {
-            status = .failed
-            statusLabel = ""
-            errorMessage = userFacingMessage(for: error, operation: "تحميل المحادثة")
-            retryTarget = .load(id)
+            errorMessage = JarvisAPIError.message(for: error)
         }
     }
 
     func send(_ text: String) async {
-        await send(text, appendLocalUserMessage: true)
-    }
-
-    private func send(_ text: String, appendLocalUserMessage: Bool) async {
+        guard !isSending, !isLoading else { return }
         let cid = conversationId
-        guard !cid.isEmpty else { return }
+        guard !cid.isEmpty else { errorMessage = "افتح محادثة أولًا."; return }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        guard !requestInFlight else { return }
 
-        guard !api.sessionToken.isEmpty else {
-            status = .failed
-            statusLabel = ""
-            errorMessage = "جلسة جارفس غير متاحة. أعد ربط الجهاز ثم حاول مرة أخرى."
-            retryTarget = .send(trimmed)
-            return
-        }
+        pendingText = trimmed
+        pendingRequestID = UUID().uuidString
+        let userMsg = ChatMessage(messageId: "local-\(UUID().uuidString.prefix(8))",
+                                  conversationId: cid, role: "user", content: trimmed,
+                                  citations: nil, toolCalls: nil, attachmentRefs: nil,
+                                  taskRefs: nil, deliveryRefs: nil,
+                                  executionState: nil, createdAt: Date().timeIntervalSince1970)
+        messages.append(userMsg)
 
-        requestInFlight = true
-        defer { requestInFlight = false }
+        await transmit()
+    }
 
-        if appendLocalUserMessage {
-            let userMsg = ChatMessage(messageId: "local-\(UUID().uuidString.prefix(8))",
-                                      conversationId: cid, role: "user", content: trimmed,
-                                      citations: nil, toolCalls: nil, attachmentRefs: nil,
-                                      taskRefs: nil, deliveryRefs: nil,
-                                      executionState: nil, createdAt: Date().timeIntervalSince1970)
-            messages.append(userMsg)
-        }
-
+    private func transmit() async {
+        guard !isSending, let text = pendingText, let requestID = pendingRequestID else { return }
+        isSending = true
+        defer { isSending = false }
         streamingText = ""
         liveCitations = []
         pendingTaskId = nil
         errorMessage = nil
+        terminalReceived = false
         status = .working
         statusLabel = "جارٍ المعالجة"
-        retryTarget = .send(trimmed)
-
-        var req = URLRequest(url: api.baseURL.appendingPathComponent("conversations/\(cid)/chat"))
-        req.httpMethod = "POST"
-        req.timeoutInterval = 45
-        req.setValue(api.sessionToken, forHTTPHeaderField: "X-Jarvis-Session")
-        req.setValue(api.workspace, forHTTPHeaderField: "X-Jarvis-Workspace")
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try? JSONSerialization.data(withJSONObject: ["text": trimmed])
-
         do {
-            let (bytes, response) = try await URLSession.shared.bytes(for: req)
-            guard let http = response as? HTTPURLResponse else {
-                failSend("استجابة الخادم غير صالحة.")
-                return
+            var req = try api.request("conversations/\(conversationId)/chat", method: "POST",
+                                      body: ["text": text, "client_msg_id": requestID])
+            req.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+            let (bytes, response) = try await api.session.bytes(for: req)
+            try JarvisAPI.validate(response)
+            guard response.mimeType == "text/event-stream" else { throw JarvisAPIError.invalidResponse }
+            var parser = ChatEventParser()
+            for try await byte in bytes {
+                try Task.checkCancellation()
+                if let event = try parser.consume(byte) { handle(event.name, event.payload) }
+                if terminalReceived { break }
             }
-            guard (200..<300).contains(http.statusCode) else {
-                failSend(message(forHTTPStatus: http.statusCode))
-                return
-            }
-
-            var currentEvent = ""
-            var sawTerminalEvent = false
-            for try await line in bytes.lines {
-                if line.hasPrefix("event: ") {
-                    currentEvent = String(line.dropFirst(7))
-                } else if line.hasPrefix("data: ") {
-                    let payload = String(line.dropFirst(6))
-                    if handle(currentEvent, payload) {
-                        sawTerminalEvent = true
-                    }
-                }
-            }
-
-            if !sawTerminalEvent && status != .idle && status != .backgroundTask && status != .failed {
-                failSend("انتهى الاتصال قبل اكتمال الرد. يمكنك إعادة المحاولة.")
-            }
+            if !terminalReceived, let event = parser.finishStream() { handle(event.name, event.payload) }
+            guard terminalReceived else { throw JarvisAPIError.interrupted }
         } catch {
-            failSend(userFacingMessage(for: error, operation: "إرسال الرسالة"))
+            status = .failed
+            statusLabel = "تعذّر إكمال الرد"
+            errorMessage = JarvisAPIError.message(for: error)
         }
     }
 
-    /// يعيد true عند حدث نهائي حتى نميز انتهاء SSE الطبيعي عن انقطاع صامت.
-    private func handle(_ event: String, _ payload: String) -> Bool {
-        guard let data = payload.data(using: .utf8) else { return false }
+    private func handle(_ event: String, _ payload: String) {
+        guard !terminalReceived, let data = payload.data(using: .utf8) else { return }
         switch event {
         case "message_start":
             status = .working
             statusLabel = "جارٍ المعالجة"
         case "content_delta":
-            if let d = try? JSONDecoder().decode(DeltaEvent.self, from: data) {
+            if let d = try? JarvisJSON.decoder().decode(DeltaEvent.self, from: data) {
                 streamingText += d.delta ?? ""
             }
         case "tool_call":
-            if let t = try? JSONDecoder().decode(ToolCallEvent.self, from: data) {
+            if let t = try? JarvisJSON.decoder().decode(ToolCallEvent.self, from: data) {
                 let name = t.toolName ?? ""
                 if name.lowercased().contains("search") || name.lowercased().contains("web") {
                     status = .searching; statusLabel = "يبحث"
@@ -156,18 +128,21 @@ final class ChatViewModel: ObservableObject {
                 }
             }
         case "citation":
-            if let c = try? JSONDecoder().decode(CitationEvent.self, from: data) {
+            if let c = try? JarvisJSON.decoder().decode(CitationEvent.self, from: data) {
                 liveCitations.append(Citation(citationId: c.citationId ?? "",
                                               messageId: nil, title: c.title, url: c.url,
                                               source: c.source, snippet: c.snippet, order: nil))
             }
         case "message_complete":
-            if let c = try? JSONDecoder().decode(CompleteEvent.self, from: data) {
+            if let c = try? JarvisJSON.decoder().decode(CompleteEvent.self, from: data) {
+                guard c.status == "complete" || c.status == "background_task" else { return }
+                terminalReceived = true
+                pendingText = nil
+                pendingRequestID = nil
                 if c.status == "background_task" {
                     status = .backgroundTask
                     statusLabel = "انتقل إلى مهمة خلفية"
                     pendingTaskId = c.taskId
-                    retryTarget = nil
                     #if os(iOS)
                     if let tid = c.taskId {
                         NotificationManager.shared.notifyTaskHandoff(tid)
@@ -176,19 +151,22 @@ final class ChatViewModel: ObservableObject {
                 } else {
                     finishAssistant(c)
                 }
-                return true
             }
         case "error":
-            if let e = try? JSONDecoder().decode(ErrorEvent.self, from: data) {
+            if let e = try? JarvisJSON.decoder().decode(ErrorEvent.self, from: data) {
+                terminalReceived = true
                 status = .failed
-                statusLabel = ""
-                errorMessage = e.message ?? "حدث خطأ أثناء تنفيذ الطلب"
-                return true
+                statusLabel = "تعذّر إكمال الرد"
+                switch e.errorType {
+                case "auth_error": errorMessage = JarvisAPIError.forbidden.localizedDescription
+                case "request_in_progress": errorMessage = JarvisAPIError.conflict.localizedDescription
+                case "request_interrupted": errorMessage = "توقف الطلب بعد قبوله. راجع المحادثة قبل إرسال طلب جديد."
+                default: errorMessage = "تعذّر إكمال الطلب على الخادم. راجع المحادثة ثم حاول مجددًا."
+                }
             }
         default:
             break
         }
-        return false
     }
 
     private func finishAssistant(_ c: CompleteEvent) {
@@ -199,74 +177,72 @@ final class ChatViewModel: ObservableObject {
                                     taskRefs: nil, deliveryRefs: nil,
                                     executionState: ExecutionState(status: "complete", error: nil),
                                     createdAt: Date().timeIntervalSince1970)
-        messages.append(assistant)
+        if !messages.contains(where: { $0.id == assistant.id }) { messages.append(assistant) }
         streamingText = ""
         liveCitations = []
         status = .idle
         statusLabel = ""
-        retryTarget = nil
-    }
-
-    private func failSend(_ message: String) {
-        status = .failed
-        statusLabel = ""
-        errorMessage = message
-    }
-
-    private func message(forHTTPStatus code: Int) -> String {
-        switch code {
-        case 401:
-            return "انتهت جلسة جارفس أو لم تعد صالحة. أعد ربط الجهاز."
-        case 403:
-            return "هذه المساحة أو العملية غير مصرح بها."
-        case 408, 504:
-            return "انتهت مهلة الاتصال بالخادم. يمكنك إعادة المحاولة."
-        case 429:
-            return "الخدمة مشغولة حاليًا. حاول مرة أخرى بعد قليل."
-        case 500...599:
-            return "الخادم غير متاح مؤقتًا. يمكنك إعادة المحاولة."
-        default:
-            return "تعذر تنفيذ الطلب (HTTP \(code))."
-        }
-    }
-
-    private func userFacingMessage(for error: Error, operation: String) -> String {
-        if let urlError = error as? URLError {
-            switch urlError.code {
-            case .notConnectedToInternet:
-                return "لا يوجد اتصال بالإنترنت. تحقق من الشبكة ثم أعد المحاولة."
-            case .timedOut:
-                return "انتهت مهلة \(operation). أعد المحاولة."
-            case .networkConnectionLost:
-                return "انقطع اتصال الشبكة أثناء \(operation). أعد المحاولة."
-            case .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed:
-                return "تعذر الوصول إلى خادم جارفس. تحقق من الشبكة ثم أعد المحاولة."
-            default:
-                break
-            }
-        }
-
-        let nsError = error as NSError
-        if nsError.domain == "JarvisAPI" {
-            return message(forHTTPStatus: nsError.code)
-        }
-        return "تعذر \(operation). أعد المحاولة."
     }
 
     func retry() async {
-        guard !requestInFlight else { return }
-        guard let target = retryTarget else {
-            if !conversationId.isEmpty { await load(conversationId) }
-            return
-        }
+        guard !isSending, !isLoading else { return }
+        if pendingRequestID != nil { await transmit() }
+        else { await load(conversationId) }
+    }
+}
 
-        errorMessage = nil
-        switch target {
-        case .load(let id):
-            await load(id)
-        case .send(let text):
-            // الرسالة المحلية موجودة أصلًا؛ لا نكررها عند retry.
-            await send(text, appendLocalUserMessage: false)
+/// SSE fields may omit a space; multiline data is joined at a frame boundary.
+struct ChatEventParser {
+    struct Event { let name: String; let payload: String }
+    private var name = ""
+    private var lines: [String] = []
+    private var lineBytes: [UInt8] = []
+    private var skipLF = false
+    private var frameBytes = 0
+
+    // AsyncBytes.lines drops empty lines on some Foundation versions. SSE needs
+    // those delimiters, so decode UTF-8 only after assembling each complete line.
+    mutating func consume(_ byte: UInt8) throws -> Event? {
+        if skipLF { skipLF = false; if byte == 10 { return nil } }
+        frameBytes += 1
+        guard frameBytes <= 1_048_576 else { throw JarvisAPIError.invalidResponse }
+        if byte == 10 || byte == 13 {
+            skipLF = byte == 13
+            let line = String(decoding: lineBytes, as: UTF8.self)
+            lineBytes = []
+            return consume(line)
         }
+        lineBytes.append(byte)
+        return nil
+    }
+
+    mutating func finishStream() -> Event? {
+        if !lineBytes.isEmpty {
+            let line = String(decoding: lineBytes, as: UTF8.self)
+            lineBytes = []
+            if let event = consume(line) { return event }
+        }
+        return finish()
+    }
+
+    mutating func consume(_ line: String) -> Event? {
+        if line.isEmpty { return finish() }
+        if line.hasPrefix(":") { return nil }
+        let fields = line.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
+        let field = String(fields[0])
+        var value = fields.count > 1 ? String(fields[1]) : ""
+        if value.hasPrefix(" ") { value.removeFirst() }
+        switch field {
+        case "event": name = value
+        case "data": lines.append(value)
+        default: break
+        }
+        return nil
+    }
+
+    mutating func finish() -> Event? {
+        defer { name = ""; lines = []; frameBytes = 0 }
+        guard !lines.isEmpty else { return nil }
+        return Event(name: name, payload: lines.joined(separator: "\n"))
     }
 }
