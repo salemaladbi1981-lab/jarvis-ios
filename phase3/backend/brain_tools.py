@@ -42,8 +42,10 @@ def execute_brain_tool(name, args):
     if not key:
         return {"ok": False, "error": "hermes_key_missing"}
     ident = identity.from_args(args)
-    sys_msg = (f"Identity: user_id={ident.user_id}, conversation_id={ident.conversation_id}, "
-               f"memory_namespace={ident.memory_namespace}")
+    sys_msg = (f"Identity: user_id={ident.user_id}, workspace_id={ident.workspace_id}, conversation_id={ident.conversation_id}, "
+               f"memory_namespace={ident.memory_namespace}. "
+               "Use only verified memory from this user and workspace. Never use seeded/demo context "
+               "or another workspace. If no stored evidence exists, say you do not have that memory.")
     body = json.dumps({
         "model": "hermes-agent",
         "messages": [

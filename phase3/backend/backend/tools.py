@@ -48,13 +48,15 @@ class ToolGateway:
     def execute(self, tool_id, params, *, bypass_approval: bool = False) -> dict:
         t = self.tools.get(tool_id)
         if not t:
-            return {"ok": False, "error": "tool_unavailable", "mock": True}
+            return {"ok": False, "error": "tool_unavailable", "mock": False}
         if t.risk_class in ("medium", "high") and not bypass_approval:
             # caller must have resolved approval; gateway enforces the gate
             return {"ok": False, "error": "approval_required", "approval_rule": t.approval_rule}
         try:
             result = self._handlers[tool_id](params)
-            # structured result; never infer real success from prose
+            # A handler failure or fixture must never become production success.
+            if result.get("ok") is False or result.get("mock", False):
+                return {"ok": False, "error": result.get("error", "provider_unavailable"), "mock": False}
             return {"ok": True, "result": result, "mock": result.get("mock", False)}
         except Exception as e:
             return {"ok": False, "error": f"tool_error:{type(e).__name__}"}

@@ -4,6 +4,7 @@ import SwiftUI
 struct ConversationView: View {
     @StateObject private var vm: ChatViewModel
     @State private var input: String = ""
+    @State private var didSendInitialText = false
     private let api: JarvisAPI
     private let initialText: String?
     let conversationId: String
@@ -28,11 +29,12 @@ struct ConversationView: View {
                                             status: vm.status,
                                             statusLabel: vm.statusLabel,
                                             citations: vm.liveCitations)
-                                .id("bottom")
+
                         }
                         if let taskId = vm.pendingTaskId {
-                            TaskHandoffCard(taskId: taskId).id("bottom")
+                            TaskHandoffCard(taskId: taskId)
                         }
+                        Color.clear.frame(height: 1).id("bottom")
                     }
                     .padding(16)
                 }
@@ -50,7 +52,8 @@ struct ConversationView: View {
                 }
             }
 
-            InputBar(text: $input, disabled: vm.status == .working || vm.status == .searching || vm.status == .usingTool) {
+            InputBar(text: $input, disabled: vm.isSending || vm.isLoading) {
+                guard !vm.isSending, !vm.isLoading else { return }
                 let t = input
                 input = ""
                 Task { await vm.send(t) }
@@ -61,7 +64,8 @@ struct ConversationView: View {
         #endif
         .task {
             await vm.load(conversationId)
-            if let t = initialText, !t.isEmpty {
+            if !didSendInitialText, let t = initialText, !t.isEmpty, vm.errorMessage == nil {
+                didSendInitialText = true
                 await vm.send(t)   // إرسال تلقائي للرسالة القادمة من شريط الإدخال الرئيسي
             }
         }
@@ -193,6 +197,10 @@ private struct InputBar: View {
         HStack(spacing: 10) {
             TextField("اكتب رسالة…", text: $text)
                 .textFieldStyle(.plain)
+                .submitLabel(.send)
+                .onSubmit {
+                    if !disabled && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { onSend() }
+                }
                 .font(.system(size: 15))
                 .foregroundColor(JarvisColor.text_primary)
                 .padding(12)

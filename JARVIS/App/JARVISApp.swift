@@ -16,6 +16,7 @@ struct JARVISApp: App {
         WindowGroup {
             if enrollment.isEnrolled || isDemo {
                 AdaptiveRootView()
+                    .id(enrollment.sessionToken)
                     .environment(\.layoutDirection, .rightToLeft)
                     .preferredColorScheme(.dark)
                     .environmentObject(enrollment)

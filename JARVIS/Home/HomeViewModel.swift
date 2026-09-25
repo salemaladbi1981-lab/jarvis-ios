@@ -20,6 +20,8 @@ final class HomeViewModel: ObservableObject {
     @Published private(set) var isListening = false
     @Published var calendarMessage: String?
     private var isVoiceStarting = false
+    private var voiceStartTask: Task<Void, Never>?
+    private var voiceStartGeneration = 0
 
     // V1 Visual: audio level (read-only) + agent orbit activity
     @Published var successPulse: Bool = false
@@ -35,7 +37,6 @@ final class HomeViewModel: ObservableObject {
     private let smartHome: SmartHomeProvider
     private let security: SecurityProvider
     private let media: MediaProvider
-    private let voice: VoiceProvider
     private var approval: ApprovalPolicyEvaluator?
     private(set) var registry: AgentRegistry?
     private let calendarTools = CalendarTools(useMock: false)
@@ -60,15 +61,13 @@ final class HomeViewModel: ObservableObject {
     }
 
     init(
-        smartHome: SmartHomeProvider = MockSmartHomeProvider(),
-        security: SecurityProvider = MockSecurityProvider(),
-        media: MediaProvider = MockMediaProvider(),
-        voice: VoiceProvider = MockVoiceProvider()
+        smartHome: SmartHomeProvider = UnavailableSmartHomeProvider(),
+        security: SecurityProvider = UnavailableSecurityProvider(),
+        media: MediaProvider = UnavailableMediaProvider()
     ) {
         self.smartHome = smartHome
         self.security = security
         self.media = media
-        self.voice = voice
         bindVoice()
     }
 
@@ -87,10 +86,11 @@ final class HomeViewModel: ObservableObject {
                     // سجّل أن رداً صوتياً بدأ — حتى لا نمسح الـ agent عند .connected دون رد سابق.
                     self.hasSpokenSinceConnect = true
                 case .disconnected:
+                    self.isVoiceActive = false
                     self.isListening = false
                     // response.done / session ready → success + deactivate agents
                     self.orbit.items.forEach { self.orbit.deactivate($0.id) }
-                    self.successPulse = true
+                    self.successPulse = false
                     self.hasSpokenSinceConnect = false
                 case .connected:
                     self.isListening = false
@@ -109,6 +109,12 @@ final class HomeViewModel: ObservableObject {
                 case .error(let code):
                     // سجّل رمز الخطأ قبل أي تعيين للحالة — لا حالة حمراء عالقة على خطأ عابر.
                     print("[JARVIS-VOICE] error code: \(code)")
+                    self.isVoiceActive = false
+                    self.isListening = false
+                    self.voiceSession.stopListening()
+                    self.calendarMessage = code == "mic_unavailable"
+                        ? "الميكروفون غير متاح. تحقق من الصلاحية ثم اضغط المايك للمحاولة."
+                        : "توقف الاتصال الصوتي. اضغط المايك لإعادة الاتصال."
                     self.state = .alert
                     self.scheduleErrorRecovery()
                 default: break
@@ -188,6 +194,7 @@ final class HomeViewModel: ObservableObject {
     /// Read launch arguments for deterministic screenshots:
     ///   -group core|system|content, -state idle|listening|...|approval
     private func applyLaunchArguments() {
+        #if DEBUG
         let args = ProcessInfo.processInfo.arguments
         if let gi = args.firstIndex(of: "-group"), gi + 1 < args.count {
             activeGroup = args[gi + 1]
@@ -216,11 +223,14 @@ final class HomeViewModel: ObservableObject {
             default: break
             }
         }
+            #endif
     }
 
 
     // MARK: Live voice (M3.5)
     func toggleVoice() {
+        errorRecoveryTask?.cancel()
+        calendarMessage = nil
         if isVoiceActive {
             if state == .speaking {
                 // المقاطعة اليدوية أثناء الكلام (زر المايك) — إلغاء الرد فقط.
@@ -236,12 +246,15 @@ final class HomeViewModel: ObservableObject {
         } else if !isVoiceStarting {
             // منع re-entry: لا Task مكرر حتى تكتمل دورة البدء (كان يسبب multiple audio.start())
             isVoiceStarting = true
-            Task {
-                defer { isVoiceStarting = false }
+            voiceStartGeneration += 1
+            let generation = voiceStartGeneration
+            voiceStartTask = Task {
+                defer { if generation == voiceStartGeneration { isVoiceStarting = false } }
                 // 1) mic permission أولاً (كان مفقوداً — يمنع input صامت/فشل)
                 let mic = AudioCapture.micPermission()
                 if mic == .notDetermined {
                     let r = await AudioCapture.requestMic()
+                    guard !Task.isCancelled, generation == voiceStartGeneration else { return }
                     guard r == .granted else {
                         state = .alert
                         calendarMessage = "صلاحية الميكروفون مرفوضة — فعّلها من إعدادات النظام"
@@ -257,13 +270,18 @@ final class HomeViewModel: ObservableObject {
                     guard let url = URL(string: RealtimeVoiceSession.backendBaseURL) else {
                         state = .alert; calendarMessage = "عنوان الخادم غير صالح"; return
                     }
+                    guard !Task.isCancelled, generation == voiceStartGeneration else { return }
                     try await voiceSession.connect(baseURL: url)
+                    guard !Task.isCancelled, generation == voiceStartGeneration else {
+                        voiceSession.disconnect()
+                        return
+                    }
                     voiceSession.startListening()
                     isVoiceActive = true
                     isListening = true
                 } catch {
                     state = .alert
-                    calendarMessage = "تعذّر الاتصال بالخادم الصوتي"
+                    calendarMessage = JarvisAPIError.message(for: error)
                 }
             }
         }
@@ -281,12 +299,15 @@ final class HomeViewModel: ObservableObject {
     /// إعادة تعيين الجلسة عند الخروج للخلفية — حتى يعمل المايك من أول ضغطة عند العودة
     /// (بدل ما يظن أن الجلسة ما زالت نشطة ويحاول stop بدل connect).
     func handleAppBackgrounded() {
-        if isVoiceActive {
-            voiceSession.disconnect()
-            isVoiceActive = false
-            isListening = false
-            state = .idle
-        }
+        voiceStartGeneration += 1
+        voiceStartTask?.cancel()
+        voiceStartTask = nil
+        isVoiceStarting = false
+        errorRecoveryTask?.cancel()
+        voiceSession.disconnect()
+        isVoiceActive = false
+        isListening = false
+        state = .idle
     }
 
     /// Voice transcript → local tool route → spoken result.
@@ -432,7 +453,6 @@ final class HomeViewModel: ObservableObject {
             guard let self, !Task.isCancelled else { return }
             if self.state == .alert {
                 self.state = .idle
-                self.calendarMessage = nil
             }
         }
     }
@@ -482,7 +502,8 @@ final class HomeViewModel: ObservableObject {
     // MARK: Status
     var statusText: String {
         switch state {
-        case .idle, .listening: return "أنا أستمع إليك…"
+        case .idle: return "جاهز عندما تحتاجني"
+        case .listening: return "أنا أستمع إليك…"
         case .thinking:  return "أفكّر…"
         case .speaking:  return "جارفس يتحدّث"
         case .executing: return "جارٍ التنفيذ…"
@@ -493,17 +514,10 @@ final class HomeViewModel: ObservableObject {
 
     // MARK: Approval flow (registry-driven)
     func requestAction(agentID: String, action: String) {
-        guard let approval else {
-            state = .approval   // fail-safe without registry
-            pendingApproval = action
-            return
-        }
-        if approval.requiresApproval(agentID: agentID, action: action) {
-            state = .approval
-            pendingApproval = displayName(action)
-        } else {
-            state = .executing   // safe action proceeds (mock)
-        }
+        // Registry policy is not proof that a device integration can execute.
+        pendingApproval = nil
+        state = .idle
+        calendarMessage = "هذه الخدمة غير متصلة. لا يمكن تنفيذ الإجراء حاليًا."
     }
 
     func approve() {
