@@ -8,8 +8,12 @@ struct JARVISApp: App {
 
     /// -demo / -sessionToken: يعرض الواجهة الرئيسية بلا enrollment (لـscreenshots الـCI).
     private var isDemo: Bool {
-        ProcessInfo.processInfo.arguments.contains("-demo")
-        || ProcessInfo.processInfo.arguments.contains("-sessionToken")
+        #if DEBUG
+        return ProcessInfo.processInfo.arguments.contains("-demo")
+            || JarvisConfig.injectedSessionToken != nil
+        #else
+        return false
+        #endif
     }
 
     var body: some Scene {

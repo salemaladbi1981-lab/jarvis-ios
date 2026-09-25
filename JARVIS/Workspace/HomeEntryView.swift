@@ -36,7 +36,16 @@ struct HomeEntryView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 24) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(Date.now, format: .dateTime.weekday(.wide).day().month(.wide))
+                            .font(.caption).foregroundColor(JarvisColor.text_muted)
+                        Text("بماذا نبدأ؟")
+                            .font(.custom("IBMPlexSansArabic-Bold", size: 28, relativeTo: .title))
+                            .foregroundColor(JarvisColor.text_primary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 8)
                     // Concept 2: النواة السينمائية + زر المايك البارز (مرتبطان بحالة/مستوى الصوت الحقيقي)
                     JarvisHeroView(vm: voiceVM)
                     JarvisMicControl(vm: voiceVM)
@@ -61,16 +70,19 @@ struct HomeEntryView: View {
                         }
                     } label: {
                         HStack(spacing: 10) {
-                            Image(systemName: "plus.bubble.fill")
+                            if vm.isCreating { ProgressView().tint(JarvisColor.highlight_blue) }
+                            else { Image(systemName: "plus.bubble") }
                             Text("بدء محادثة جديدة")
                                 .font(.system(size: 16, weight: .semibold))
                         }
                         .foregroundColor(JarvisColor.text_primary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
-                        .background(JarvisColor.bg_1)
-                        .cornerRadius(14)
+                        .background(RoundedRectangle(cornerRadius: 18).fill(JarvisColor.bg_1))
+                        .overlay(RoundedRectangle(cornerRadius: 18).stroke(JarvisColor.primary_blue.opacity(0.22), lineWidth: 1))
                     }
+                    .buttonStyle(.plain)
+                    .disabled(vm.isCreating || isSending)
 
                     if let nce = vm.newConversationError {
                         Text(nce)
@@ -133,10 +145,64 @@ struct HomeEntryView: View {
                         .padding(.top, 24)
                     }
                 }
-                .padding(16)
+                .padding(.horizontal, 24)
+                .padding(.bottom, 24)
+                .frame(maxWidth: 720)
+                .frame(maxWidth: .infinity)
             }
-            .navigationTitle("جارفس")
+            .background(
+                RadialGradient(colors: [JarvisColor.bg_1, JarvisColor.bg_0], center: .top, startRadius: 30, endRadius: 600)
+                    .ignoresSafeArea()
+            )
+            .safeAreaInset(edge: .bottom) {
+                VStack(spacing: 0) {
+                    AttachmentPreviewBar(attachments: pendingAttachments) { id in
+                        pendingAttachments.removeAll { $0.id == id }
+                    }
+                    if let err = sendError {
+                        HStack {
+                            Text(err).font(.caption).foregroundColor(.red)
+                            Spacer()
+                            Button("إعادة المحاولة") {
+                                let t = retryText
+                                sendError = nil
+                                Task { await sendMessage(text: t) }
+                            }
+                            .font(.caption).foregroundColor(JarvisColor.highlight_blue)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 6)
+                    }
+                    WorkspaceComposerView(
+                        text: $composerText,
+                        hasAttachments: !pendingAttachments.isEmpty,
+                        disabled: isSending || vm.isCreating,
+                        onSend: {
+                            let t = composerText.trimmingCharacters(in: .whitespacesAndNewlines)
+                            guard !t.isEmpty || !pendingAttachments.isEmpty else { return }
+                            guard !isSending, !vm.isCreating else { return }
+                            Task { await sendMessage(text: t) }
+                        },
+                        onAttach: { showAttachments = true },
+                        onMic: { voiceVM.toggleVoice() }
+                    )
+                    .padding(.horizontal, 16)
+                }
+                .background(JarvisColor.bg_0.opacity(0.92))
+            }
+            .navigationTitle("")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(JarvisColor.bg_0, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            #endif
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("JARVIS")
+                        .font(.custom("CormorantGaramond-SemiBold", size: 22))
+                        .tracking(4)
+                        .foregroundColor(JarvisColor.highlight_blue)
+                }
                 ToolbarItem(placement: .primaryAction) {
                     Button { showConnection = true } label: {
                         Image(systemName: "key.horizontal")
@@ -149,42 +215,7 @@ struct HomeEntryView: View {
                 ConversationView(api: api, conversationId: c.id, initialText: c.initialText)
             }
         }
-        .safeAreaInset(edge: .bottom) {
-            VStack(spacing: 0) {
-                AttachmentPreviewBar(attachments: pendingAttachments) { id in
-                    pendingAttachments.removeAll { $0.id == id }
-                }
-                if let err = sendError {
-                    HStack {
-                        Text(err).font(.caption).foregroundColor(.red)
-                        Spacer()
-                        Button("إعادة المحاولة") {
-                            let t = retryText
-                            sendError = nil
-                            Task { await sendMessage(text: t) }
-                        }
-                        .font(.caption).foregroundColor(.blue)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 6)
-                }
-                WorkspaceComposerView(
-                    text: $composerText,
-                    hasAttachments: !pendingAttachments.isEmpty,
-                    disabled: isSending || vm.isCreating,
-                    onSend: {
-                        let t = composerText.trimmingCharacters(in: .whitespacesAndNewlines)
-                        guard !t.isEmpty || !pendingAttachments.isEmpty else { return }
-                        guard !isSending, !vm.isCreating else { return }
-                        Task { await sendMessage(text: t) }
-                    },
-                    onAttach: { showAttachments = true },
-                    onMic: { voiceVM.toggleVoice() }
-                )
-                .padding(.horizontal, 16)
-            }
-            .background(JarvisColor.bg_0.opacity(0.92))
-        }
+        .tint(JarvisColor.highlight_blue)
         .background(
             LinearGradient(colors: [JarvisColor.bg_0, JarvisColor.bg_1], startPoint: .top, endPoint: .bottom)
                 .ignoresSafeArea()
@@ -199,6 +230,7 @@ struct HomeEntryView: View {
             await voiceVM.load()
             voiceVM.handleAppIntentStart()
         }
+        .onDisappear { voiceVM.handleAppBackgrounded() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .background { voiceVM.handleAppBackgrounded() }
         }
@@ -280,7 +312,7 @@ struct HomeEntryView: View {
             Text(title)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(JarvisColor.text_muted)
-            VStack(spacing: 0) { content() }
+            VStack(spacing: 8) { content() }
         }
     }
 
@@ -306,7 +338,9 @@ struct HomeEntryView: View {
                 .font(.system(size: 12))
                 .foregroundColor(JarvisColor.text_muted)
         }
-        .padding(.vertical, 10)
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: 16).fill(JarvisColor.bg_1.opacity(0.7)))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(JarvisColor.border.opacity(0.55), lineWidth: 1))
     }
 
     /// تشخيص مُمنهج على الشاشة (عبر -diagnostics) — يظهر حالة المصادقة/الـAPI/التنقل بدون Xcode console.

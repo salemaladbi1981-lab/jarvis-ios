@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Composer سفلي: زر +، نص، إرسال، مايك.
+/// Persistent composer shared by the workspace entry points.
 struct WorkspaceComposerView: View {
     @Binding var text: String
     let hasAttachments: Bool
@@ -9,26 +9,51 @@ struct WorkspaceComposerView: View {
     let onAttach: () -> Void
     let onMic: () -> Void
 
+    private var canSend: Bool {
+        !disabled && (!text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || hasAttachments)
+    }
+
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 4) {
             Button(action: onAttach) {
-                Image(systemName: "plus.circle.fill").font(.title2)
+                Image(systemName: "plus").font(.system(size: 18, weight: .medium))
+                    .frame(width: 44, height: 44)
             }
-            TextField("اكتب أو أرسل ملفًا…", text: $text)
-                .textFieldStyle(.roundedBorder)
-                .multilineTextAlignment(.trailing)
+            .accessibilityLabel("إضافة مرفق")
+            .disabled(disabled)
+
+            TextField("اكتب لجارفس…", text: $text)
+                .textFieldStyle(.plain)
+                .font(.body)
+                .foregroundColor(JarvisColor.text_primary)
                 .submitLabel(.send)
-                .onSubmit { if !disabled { onSend() } }
-            Button(action: onSend) {
-                Image(systemName: "arrow.up.circle.fill").font(.title2)
-            }
-            .disabled(disabled || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !hasAttachments)
+                .onSubmit { if !disabled && canSend { onSend() } }
+                .accessibilityLabel("رسالتك إلى جارفس")
+                .padding(.vertical, 12)
+
             Button(action: onMic) {
-                Image(systemName: "mic.fill").font(.title2)
+                Image(systemName: "mic").font(.system(size: 19))
+                    .frame(width: 44, height: 44)
             }
+            .accessibilityLabel("التحكم بالصوت")
+
+            Button(action: onSend) {
+                ZStack {
+                    Circle().fill(canSend ? JarvisColor.primary_blue : JarvisColor.primary_blue.opacity(0.12))
+                        .frame(width: 36, height: 36)
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundColor(canSend ? JarvisColor.bg_0 : JarvisColor.text_muted)
+                }.frame(width: 44, height: 44)
+            }
+            .disabled(!canSend)
+            .accessibilityLabel("إرسال الرسالة")
         }
-        .padding(.horizontal)
-        .padding(.vertical, 8)
-        .background(.thinMaterial)
+        .buttonStyle(.plain)
+        .foregroundColor(JarvisColor.highlight_blue)
+        .padding(5)
+        .background(RoundedRectangle(cornerRadius: 26, style: .continuous).fill(JarvisColor.surface))
+        .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).stroke(JarvisColor.primary_blue.opacity(0.26), lineWidth: 1))
+        .padding(.vertical, 10)
     }
 }

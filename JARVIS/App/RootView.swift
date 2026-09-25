@@ -119,6 +119,10 @@ struct RootView: View {
                 .tag("deliveries")
         }
         .tint(JarvisColor.highlight_blue)
+        #if os(iOS)
+        .toolbarBackground(JarvisColor.bg_0, for: .tabBar)
+        .toolbarBackground(.visible, for: .tabBar)
+        #endif
         .overlay(alignment: .top) {
             if ProcessInfo.processInfo.arguments.contains("-showArgs") {
                 Text(ProcessInfo.processInfo.arguments.joined(separator: " | "))

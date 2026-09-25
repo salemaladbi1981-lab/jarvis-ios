@@ -59,6 +59,9 @@ struct ConversationView: View {
                 Task { await vm.send(t) }
             }
         }
+        .background(JarvisColor.bg_0.ignoresSafeArea())
+        .tint(JarvisColor.highlight_blue)
+        .navigationTitle("المحادثة")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
@@ -212,6 +215,8 @@ private struct InputBar: View {
                     .foregroundColor(disabled ? JarvisColor.text_muted : JarvisColor.highlight_blue)
             }
             .disabled(disabled || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .frame(width: 44, height: 44)
+            .accessibilityLabel("إرسال الرسالة")
         }
         .padding(12)
     }

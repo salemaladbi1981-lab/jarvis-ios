@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// V1 Living Core — motion مشتق من Runtime State + audio level (لا sine mock لـ listening/speaking).
-/// Idle فقط يستخدم sine breathing. Listening/Speaking يستخدمان level حقيقي (smoothed إلى 60fps).
+/// Idle is still. Listening/Speaking use real audio levels; work states animate only while active.
 struct JarvisCoreView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject var levels: VisualLevelModel
@@ -25,8 +25,8 @@ struct JarvisCoreView: View {
     private let ringRadii: [CGFloat] = [0.62, 0.72, 0.82, 0.90]
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { timeline in
-            let t = reduceMotion ? 0.0 : timeline.date.timeIntervalSinceReferenceDate
+        TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: reduceMotion || state == .idle)) { timeline in
+            let t = reduceMotion || state == .idle ? 0.0 : timeline.date.timeIntervalSinceReferenceDate
             Canvas { ctx, size in
                 let start = CACurrentMediaTime()
                 draw(canvas: &ctx, size: size, time: t,
@@ -106,7 +106,7 @@ struct JarvisCoreView: View {
         if !reduce {
             switch state {
             case .idle:
-                coreScale = 1.0 + MotionTokens.Amplitude.idleBreath * sin(time * 2 * .pi / MotionTokens.Duration.idleBreath)
+                coreScale = 1.0
             case .listening:
                 coreScale = 1.0 + MotionTokens.Amplitude.listening * micP
             case .speaking:
@@ -138,7 +138,8 @@ struct JarvisCoreView: View {
             switch state {
             case .thinking: rotSpeed = MotionTokens.Speed.thinking * 2 * .pi
             case .executing: rotSpeed = MotionTokens.Speed.executing * 2 * .pi
-            default: rotSpeed = 0.02   // بطيء جداً
+            case .listening, .speaking: rotSpeed = 0.02
+            default: rotSpeed = 0
             }
         }
         let pulse = reduce ? 1.0 : 1.0 + 0.02 * (state == .listening ? micP : (state == .speaking ? outP : 0))
@@ -170,7 +171,7 @@ struct JarvisCoreView: View {
                     let rr = pr
                     px = c.x + cos(a) * rr
                     py = c.y + sin(a) * rr
-                } else {
+                } else if state == .speaking || state == .thinking {
                     let wobble = 0.04 * sin(time * 2.0 + Double(i))
                     py = c.y + p.y * pr * (1.0 + wobble)
                 }
