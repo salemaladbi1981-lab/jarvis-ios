@@ -40,6 +40,23 @@ struct HomeEntryView: View {
                     JarvisHeroView(vm: voiceVM)
                     JarvisMicControl(vm: voiceVM)
 
+                    // عناصر الواجهة السابقة (لقطات الشاشة): الترحيب + الموجة الصوتية/حالة التحدث + البطاقات + الاقتراحات
+                    JarvisTitleGreetingView()
+
+                    JarvisWaveformStatusView(vm: voiceVM)
+
+                    SmartHomeCard(devices: voiceVM.homeDevices)
+                        .onTapGesture { voiceVM.requestAction(agentID: "core_home", action: "read-temperature") }
+
+                    SecurityCard(status: voiceVM.securityStatus ?? SecurityStatus(systemsNormal: true, doorsLocked: true, camerasActive: true))
+                        .onTapGesture { voiceVM.requestAction(agentID: "core_home", action: "unlock-door") }
+
+                    MediaCard(track: voiceVM.mediaTrack ?? MediaTrack(title: "Blinding Lights", artist: "The Weeknd", current: "2:06", duration: "3:20"))
+
+                    QuickSuggestions(commands: QuickCommand.productionCases) { cmd in
+                        Task { await voiceVM.handleQuickCommand(cmd) }
+                    }
+
                     // نتيجة أدوات التقويم/التذكيرات (تُعرض هنا بدل الرد الصوتي الثاني — دماغ واحد)
                     if let msg = voiceVM.calendarMessage {
                         Text(msg)
