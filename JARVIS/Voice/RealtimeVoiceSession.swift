@@ -160,7 +160,7 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
             trace("response.create skipped — session not ready")
             return
         }
-        let resp = #"{\"type\":\"response.create\"}"#
+        let resp = #"{"type":"response.create"}"#
         ws?.send(.string(resp)) { [weak self] error in
             if let error { self?.trace("response.create send failed: \(type(of: error))") }
         }
