@@ -90,7 +90,7 @@ async def openai_realtime_proxy(client_ws, session_config: dict, trusted_identit
                 return execute_memory_tool(name, args)
             if name == "jarvis_capabilities":
                 return execute_capabilities_tool(name, args)
-            if name == "jarvis_agent":
+            if name in {tool["name"] for tool in AGENT_TOOLS}:
                 return execute_agent_tool(name, args)
             if name.startswith("telegram_"):
                 return execute_telegram_tool(name, args, pending_tg)
