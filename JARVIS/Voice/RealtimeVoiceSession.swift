@@ -151,6 +151,23 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
         eventPublisher.send(.thinking)
     }
 
+    /// Ask Realtime for the assistant response after transcript routing.
+    /// Server VAD uses create_response=false so native device tools can consume
+    /// Calendar/Reminder turns without a duplicate AI response.
+    func requestResponse() {
+        let ready = stateQueue.sync { self.guardState.isSessionReady }
+        guard ready else {
+            trace("response.create skipped — session not ready")
+            return
+        }
+        let resp = #"{\"type\":\"response.create\"}"#
+        ws?.send(.string(resp)) { [weak self] error in
+            if let error { self?.trace("response.create send failed: \(type(of: error))") }
+        }
+        eventPublisher.send(.thinking)
+        trace("response.create sent after transcript routing")
+    }
+
     func sendAudio(pcm16: Data) {
         // Gate: لا PCM قبل نجاح handshake/session.created (تحت التسلسل نفسه)
         let ready = stateQueue.sync { self.guardState.isSessionReady }

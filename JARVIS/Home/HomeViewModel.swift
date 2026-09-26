@@ -122,7 +122,13 @@ final class HomeViewModel: ObservableObject {
             }
             .store(in: &cancellables)
         voiceSession.onTranscript = { [weak self] text in
-            Task { await self?.routeVoiceTranscript(text) }
+            Task { @MainActor in
+                guard let self else { return }
+                let handledLocally = await self.routeVoiceTranscript(text)
+                if !handledLocally {
+                    self.voiceSession.requestResponse()
+                }
+            }
         }
         // V1 Visual: audio level forwarding (read-only)
         voiceSession.onMicLevel = { [weak self] level in
@@ -312,7 +318,8 @@ final class HomeViewModel: ObservableObject {
 
     /// Voice transcript → local tool route → spoken result.
     /// V1.1: إضافة إنشاء تذكير (بتأكيد) + أسئلة شخصية تعتمد على الذاكرة.
-    func routeVoiceTranscript(_ text: String) async {
+    @discardableResult
+    func routeVoiceTranscript(_ text: String) async -> Bool {
         let t = text.lowercased()
         // OBSERVATION MODE ONLY: log the router's decision without acting on it.
         let routedAgentID = AgentRouter.route(text)
@@ -321,25 +328,26 @@ final class HomeViewModel: ObservableObject {
         #endif
         // أسئلة البريد يعالجها الـ backend LLM عبر function calling — لا نعترضها محلياً
         // (يمنع «وش أهم إيميلاتي اليوم؟» من الوصول لمسار التقويم بسبب كلمة «اليوم»)
-        if Self.isEmailQuestion(t) { return }
+        if Self.isEmailQuestion(t) { return false }
         // 1) إنشاء تذكير (يتطلب تأكيد)
         if let reminderTitle = Self.parseCreateReminder(t) {
             requestReminderCreate(title: reminderTitle)
-            return
+            return true
         }
         // 2) قراءة التذكيرات (أداة محلية) — تُعرض على الشاشة فقط، لا sendText (لا رد منافس)
         if t.contains("تذكير") || t.contains("reminder") {
             await runReminders()
-            return
+            return true
         }
         // 3) قراءة التقويم (أداة محلية) — تُعرض على الشاشة فقط، لا sendText
         if t.contains("جدول") || t.contains("موعد") || t.contains("اليوم") || t.contains("بكرة") || t.contains("calendar") {
             await runCalendar(kind: "today")
-            return
+            return true
         }
         // 4) الذاكرة الشخصية — الدماغ الوحيد = backend (memory_tools عبر function calling).
         //    لا مسار محلي (MemoryStore.seeded) ولا sendText — يمنع الرد المزدوج/القفز.
-        // 5) محادثة مباشرة — النموذج (الدماغ الواحد) رد بالفعل من الصوت.
+        // 5) محادثة مباشرة — اطلب من Realtime الرد بعد اكتمال النسخ.
+        return false
     }
 
     // MARK: Quick commands (typed routing — no fragile text matching)
