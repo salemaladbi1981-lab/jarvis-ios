@@ -7,7 +7,14 @@ import SwiftUI
 #if os(macOS)
 struct MacHomeView: View {
     @StateObject private var vm = HomeViewModel()
+    @EnvironmentObject private var enrollment: EnrollmentManager
     @State private var selectedTab = "home"
+
+    /// نفس مسار الدردشة عبر iOS: عميل موثّق يضرب /conversations/{id}/chat (= brain_tools + الوكلاء).
+    private var api: JarvisAPI {
+        enrollment.api ?? JarvisAPI(baseURL: JarvisConfig.baseURL,
+                                    sessionToken: JarvisConfig.injectedSessionToken ?? "")
+    }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -25,32 +32,37 @@ struct MacHomeView: View {
             .padding(JarvisSpacing.lg)
             .background(JarvisColor.bg_0.opacity(0.5))
 
-            // CENTER zone — hero dominant
-            ScrollView {
-                VStack(spacing: JarvisSpacing.lg) {
-                    Text("JARVIS")
-                        .font(.custom("CormorantGaramond-SemiBold", size: 30))
-                        .tracking(4)
-                        .foregroundColor(JarvisColor.highlight_blue)
+            // CENTER zone — hero (home) أو الدردشة (chat) عبر نفس مسار الوكلاء
+            if selectedTab == "chat" {
+                ConversationListView(api: api)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    VStack(spacing: JarvisSpacing.lg) {
+                        Text("JARVIS")
+                            .font(.custom("CormorantGaramond-SemiBold", size: 30))
+                            .tracking(4)
+                            .foregroundColor(JarvisColor.highlight_blue)
 
-                    JarvisHeroView(vm: vm, coreSize: 300)
+                        JarvisHeroView(vm: vm, coreSize: 300)
 
-                    JarvisTitleGreetingView()
+                        JarvisTitleGreetingView()
 
-                    JarvisWaveformStatusView(vm: vm)
+                        JarvisWaveformStatusView(vm: vm)
 
-                    QuickSuggestions(commands: QuickCommand.productionCases) { cmd in
-                            Task { await vm.handleQuickCommand(cmd) }
+                        QuickSuggestions(commands: QuickCommand.productionCases) { cmd in
+                                Task { await vm.handleQuickCommand(cmd) }
+                            }
+
+                        VoiceInputBar(isListening: vm.isListening) { vm.toggleVoice() }
+
+                        if let approval = vm.pendingApproval {
+                            ApprovalCardView(vm: vm, action: approval)
                         }
-
-                    VoiceInputBar(isListening: vm.isListening) { vm.toggleVoice() }
-
-                    if let approval = vm.pendingApproval {
-                        ApprovalCardView(vm: vm, action: approval)
                     }
+                    .padding(JarvisSpacing.xl)
+                    .frame(maxWidth: .infinity)
                 }
-                .padding(JarvisSpacing.xl)
-                .frame(maxWidth: .infinity)
             }
 
             // RIGHT zone — contextual (empty, no invented live data)
@@ -73,7 +85,7 @@ struct MacHomeView: View {
 
     private var macSidebar: some View {
         VStack(spacing: 6) {
-            ForEach(["home", "devices", "car", "more"], id: \.self) { id in
+            ForEach(["home", "chat", "devices", "car", "more"], id: \.self) { id in
                 let (label, icon) = sideItem(id)
                 Button {
                     selectedTab = id
@@ -104,6 +116,7 @@ struct MacHomeView: View {
     private func sideItem(_ id: String) -> (String, String) {
         switch id {
         case "home":    return ("الرئيسية", JarvisIconResolver.symbol(for: "nav.home"))
+        case "chat":    return ("الدردشة", "bubble.left.and.bubble.right.fill")
         case "devices": return ("الأجهزة", JarvisIconResolver.symbol(for: "nav.devices"))
         case "car":     return ("السيارة", JarvisIconResolver.symbol(for: "nav.car"))
         default:        return ("المزيد", JarvisIconResolver.symbol(for: "nav.more"))

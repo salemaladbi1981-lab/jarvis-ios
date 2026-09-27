@@ -63,9 +63,22 @@ async def openai_realtime_proxy(client_ws, session_config: dict):
         session.setdefault("audio", {}).setdefault("output", {})["voice"] = config.REALTIME_VOICE
         inp = session.setdefault("audio", {}).setdefault("input", {})
         inp["transcription"] = {"model": "whisper-1"}
-        # VAD ثابت: semantic_vad + interrupt_response=False (المقاطعة تُدار عبر response.cancel من العميل)
-        inp["turn_detection"] = {"type": "semantic_vad", "interrupt_response": False, "create_response": True}
+        # VAD ثابت: server_vad + create_response=True (رد تلقائي بعد نهاية الكلام).
+        # ملاحظة: gpt-realtime (GA) يرفض semantic_vad ويرجع للافتراضي server_vad مع create_response=False
+        # → لا رد تلقائي على الصوت إطلاقاً. لذا نضبط server_vad صراحةً مع create_response=True.
+        # interrupt_response=False لأن المقاطعة تُدار عبر response.cancel من العميل.
+        inp["turn_detection"] = {"type": "server_vad", "threshold": 0.5,
+                                 "prefix_padding_ms": 300, "silence_duration_ms": 500,
+                                 "interrupt_response": False, "create_response": True}
         session.setdefault("instructions", config.REALTIME_INSTRUCTIONS)
+        # توجيه صريح للوكلاء (grounded) — كان النموذج الصوتي ينكر وجود الوكلاء ويجيب من معرفته الذاتية.
+        # نُلحقه دائماً حتى لو جاءت التعليمات من env/العميل، تماشياً مع نفس أسلوب grounding البريد.
+        session["instructions"] = (session.get("instructions") or "") + (
+            " لديك فريق من الوكلاء المتخصّصين مسجّلين في سجل جارفس الرسمي. "
+            "لأي سؤال عن الوكلاء (كم عددهم، من هم، هل يوجد وكيل لمهمة معيّنة، اسمه أو دوره أو قدراته أو أدواته) "
+            "استدعِ الأداة jarvis_agent_lookup فوراً وأجب من نتيجتها فقط — لا تجب من معرفتك الذاتية "
+            "ولا تنكر وجود الوكلاء أبداً. ولتشغيل وكيل متخصّص على مهمة استخدم الأداة jarvis_agent."
+        )
         session["tools"] = build_email_tools() + TELEGRAM_TOOLS + YOUTUBE_TOOLS + INSTAGRAM_TOOLS + MAPS_TOOLS + BRAIN_TOOLS + MEMORY_TOOLS + CAPABILITIES_TOOLS + AGENT_TOOLS
         session["tool_choice"] = "auto"
         await upstream.send(json.dumps({"type": "session.update", "session": session}))
@@ -78,7 +91,9 @@ async def openai_realtime_proxy(client_ws, session_config: dict):
                 return execute_memory_tool(name, args)
             if name == "jarvis_capabilities":
                 return execute_capabilities_tool(name, args)
-            if name == "jarvis_agent":
+            if name.startswith("jarvis_agent"):
+                # يشمل jarvis_agent و jarvis_agent_lookup — بدون startswith كان lookup
+                # يسقط للـ fallthrough ويُنفَّذ كأداة بريد → خطأ "تعذّر جلب قائمة الوكلاء".
                 return execute_agent_tool(name, args)
             if name.startswith("telegram_"):
                 return execute_telegram_tool(name, args, pending_tg)
@@ -200,6 +215,8 @@ async def openai_realtime_proxy(client_ws, session_config: dict):
                     rid = resp.get("id", "")
                 if t != "response.output_audio.delta":
                     _trace("u2c", f"{t} rid={rid[:12]}")
+                if t == "error":
+                    _trace("u2c-error", json.dumps(d.get("error", d))[:600])
                 await client_ws.send_text(msg)
 
         await asyncio.gather(c2u(), u2c(), return_exceptions=True)

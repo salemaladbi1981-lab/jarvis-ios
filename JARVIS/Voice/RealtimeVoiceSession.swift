@@ -212,7 +212,9 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                 // حدث بدء الجلسة — لا يشترط isSessionReady؛ الـ receiveLoop يتحقق من جيل الاتصال.
                 trace("session.created received")
                 guardState.sessionCreated()
-                eventPublisher.send(.connected)   // الآن فقط بعد نجاح handshake
+                // handshake نجح والجلسة جاهزة → نبقى في وضع الاستماع (المايك مفتوح بانتظار المستخدم).
+                // كان .connected → idle يُطفئ مؤشر المايك بعد جزء من الثانية من فتحه.
+                eventPublisher.send(.listening)
             case "session.updated":
                 trace("session.updated received")
             case "response.created":
