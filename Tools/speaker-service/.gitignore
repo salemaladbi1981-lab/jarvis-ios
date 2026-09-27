@@ -1,0 +1,7 @@
+owner-profile.json
+*.pcm
+*.wav
+*.flac
+*.m4a
+*.onnx
+__pycache__/

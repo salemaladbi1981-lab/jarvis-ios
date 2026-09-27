@@ -672,3 +672,7 @@ async def realtime_ws(ws: WebSocket):
                         "memory_namespace": conv["memory_namespace"]}
     await ws.accept()
     await realtime.openai_realtime_proxy(ws, {}, trusted_identity=trusted_identity)
+
+# Owner voice verification uses existing session and workspace authorization.
+import speaker_routes
+speaker_routes.install_routes(app, get_user_id, get_workspace)

@@ -130,3 +130,54 @@ struct SessionGuardState {
         pendingCompletionCycle = 0
     }
 }
+
+/// Captures only a bounded candidate while playback is active.
+/// Identity is decided by the authenticated verifier, never by loudness alone.
+struct OwnerVoiceCandidate {
+    private(set) var epoch = 0
+    private(set) var buffer = Data()
+    private(set) var inFlight = false
+    private(set) var confirmations = 0
+    private var quietBytes = 0
+    private var voicedBytes = 0
+    private var lastSubmittedBytes = 0
+
+    mutating func reset() {
+        epoch += 1
+        buffer.removeAll(keepingCapacity: true)
+        inFlight = false
+        confirmations = 0
+        quietBytes = 0
+        voicedBytes = 0
+        lastSubmittedBytes = 0
+    }
+
+    mutating func append(_ data: Data, level: Double) {
+        let voiced = level >= 0.004
+        if buffer.isEmpty && !voiced { return }
+        buffer.append(data)
+        if voiced { voicedBytes += data.count; quietBytes = 0 }
+        else { quietBytes += data.count }
+        // End a candidate on a 350 ms pause; cap retained audio at six seconds.
+        if quietBytes >= 16800 || buffer.count > 288000 { reset() }
+    }
+
+    mutating func nextClip() -> (Data, Int)? {
+        guard !inFlight, buffer.count >= 76800,
+              buffer.count - lastSubmittedBytes >= 21600,
+              voicedBytes * 2 >= buffer.count, quietBytes < 9600 else { return nil }
+        inFlight = true
+        lastSubmittedBytes = buffer.count
+        return (Data(buffer.suffix(115200)), epoch)
+    }
+
+    mutating func complete(matched: Bool, epoch requestEpoch: Int) -> Data? {
+        guard requestEpoch == epoch, inFlight else { return nil }
+        inFlight = false
+        confirmations = matched ? confirmations + 1 : 0
+        guard confirmations >= 2 else { return nil }
+        let speech = buffer
+        reset()
+        return speech
+    }
+}

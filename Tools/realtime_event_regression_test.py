@@ -18,6 +18,7 @@ final class VoiceAudioEngine {
     var currentGeneration = 0
     var playedDurationMs = 0
     var flushCount = 0
+    static func rmsLevel(_ data: Data) -> Double? { 0.05 }
     func start() throws {}
     func stop() {}
     func beginSpeaking() { currentGeneration += 1 }
@@ -79,9 +80,35 @@ func testErrors() {
     check("unexpected provider errors remain visible", errors == 1)
     withExtendedLifetime(token) {}
 }
+func testOwnerGate() {
+    var gate = OwnerVoiceCandidate()
+    let speech = Data(repeating: 1, count: 76800)
+    gate.append(speech, level: 0.05)
+    let (_, epoch) = gate.nextClip()!
+    check("only one verification may be in flight", gate.nextClip() == nil)
+    check("one speaker match cannot interrupt", gate.complete(matched: true, epoch: epoch) == nil)
+    gate.append(Data(repeating: 1, count: 24000), level: 0.05)
+    let (_, secondEpoch) = gate.nextClip()!
+    check("two consecutive matches replay complete utterance", gate.complete(matched: true, epoch: secondEpoch)?.count == 100800)
+    gate.append(speech, level: 0.05)
+    let (_, staleEpoch) = gate.nextClip()!
+    gate.reset()
+    check("stale verification cannot interrupt a new turn", gate.complete(matched: true, epoch: staleEpoch) == nil)
+    gate.append(speech, level: 0.05)
+    let (_, e1) = gate.nextClip()!
+    _ = gate.complete(matched: true, epoch: e1)
+    gate.append(Data(repeating: 1, count: 24000), level: 0.05)
+    let (_, e2) = gate.nextClip()!
+    check("mismatch clears previous confirmation", gate.complete(matched: false, epoch: e2) == nil && gate.confirmations == 0)
+    gate.append(Data(repeating: 0, count: 16800), level: 0)
+    check("silence clears candidate audio", gate.buffer.isEmpty)
+    gate.append(Data(repeating: 0, count: 96000), level: 0)
+    check("silence never starts verification", gate.nextClip() == nil)
+}
 testAutoResponse()
 testTail()
 testErrors()
+testOwnerGate()
 if failures > 0 { exit(1) }
 '''
 source = stubs

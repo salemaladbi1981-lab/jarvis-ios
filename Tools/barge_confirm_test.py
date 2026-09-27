@@ -1,6 +1,6 @@
-"""Manual-interruption regression (source + logic mirror).
+"""Unverified-speech and manual-interruption regression.
 السياسة الإنتاجية: كلام الغرفة/الخلفية (قصير أو مستمر) لا يُلغي رد JARVIS أبداً.
-المقاطعة الوحيدة أثناء الكلام = يدوية (زر المايك → interrupt() → cancel+truncate+flush مرة واحدة)."""
+المقاطعة غير المتحققة تبقى يدوية (زر المايك → interrupt() → cancel+truncate+flush مرة واحدة)."""
 import os, sys
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'JARVIS')
 PASS = FAIL = 0
@@ -18,15 +18,15 @@ check("RealtimeVoiceSession: لا pendingBargeIn", 'pendingBargeIn' not in rvs)
 check("RealtimeVoiceSession: لا scheduleBargeConfirm", 'scheduleBargeConfirm' not in rvs)
 
 # 2) Source-level: speech_started أثناء الكلام → ignored (لا bargeIn)
-check("speech_started أثناء الكلام → ignored (manual only)",
-      'speech_started while speaking → ignored' in rvs)
+check("speech_started requires owner verification",
+      'interruption requires owner verification' in rvs)
 check("لا bargeIn() داخل معالج speech_started", 'if isSpeaking' in rvs)
 
 # 3) Source-level: المقاطعة اليدوية تُرسل cancel + truncate + flush
 check("interrupt() يرسل response.cancel", 'response.cancel' in rvs)
 check("interrupt() يرسل conversation.item.truncate", 'conversation.item.truncate' in rvs)
 check("interrupt() يرسل audio.flush", 'audio.flush()' in rvs)
-check("bargeIn() يُستدعى من interrupt() فقط", 'func interrupt()' in rvs)
+check("manual interrupt remains available", 'func interrupt()' in rvs)
 
 # 4) Logic mirror (نفس state machine): speech_started أثناء الكلام لا يُلغي
 class ManualInterrupt:

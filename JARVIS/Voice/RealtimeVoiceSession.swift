@@ -25,6 +25,10 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     private var session = URLSession(configuration: .default)
     private let audio = VoiceAudioEngine()
     private var isSpeaking = false
+    private var ownerVoiceReady = false
+    private var ownerVoiceCandidate = OwnerVoiceCandidate()
+    private var ownerVoiceBaseURL: URL?
+    private var ownerVoiceToken = ""
     // Follow the negotiated server policy rather than requesting a second reply.
     private var serverCreatesResponses = false
     private var responseRequestPending = false
@@ -54,6 +58,10 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
         request.setValue("PERSONAL", forHTTPHeaderField: "X-Jarvis-Workspace")
         // بدء اتصال جديد → جيل جديد يربط به الـ receiveLoop
         let gen = stateQueue.sync {
+            self.ownerVoiceReady = false
+            self.ownerVoiceCandidate.reset()
+            self.ownerVoiceBaseURL = baseURL
+            self.ownerVoiceToken = token
             self.serverCreatesResponses = false
             self.responseRequestPending = false
             self.responseDeferred = false
@@ -65,12 +73,14 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
         }
         trace("WS resume → \(url) (handshake pending — NOT connected yet)")
         receiveLoop(gen: gen)
+        loadOwnerVoiceStatus(gen: gen)
     }
 
     func disconnect() {
         stateQueue.sync {
             self.guardState.onStop()   // يبطل الجلسة/الرد + دورة الاتصال معاً
             self.isSpeaking = false
+            self.ownerVoiceCandidate.reset()
             self.responseRequestPending = false
             self.responseDeferred = false
         }
@@ -99,11 +109,13 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                 case .success:
                     self.trace("playback drained — اكتمل التشغيل المحلي")
                     self.isSpeaking = false
+            self.ownerVoiceCandidate.reset()
                     self.eventPublisher.send(.listening)
                     self.resumeDeferredResponse()
                 case .failed:
                     self.trace("playback drained — اكتمل التشغيل (failed)")
                     self.isSpeaking = false
+            self.ownerVoiceCandidate.reset()
                     self.eventPublisher.send(.error("realtime_error"))
                 }
             }
@@ -121,6 +133,7 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
         stateQueue.sync {
             self.guardState.onStop()   // إبطال الجلسة + الرد (منع أحداث الدورة الموقوفة)
             self.isSpeaking = false
+            self.ownerVoiceCandidate.reset()
             self.responseRequestPending = false
             self.responseDeferred = false
         }
@@ -131,8 +144,8 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
 
     /// Barge-in: إلغاء الرد الجاري + مسح الـ playback (الـ mic يبقى شغّالاً).
     /// (لا يغيّر الحالة — المتصلون يبطلون الرد عبر onBarge قبل النداء).
-    private func bargeIn() {
-        trace("BARGE manual interrupt → response.cancel + truncate + flush")
+    private func bargeIn(reason: String = "manual") {
+        trace("BARGE \(reason) interrupt → response.cancel + truncate + flush")
         let cancel = #"{"type":"response.cancel"}"#
         ws?.send(.string(cancel)) { _ in }
         // قطع الجزء غير المسموع من item الصوت الحالي (item_id + content_index + مدة الصوت المشغّل فعلاً)
@@ -148,13 +161,14 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
         eventPublisher.send(.interrupted)
     }
 
-    /// المقاطعة اليدوية (زر المايك) — الإلغاء الفوري الوحيد أثناء الكلام.
+    /// المقاطعة اليدوية (زر المايك) — إلغاء فوري بلا انتظار التحقق من الصوت.
     /// كلام الغرفة/الخلفية لا يستدعي هذا أبداً (لا مقاطعة تلقائية من speech_started).
     func interrupt() {
         bargeStartTime = Date().timeIntervalSinceReferenceDate
         stateQueue.sync {
             self.guardState.onBarge()
             self.isSpeaking = false
+            self.ownerVoiceCandidate.reset()
             self.responseRequestPending = false
             self.responseDeferred = false
         }
@@ -228,16 +242,89 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     }
 
     func sendAudio(pcm16: Data) {
-        // Gate: لا PCM قبل نجاح handshake/session.created (تحت التسلسل نفسه)
-        let ready = stateQueue.sync { self.guardState.isSessionReady }
-        guard ready else { return }
-        pcmAppendCount += 1
-        if pcmAppendCount == 1 {
-            trace("PCM append #1 bytes=\(pcm16.count)")
+        // Never block the real-time audio tap on network or speaker inference.
+        stateQueue.async { [weak self] in
+            guard let self, self.guardState.isSessionReady else { return }
+            if self.isSpeaking {
+                // Keep background speech out of upstream VAD while the speaker is active.
+                // Missing profile/service fails closed; the manual button still works.
+                guard self.ownerVoiceReady else { return }
+                let level = VoiceAudioEngine.rmsLevel(pcm16) ?? 0
+                self.ownerVoiceCandidate.append(pcm16, level: level)
+                if let (clip, epoch) = self.ownerVoiceCandidate.nextClip() {
+                    self.verifyOwnerVoice(clip, epoch: epoch)
+                }
+                return
+            }
+            self.appendAudioToUpstream(pcm16)
         }
+    }
+
+    private func appendAudioToUpstream(_ pcm16: Data) {
+        pcmAppendCount += 1
+        if pcmAppendCount == 1 { trace("PCM append #1 bytes=\(pcm16.count)") }
         let b64 = pcm16.base64EncodedString()
         let msg = #"{"type":"input_audio_buffer.append","audio":"\#(b64)"}"#
         ws?.send(.string(msg)) { _ in }
+    }
+
+    private func ownerVoiceRequest(path: String) -> URLRequest? {
+        guard let base = ownerVoiceBaseURL,
+              var components = URLComponents(url: base, resolvingAgainstBaseURL: false) else { return nil }
+        components.path = path
+        components.query = nil
+        guard let url = components.url else { return nil }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 2.5
+        request.setValue(ownerVoiceToken, forHTTPHeaderField: "X-Jarvis-Session")
+        request.setValue("PERSONAL", forHTTPHeaderField: "X-Jarvis-Workspace")
+        return request
+    }
+
+    private func loadOwnerVoiceStatus(gen: Int) {
+        guard let request = ownerVoiceRequest(path: "/voice/owner/status") else { return }
+        session.dataTask(with: request) { [weak self] data, response, _ in
+            let ok = (response as? HTTPURLResponse)?.statusCode == 200
+            let object = data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+            let enabled = ok && object?["enabled"] as? Bool == true
+            self?.stateQueue.async { [weak self] in
+                guard let self, self.guardState.isValidConnection(gen) else { return }
+                self.ownerVoiceReady = enabled
+                self.trace("owner voice verification ready=\(enabled)")
+            }
+        }.resume()
+    }
+
+    private func verifyOwnerVoice(_ clip: Data, epoch: Int) {
+        guard var request = ownerVoiceRequest(path: "/voice/owner/verify") else {
+            _ = ownerVoiceCandidate.complete(matched: false, epoch: epoch)
+            return
+        }
+        let gen = guardState.connectionGeneration
+        request.httpMethod = "POST"
+        request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
+        request.httpBody = clip
+        session.dataTask(with: request) { [weak self] data, response, _ in
+            let ok = (response as? HTTPURLResponse)?.statusCode == 200
+            let object = data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+            let matched = ok && object?["matched"] as? Bool == true
+            self?.stateQueue.async { [weak self] in
+                guard let self, self.guardState.isValidConnection(gen), self.isSpeaking else { return }
+                guard let speech = self.ownerVoiceCandidate.complete(matched: matched, epoch: epoch) else {
+                    self.trace("owner voice candidate matched=\(matched) — awaiting two confirmations")
+                    return
+                }
+                self.bargeStartTime = Date().timeIntervalSinceReferenceDate
+                self.guardState.onBarge()
+                self.isSpeaking = false
+                self.responseRequestPending = false
+                self.responseDeferred = false
+                self.bargeIn(reason: "verified owner")
+                self.ws?.send(.string(#"{"type":"input_audio_buffer.clear"}"#)) { _ in }
+                // Replay the verified utterance so recognition keeps its opening words.
+                self.appendAudioToUpstream(speech)
+            }
+        }.resume()
     }
 
     private func trace(_ msg: String) {
@@ -270,6 +357,7 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                     }
                     self.guardState.onStop()
                     self.isSpeaking = false
+            self.ownerVoiceCandidate.reset()
             self.responseRequestPending = false
             self.responseDeferred = false
                     self.ws?.cancel(with: .goingAway, reason: nil)
@@ -328,6 +416,7 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                 }
                 if !responseAlreadyHasAudio {
                     isSpeaking = true
+                    ownerVoiceCandidate.reset()
                     audio.beginSpeaking()   // يصفّر الـ counters ويبدأ التدفق
                 }
                 if let b64 = SessionEventParser.field(text, "delta") {
@@ -343,8 +432,8 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                 }
                 if isSpeaking {
                     // لا مقاطعة تلقائية أثناء الكلام — كلام الغرفة/الخلفية لا يُلغي الرد.
-                    // المقاطعة يدوية فقط عبر interrupt() (زر المايك).
-                    trace("speech_started while speaking → ignored (manual interruption only)")
+                    // المقاطعة الصوتية تحتاج تحقق المالك؛ زر المايك يبقى فورياً.
+                    trace("speech_started while speaking — interruption requires owner verification")
                 } else {
                     // VAD is an observation, never permission to discard playback.
                     eventPublisher.send(.listening)
@@ -362,7 +451,7 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
             case "response.output_audio_transcript.done":
                 // نص رد جارفس — لا يُعاد توجيهه (يمنع الـ loop).
                 break
-            case "response.output_item.done":
+            case "response.output_item.added", "response.output_item.done":
                 // تتبع هوية item الصوت الحالي للـ conversation.item.truncate عند المقاطعة.
                 if let iid = SessionEventParser.nested(text, "item", "id") {
                     currentOutputItemID = iid

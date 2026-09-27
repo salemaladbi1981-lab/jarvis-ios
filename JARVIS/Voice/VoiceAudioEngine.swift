@@ -54,7 +54,7 @@ final class VoiceAudioEngine {
     /// تُستخدم في conversation.item.truncate لقطع الجزء غير المسموع عند المقاطعة.
     var playedDurationMs: Int {
         // 24kHz mono 16-bit = 48 بايت/ms؛ الـ buffer الافتراضي 4800 بايت ≈ 100ms.
-        workQueue.sync { completedBuffers * (targetBufferBytes / 48) }
+        workQueue.sync { completedAudioBytes / 48 }
     }
     private let targetBufferBytes = 4800        // ~100ms @24kHz 16-bit mono
     private let maxScheduledAhead = 3           // keep up to 3 buffers queued in the player
@@ -63,6 +63,7 @@ final class VoiceAudioEngine {
     // Runtime counters (PROVEN, not assumed)
     private(set) var receivedBytes = 0
     private(set) var scheduledBytes = 0
+    private var completedAudioBytes = 0
     private(set) var completedBuffers = 0
     private(set) var peakQueueDepth = 0
     private(set) var underruns = 0
@@ -283,7 +284,7 @@ final class VoiceAudioEngine {
     }
 
     private func resetStats() {
-        receivedBytes = 0; scheduledBytes = 0; completedBuffers = 0
+        receivedBytes = 0; scheduledBytes = 0; completedBuffers = 0; completedAudioBytes = 0
         peakQueueDepth = 0; underruns = 0; tailBytesFlushed = 0
         converterErrors = 0; scheduleErrors = 0
     }
@@ -312,6 +313,7 @@ final class VoiceAudioEngine {
                 self.workQueue.async {
                     guard gen == self.playbackGeneration else { return }  // عمل قديم ملغى
                     self.completedBuffers += 1
+                    self.completedAudioBytes += chunk.data.count
                     self.scheduledBuffers -= 1
                     // advance: انشر level الـ المقطع التالي (يبدأ تشغيله الآن)
                     if !self.scheduledLevels.isEmpty {
