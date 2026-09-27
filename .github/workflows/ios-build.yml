@@ -10,6 +10,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - name: Run backend email tool tests (multi-account + grounded contract)
         run: |
           python3 phase3/backend/tests_realtime_tools.py

@@ -25,6 +25,10 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     private var session = URLSession(configuration: .default)
     private let audio = VoiceAudioEngine()
     private var isSpeaking = false
+    // Follow the negotiated server policy rather than requesting a second reply.
+    private var serverCreatesResponses = false
+    private var responseRequestPending = false
+    private var responseDeferred = false
     private var guardState = SessionGuardState()   // حراسة الجلسة/الرد/الاتصال
     private var startAttemptID = 0
     private var pcmAppendCount = 0
@@ -49,7 +53,12 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
         request.setValue(token, forHTTPHeaderField: "X-Jarvis-Session")
         request.setValue("PERSONAL", forHTTPHeaderField: "X-Jarvis-Workspace")
         // بدء اتصال جديد → جيل جديد يربط به الـ receiveLoop
-        let gen = stateQueue.sync { self.guardState.beginConnection() }
+        let gen = stateQueue.sync {
+            self.serverCreatesResponses = false
+            self.responseRequestPending = false
+            self.responseDeferred = false
+            return self.guardState.beginConnection()
+        }
         stateQueue.sync {
             self.ws = self.session.webSocketTask(with: request)
             self.ws?.resume()
@@ -62,6 +71,8 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
         stateQueue.sync {
             self.guardState.onStop()   // يبطل الجلسة/الرد + دورة الاتصال معاً
             self.isSpeaking = false
+            self.responseRequestPending = false
+            self.responseDeferred = false
         }
         audio.stop()
         ws?.cancel(with: .goingAway, reason: nil)
@@ -87,9 +98,12 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                     self.trace("playback drained — لا اكتمال مطابق (إشعار قديم cycle=\(cycle))")
                 case .success:
                     self.trace("playback drained — اكتمل التشغيل المحلي")
-                    self.eventPublisher.send(.connected)
+                    self.isSpeaking = false
+                    self.eventPublisher.send(.listening)
+                    self.resumeDeferredResponse()
                 case .failed:
                     self.trace("playback drained — اكتمل التشغيل (failed)")
+                    self.isSpeaking = false
                     self.eventPublisher.send(.error("realtime_error"))
                 }
             }
@@ -107,6 +121,8 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
         stateQueue.sync {
             self.guardState.onStop()   // إبطال الجلسة + الرد (منع أحداث الدورة الموقوفة)
             self.isSpeaking = false
+            self.responseRequestPending = false
+            self.responseDeferred = false
         }
         audio.stop()   // يوقف المحرك + يصفّر المستوى + يبطل generation
         let socket = stateQueue.sync { let socket = self.ws; self.ws = nil; return socket }
@@ -139,6 +155,8 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
         stateQueue.sync {
             self.guardState.onBarge()
             self.isSpeaking = false
+            self.responseRequestPending = false
+            self.responseDeferred = false
         }
         bargeIn()
     }
@@ -155,17 +173,58 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     /// Server VAD uses create_response=false so native device tools can consume
     /// Calendar/Reminder turns without a duplicate AI response.
     func requestResponse() {
-        let ready = stateQueue.sync { self.guardState.isSessionReady }
-        guard ready else {
+        stateQueue.async { [weak self] in self?.requestResponseOnStateQueue() }
+    }
+
+    private func requestResponseOnStateQueue() {
+        guard guardState.isSessionReady else {
             trace("response.create skipped — session not ready")
             return
         }
+        guard !serverCreatesResponses else {
+            trace("response.create skipped — server automatic response enabled")
+            return
+        }
+        guard !responseRequestPending else {
+            trace("response.create skipped — request already pending")
+            return
+        }
+        guard guardState.currentResponseID == nil, !isSpeaking else {
+            responseDeferred = true
+            trace("response.create deferred until current playback completes")
+            return
+        }
+        responseRequestPending = true
         let resp = #"{"type":"response.create"}"#
         ws?.send(.string(resp)) { [weak self] error in
-            if let error { self?.trace("response.create send failed: \(type(of: error))") }
+            guard let self, let error else { return }
+            self.stateQueue.async {
+                self.responseRequestPending = false
+                self.trace("response.create send failed: \(type(of: error))")
+            }
         }
         eventPublisher.send(.thinking)
         trace("response.create sent after transcript routing")
+    }
+
+    private func resumeDeferredResponse() {
+        guard responseDeferred else { return }
+        responseDeferred = false
+        requestResponseOnStateQueue()
+    }
+
+    private func updateResponsePolicy(_ text: String) {
+        guard let data = text.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let configuration = object["session"] as? [String: Any] else { return }
+        let audio = configuration["audio"] as? [String: Any]
+        let input = audio?["input"] as? [String: Any]
+        let detection = (input?["turn_detection"] as? [String: Any])
+            ?? (configuration["turn_detection"] as? [String: Any])
+        if let automatic = detection?["create_response"] as? Bool {
+            serverCreatesResponses = automatic
+            trace("negotiated create_response=\(automatic)")
+        }
     }
 
     func sendAudio(pcm16: Data) {
@@ -211,6 +270,8 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                     }
                     self.guardState.onStop()
                     self.isSpeaking = false
+            self.responseRequestPending = false
+            self.responseDeferred = false
                     self.ws?.cancel(with: .goingAway, reason: nil)
                     self.ws = nil
                     self.audio.stop()
@@ -241,10 +302,15 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                 // حدث بدء الجلسة — لا يشترط isSessionReady؛ الـ receiveLoop يتحقق من جيل الاتصال.
                 trace("session.created received")
                 guardState.sessionCreated()
-                eventPublisher.send(.connected)   // الآن فقط بعد نجاح handshake
+                updateResponsePolicy(text)
+                // handshake نجح والجلسة جاهزة → نبقى في وضع الاستماع (المايك مفتوح بانتظار المستخدم).
+                // كان .connected → idle يُطفئ مؤشر المايك بعد جزء من الثانية من فتحه.
+                eventPublisher.send(.listening)
             case "session.updated":
                 trace("session.updated received")
+                updateResponsePolicy(text)
             case "response.created":
+                responseRequestPending = false
                 currentOutputItemID = nil   // رد جديد — لا item صوتي بعد
                 currentContentIndex = 0
                 if guardState.onResponseCreated(text) {
@@ -255,11 +321,12 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                 }
             case "response.output_audio.delta":
                 // حراسة الجلسة + هوية الرد أولاً (قبل أي تغيير isSpeaking/beginSpeaking/حدث)
+                let responseAlreadyHasAudio = guardState.currentResponseHasAudio
                 guard guardState.onDelta(text) else {
                     trace("delta ignored (لا جلسة نشطة أو رد مطابق)")
                     break
                 }
-                if !isSpeaking {
+                if !responseAlreadyHasAudio {
                     isSpeaking = true
                     audio.beginSpeaking()   // يصفّر الـ counters ويبدأ التدفق
                 }
@@ -279,9 +346,9 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                     // المقاطعة يدوية فقط عبر interrupt() (زر المايك).
                     trace("speech_started while speaking → ignored (manual interruption only)")
                 } else {
-                    audio.flush()
-                    eventPublisher.send(.listening)   // انتقال الواجهة إلى Listening
-                    trace("VAD — flush tail → Listening")
+                    // VAD is an observation, never permission to discard playback.
+                    eventPublisher.send(.listening)
+                    trace("VAD — Listening (playback preserved)")
                 }
             case "input_audio_buffer.speech_stopped":
                 trace("VAD speech_stopped payload: \(text)")
@@ -313,7 +380,8 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                 case .ignore:
                     trace("response.done ignored (لا رد مطابق نشط)")
                 case .waitForDrain:
-                    isSpeaking = false
+                    // Generation ended; the speaker may still have queued audio.
+                    // Only the matching local drain callback clears isSpeaking.
                     audio.flushTail()   // يفلش tail + يطبع PLAYBACK counters
                     trace("response.done cycle=\(cycle) — flushTail (انتظار اكتمال التشغيل المحلي)")
                 case .publishImmediately(let completion):
@@ -321,6 +389,7 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                     isSpeaking = false
                     trace("response.done — لا صوت، نشر فوري")
                     emitCompletion(completion)
+                    resumeDeferredResponse()
                 }
             case "response.function_call_arguments.done":
                 eventPublisher.send(.toolExecuting)
@@ -355,7 +424,15 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
                 onNavigationHandoff?(navUrl)
             case "error":
                 // تسجيل الـ error code/message كاملاً (كان مخفياً).
-                trace("recv error payload: \(text)")
+                let code = SessionEventParser.nested(text, "error", "code") ?? "unknown"
+                trace("realtime error code=\(code)")
+                if code == "conversation_already_has_active_response"
+                    || code == "response_cancel_not_active" {
+                    // These races do not invalidate the live session or microphone.
+                    responseRequestPending = false
+                    trace("recoverable response race — keeping voice session open")
+                    break
+                }
                 eventPublisher.send(.error("realtime_error"))
             default: break
             }

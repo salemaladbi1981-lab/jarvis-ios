@@ -98,7 +98,9 @@ final class VoiceAudioEngine {
         #endif
 
         // Output graph
-        engine.attach(player)
+        if !engine.attachedNodes.contains(player) {
+            engine.attach(player)
+        }
         engine.connect(player, to: engine.mainMixerNode, format: format)
         player.volume = 1.0
         engine.mainMixerNode.outputVolume = 1.0
@@ -374,6 +376,10 @@ final class VoiceAudioEngine {
         engine.stop()
         started = false
         #if os(iOS)
+        if let observer = interruptionObserver { NotificationCenter.default.removeObserver(observer) }
+        if let observer = routeObserver { NotificationCenter.default.removeObserver(observer) }
+        interruptionObserver = nil
+        routeObserver = nil
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         #endif
     }
