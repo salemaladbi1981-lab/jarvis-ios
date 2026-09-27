@@ -25,8 +25,9 @@ check("no bare except: pass", re.search(r"except\s*:\s*\n\s*pass", rt) is None)
 check("no except Exception: pass", re.search(r"except\s+Exception\s*:\s*\n\s*pass", rt) is None)
 check("structured trace logging (_trace)", "_trace" in rt)
 
-# D) VAD ثابت — لا قلب عشوائي لـ interrupt_response
-check("semantic_vad kept", '"type": "semantic_vad"' in rt)
+# D) VAD ثابت — server_vad مع create_response=True (semantic_vad مرفوض في gpt-realtime GA)
+check("server_vad kept", '"type": "server_vad"' in rt)
+check("create_response=True kept (auto-response on GA)", '"create_response": True' in rt)
 check("interrupt_response=False kept (documented)", '"interrupt_response": False' in rt)
 
 # E) التوزيع بالبادئة سليم (لا كسر للرفع/الأدوات الأخرى)
