@@ -76,7 +76,7 @@ struct HomeView: View {
                 }
                 .padding(JarvisSpacing.lg)
             }
-            .defaultScrollAnchor(.top)
+            .compatDefaultScrollAnchorTop()
             .onAppear {
                 LaunchTiming.mark("home onAppear")
                 if ProcessInfo.processInfo.arguments.contains("-scrollBottom") {
@@ -130,7 +130,7 @@ struct HomeView: View {
             await vm.load()
             vm.handleAppIntentStart()
         }
-        .onChange(of: scenePhase) { _, phase in
+        .compatOnChange(of: scenePhase) { phase in
             if phase == .background { vm.handleAppBackgrounded() }
         }
         .sheet(isPresented: $showAttachments) {
@@ -165,7 +165,7 @@ struct HomeView: View {
         }
         #endif
         .photosPicker(isPresented: $showPhotoPicker, selection: $photoItem, matching: .images)
-        .onChange(of: photoItem) { _, item in
+        .compatOnChange(of: photoItem) { item in
             guard let item else { return }
             Task {
                 if let data = try? await item.loadTransferable(type: Data.self) {
@@ -174,7 +174,7 @@ struct HomeView: View {
             }
         }
         .photosPicker(isPresented: $showVideoPicker, selection: $videoItem, matching: .videos)
-        .onChange(of: videoItem) { _, item in
+        .compatOnChange(of: videoItem) { item in
             guard let item else { return }
             Task {
                 if let data = try? await item.loadTransferable(type: Data.self) {

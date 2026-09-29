@@ -49,6 +49,22 @@ SESSION_TTL_SECONDS = int(os.environ.get("JARVIS_SESSION_TTL", "3600"))
 
 # Voice persona — رجولي سينمائي فخم، خليجي/قطري أبيض
 REALTIME_VOICE = os.environ.get("JARVIS_REALTIME_VOICE", "verse")
+
+# TTS provider for spoken output.
+#   "elevenlabs" → OpenAI realtime يولّد نصاً فقط، ثم ElevenLabs يولّد الصوت (خليجي واقعي).
+#   "openai"     → السلوك القديم: gpt-realtime يولّد الصوت بنفسه (REALTIME_VOICE).
+# نرجع تلقائياً إلى "openai" إذا كان مزود ElevenLabs مطلوباً بلا مفتاح API.
+TTS_PROVIDER = os.environ.get("JARVIS_TTS_PROVIDER", "elevenlabs").strip().lower()
+# نموذج ElevenLabs الافتراضي — multilingual_v2 = أعلى جودة وثبات للصوت الخليجي.
+# البدائل: eleven_turbo_v2_5 (وسط)، eleven_flash_v2_5 (أسرع، أقل جودة).
+ELEVENLABS_MODEL = os.environ.get("JARVIS_ELEVENLABS_MODEL", "eleven_multilingual_v2")
+# مفتاح الصوت الافتراضي (من سجل الأصوات في voices.py) — يختاره د. سالم من الإعدادات.
+ELEVENLABS_DEFAULT_VOICE = os.environ.get("JARVIS_ELEVENLABS_VOICE", "omar_deep")
+
+
+def use_elevenlabs_tts() -> bool:
+    """صحيح فقط إذا طُلب ElevenLabs وتوفّر مفتاح API — وإلا نرجع لصوت OpenAI."""
+    return TTS_PROVIDER == "elevenlabs" and bool(ELEVENLABS_API_KEY)
 REALTIME_INSTRUCTIONS = os.environ.get(
     "JARVIS_REALTIME_INSTRUCTIONS",
     "أنت جارفس، مساعد شخصي ذكي فخم لصانع محتوى ومستثمر قطري. "

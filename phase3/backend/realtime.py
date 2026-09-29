@@ -14,8 +14,10 @@ Stability fixes (Sep 2026):
   that arrives after its turn was cancelled is NOT fed into a fresh response.create.
 - No bare `except: pass` — structured trace logging (no personal content / tokens / audio).
 """
-import asyncio, json, time
+import asyncio, base64, json, time
 import config
+import voices
+from elevenlabs_tts import ElevenLabsStreamer
 from realtime_tools import build_email_tools, execute_email_tool
 from telegram_tools import TELEGRAM_TOOLS, execute_telegram_tool
 from youtube_tools import YOUTUBE_TOOLS, execute_youtube_tool
@@ -35,7 +37,8 @@ def _trace(tag, msg):
     print(f"[TRACE {tag}] {msg}", flush=True)
 
 
-async def openai_realtime_proxy(client_ws, session_config: dict):
+async def openai_realtime_proxy(client_ws, session_config: dict, voice_key: str | None = None,
+                                model_key: str | None = None):
     if not config.OPENAI_API_KEY:
         await client_ws.send_json({"type": "error", "error": "no_openai_key"})
         return
@@ -48,6 +51,15 @@ async def openai_realtime_proxy(client_ws, session_config: dict):
     url = f"{OPENAI_REALTIME_URL}?model={config.REALTIME_MODEL}"
     headers = {"Authorization": f"Bearer {config.OPENAI_API_KEY}"}
 
+    # مسار الصوت: ElevenLabs (خليجي واقعي) إذا توفّر المفتاح، وإلا صوت OpenAI الأصلي.
+    use_eleven = config.use_elevenlabs_tts()
+    voice_id = voices.resolve(voice_key) if use_eleven else ""
+    from elevenlabs_tts import resolve_model
+    tts_model = resolve_model(model_key) if use_eleven else ""
+    _trace("tts", f"provider={'elevenlabs' if use_eleven else 'openai'} "
+                  f"voice_key={voice_key or config.ELEVENLABS_DEFAULT_VOICE if use_eleven else config.REALTIME_VOICE} "
+                  f"model={tts_model}")
+
     # pending drafts — per-session confirmation gate (email + telegram منفصلان)
     pending_email = {}
     pending_tg = {}
@@ -56,11 +68,17 @@ async def openai_realtime_proxy(client_ws, session_config: dict):
     active_agent = {"id": "core_coordinator"}
     # turn generation: يزداد عند response.cancel (barge-in) → يُبطل نتائج الأدوات المتأخرة
     turn_generation = {"n": 0}
+    # حالة بث TTS الحالي (ElevenLabs) — streamer واحد لكل رد + هوية الرد + جيل الدور.
+    tts = {"streamer": None, "rid": "", "gen": 0, "started": False}
 
     async with websockets.connect(url, additional_headers=headers) as upstream:
         session = dict(session_config) if session_config else {}
         session.setdefault("type", "realtime")
-        session.setdefault("audio", {}).setdefault("output", {})["voice"] = config.REALTIME_VOICE
+        if use_eleven:
+            # نص فقط من OpenAI — نولّد الصوت عبر ElevenLabs (لا صوت من النموذج).
+            session["output_modalities"] = ["text"]
+        else:
+            session.setdefault("audio", {}).setdefault("output", {})["voice"] = config.REALTIME_VOICE
         inp = session.setdefault("audio", {}).setdefault("input", {})
         inp["transcription"] = {"model": "whisper-1"}
         # VAD ثابت: server_vad + create_response=True (رد تلقائي بعد نهاية الكلام).
@@ -105,6 +123,44 @@ async def openai_realtime_proxy(client_ws, session_config: dict):
                 return execute_maps_tool(name, args)
             return execute_email_tool(name, args, pending_email)
 
+        # ---- ElevenLabs TTS bridge (نص OpenAI → صوت ElevenLabs → العميل) ----
+        def _make_on_audio(rid, gen):
+            stats = {"chunks": 0, "bytes": 0}
+
+            async def on_audio(pcm: bytes):
+                # لا تُرسل صوت رد أُلغي (barge-in) — turn_generation تغيّر.
+                if gen != turn_generation["n"]:
+                    _trace("tts", f"audio dropped (gen={gen} != {turn_generation['n']})")
+                    return
+                stats["chunks"] += 1
+                stats["bytes"] += len(pcm)
+                evt = {"type": "response.output_audio.delta", "response_id": rid,
+                       "item_id": f"el_{rid}", "output_index": 0, "content_index": 0,
+                       "delta": base64.b64encode(pcm).decode("ascii")}
+                try:
+                    await client_ws.send_text(json.dumps(evt))
+                    _trace("tts", f"audio sent chunk={stats['chunks']} bytes={stats['bytes']}")
+                except Exception as e:
+                    _trace("tts", f"client send_bytes(el) failed ({type(e).__name__})")
+            return on_audio
+
+        async def _ensure_streamer():
+            """يفتح جلسة ElevenLabs عند أول مقطع نص للرد الحالي (lazy)."""
+            if tts["started"] or not voice_id:
+                if not voice_id:
+                    _trace("tts", "streamer skipped — voice_id EMPTY")
+                return tts["streamer"]
+            tts["started"] = True
+            _trace("tts", f"creating streamer voice={voice_id} rid={tts['rid'][:12]} gen={tts['gen']}")
+            st = ElevenLabsStreamer(voice_id, _make_on_audio(tts["rid"], tts["gen"]), model=tts_model)
+            try:
+                await st.start()
+                tts["streamer"] = st
+            except Exception as e:
+                _trace("tts", f"elevenlabs start failed ({type(e).__name__})")
+                tts["streamer"] = None
+            return tts["streamer"]
+
         async def c2u():
             # client → upstream (pass-through؛ يشمل response.cancel للـ barge-in)
             while True:
@@ -119,6 +175,11 @@ async def openai_realtime_proxy(client_ws, session_config: dict):
                     if t == "response.cancel":
                         turn_generation["n"] += 1
                         _trace("c2u", f"response.cancel → turn_generation={turn_generation['n']}")
+                        # barge-in: أوقف بثّ صوت ElevenLabs فوراً للرد الجاري.
+                        st = tts.get("streamer")
+                        if st is not None:
+                            asyncio.create_task(st.abort())
+                            tts["streamer"] = None
                     else:
                         _trace("c2u", f"{t}")
                 except Exception as e:
@@ -217,6 +278,44 @@ async def openai_realtime_proxy(client_ws, session_config: dict):
                     _trace("u2c", f"{t} rid={rid[:12]}")
                 if t == "error":
                     _trace("u2c-error", json.dumps(d.get("error", d))[:600])
+
+                # ---- ElevenLabs TTS: نص OpenAI → صوت ElevenLabs ----
+                if use_eleven:
+                    if t == "response.created":
+                        tts.update({"rid": rid, "gen": turn_generation["n"],
+                                    "started": False, "streamer": None})
+                        await client_ws.send_text(msg)  # يضبط currentResponseID لدى العميل
+                        continue
+                    if t in ("response.output_text.delta", "response.text.delta"):
+                        st = await _ensure_streamer()
+                        if st is not None:
+                            await st.feed(d.get("delta") or "")
+                        else:
+                            _trace("tts", "text delta dropped — no streamer")
+                        continue  # لا نمرّر النص للعميل — الصوت فقط
+                    if t in ("response.output_text.done", "response.text.done"):
+                        st = tts.get("streamer")
+                        if st is not None:
+                            await st.finish()
+                        continue
+                    if t == "response.output_item.done":
+                        continue  # نكتمه: يمنع محاولة العميل truncate عنصراً نصياً عند المقاطعة
+                    if t == "response.output_audio.delta":
+                        continue  # لا صوت من OpenAI في وضع النص
+                    if t == "response.done":
+                        st = tts.get("streamer")
+                        if st is not None and tts["gen"] == turn_generation["n"]:
+                            # صرّف كل صوت ElevenLabs قبل تمرير response.done (العميل يرفض الصوت بعده)
+                            _trace("tts", "holding response.done for EL drain")
+                            await st.finish()
+                            await st.wait_done()
+                            await st.close()
+                        else:
+                            _trace("tts", f"response.done NOT held (streamer={st is not None} tts_gen={tts['gen']} cur={turn_generation['n']})")
+                        tts.update({"streamer": None, "started": False})
+                        await client_ws.send_text(msg)
+                        continue
+
                 await client_ws.send_text(msg)
 
         await asyncio.gather(c2u(), u2c(), return_exceptions=True)

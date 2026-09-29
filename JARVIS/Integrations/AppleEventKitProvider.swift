@@ -44,13 +44,23 @@ final class AppleEventKitProvider {
     }
 
     func requestEvents() async -> CalendarPermissionState {
-        do { return try await store.requestFullAccessToEvents() ? .authorized : .denied }
-        catch { return .denied }
+        do {
+            if #available(iOS 17.0, macOS 14.0, *) {
+                return try await store.requestFullAccessToEvents() ? .authorized : .denied
+            } else {
+                return try await store.requestAccess(to: .event) ? .authorized : .denied
+            }
+        } catch { return .denied }
     }
 
     func requestReminders() async -> CalendarPermissionState {
-        do { return try await store.requestFullAccessToReminders() ? .authorized : .denied }
-        catch { return .denied }
+        do {
+            if #available(iOS 17.0, macOS 14.0, *) {
+                return try await store.requestFullAccessToReminders() ? .authorized : .denied
+            } else {
+                return try await store.requestAccess(to: .reminder) ? .authorized : .denied
+            }
+        } catch { return .denied }
     }
 
     func todayEvents() async throws -> [JarvisCalendarEvent] {

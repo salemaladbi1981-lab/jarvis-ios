@@ -42,6 +42,9 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
         }
         comps.scheme = comps.scheme == "https" ? "wss" : "ws"
         comps.path = "/realtime"
+        // مفتاح الصوت المختار من الإعدادات → يحلّه الخادم إلى صوت ElevenLabs الخليجي.
+        comps.queryItems = [URLQueryItem(name: "voice", value: VoiceCatalog.selectedKey),
+                            URLQueryItem(name: "model", value: ModelCatalog.selectedKey)]
         guard let url = comps.url else { eventPublisher.send(.error("invalid_url")); return }
         // بدء اتصال جديد → جيل جديد يربط به الـ receiveLoop
         let gen = stateQueue.sync { self.guardState.beginConnection() }
@@ -160,6 +163,7 @@ final class RealtimeVoiceSession: NSObject, VoiceSession {
     private func trace(_ msg: String) {
         let ts = Date().timeIntervalSinceReferenceDate
         print("[JARVIS-TRACE] \(String(format: "%.3f", ts)) \(msg)")
+        DebugLog.write(msg)
     }
 
     private func receiveLoop(gen: Int) {

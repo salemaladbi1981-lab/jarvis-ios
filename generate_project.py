@@ -23,13 +23,14 @@ APP_SOURCES = [
     "JARVIS/Workspace/HomeEntryView.swift",
     "JARVIS/Workspace/AttachmentView.swift",
     "JARVIS/Home/VoiceInputBar.swift", "JARVIS/Home/BottomNavBar.swift",
-    "JARVIS/Core/JarvisCoreView.swift", "JARVIS/Core/JarvisOrbitView.swift", "JARVIS/Core/WaveformView.swift",
+    "JARVIS/Core/DebugLog.swift", "JARVIS/Core/CompatModifiers.swift", "JARVIS/Core/JarvisCoreView.swift", "JARVIS/Core/JarvisOrbitView.swift", "JARVIS/Core/WaveformView.swift",
     "JARVIS/Core/MotionTokens.swift", "JARVIS/Core/AgentOrbitModel.swift", "JARVIS/Core/LaunchTiming.swift", "JARVIS/Core/VisualLevelModel.swift",
     "JARVIS/Core/JarvisHeroView.swift", "JARVIS/Core/ApprovalCardView.swift",
     "JARVIS/iPad/iPadLandscapeView.swift", "JARVIS/iPad/AdaptiveRootView.swift",
     "JARVIS/macOS/MacApp.swift", "JARVIS/macOS/MacHomeView.swift",
     "JARVIS/Voice/VoiceSession.swift", "JARVIS/Voice/RealtimeVoiceSession.swift", "JARVIS/Voice/AudioCapture.swift", "JARVIS/Voice/VoiceAudioEngine.swift",
     "JARVIS/Voice/SessionEventParser.swift", "JARVIS/Voice/SessionGuardState.swift",
+    "JARVIS/Voice/VoiceCatalog.swift", "JARVIS/Voice/VoiceSettingsView.swift", "JARVIS/Voice/ModelCatalog.swift",
     "JARVIS/Integrations/EventKitModels.swift", "JARVIS/Integrations/AppleEventKitProvider.swift",
     "JARVIS/Integrations/MockCalendarProvider.swift", "JARVIS/Integrations/CalendarTools.swift",
     "JARVIS/Diagnostics/PreflightDiagnostics.swift",
@@ -194,7 +195,7 @@ test_frameworks_phase = add("PBXFrameworksBuildPhase", files=[], buildActionMask
 app_settings = {
     "CODE_SIGN_STYLE": "Automatic", "CURRENT_PROJECT_VERSION": "4",
     "GENERATE_INFOPLIST_FILE": "NO", "INFOPLIST_FILE": "JARVIS/Info.plist",
-    "IPHONEOS_DEPLOYMENT_TARGET": "17.0", "MARKETING_VERSION": "0.1.0",
+    "IPHONEOS_DEPLOYMENT_TARGET": "16.0", "MARKETING_VERSION": "0.1.0",
     "PRODUCT_BUNDLE_IDENTIFIER": "com.salemai.jarvis", "PRODUCT_NAME": "$(TARGET_NAME)",
     "SDKROOT": "iphoneos", "SWIFT_VERSION": "5.0", "TARGETED_DEVICE_FAMILY": "1,2",
     "LD_RUNPATH_SEARCH_PATHS": "$(inherited) @executable_path/Frameworks",
@@ -203,7 +204,7 @@ app_settings = {
 test_settings = {
     "BUNDLE_LOADER": "$(TEST_HOST)", "CODE_SIGN_STYLE": "Automatic",
     "CURRENT_PROJECT_VERSION": "1", "GENERATE_INFOPLIST_FILE": "YES",
-    "IPHONEOS_DEPLOYMENT_TARGET": "17.0", "MARKETING_VERSION": "0.1.0",
+    "IPHONEOS_DEPLOYMENT_TARGET": "16.0", "MARKETING_VERSION": "0.1.0",
     "PRODUCT_BUNDLE_IDENTIFIER": "com.salemai.jarvisTests", "PRODUCT_NAME": "$(TARGET_NAME)",
     "SDKROOT": "iphoneos", "SWIFT_VERSION": "5.0", "TARGETED_DEVICE_FAMILY": "1,2",
     "TEST_HOST": "$(BUILT_PRODUCTS_DIR)/JARVIS.app/JARVIS",
@@ -218,7 +219,7 @@ mac_settings = {
     "INFOPLIST_KEY_NSCalendarsUsageDescription": "جارفس يحتاج التقويم لعرض مواعيدك.",
     "INFOPLIST_KEY_NSRemindersUsageDescription": "جارفس يحتاج التذكيرات لعرض مهامك.",
 }
-proj_common = {"MACOSX_DEPLOYMENT_TARGET": "14.0", "IPHONEOS_DEPLOYMENT_TARGET": "17.0", "SDKROOT": "macosx", "CLANG_ENABLE_MODULES": "YES"}
+proj_common = {"MACOSX_DEPLOYMENT_TARGET": "14.0", "IPHONEOS_DEPLOYMENT_TARGET": "16.0", "SDKROOT": "macosx", "CLANG_ENABLE_MODULES": "YES"}
 app_debug = add("XCBuildConfiguration", buildSettings=dict(app_settings), name="Debug")
 app_release = add("XCBuildConfiguration", buildSettings=dict(app_settings), name="Release")
 test_debug = add("XCBuildConfiguration", buildSettings=dict(test_settings), name="Debug")

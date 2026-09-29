@@ -18,11 +18,13 @@ final class AppleEventKitWriter {
 
     private func eventAccessGranted() -> Bool {
         let s = EKEventStore.authorizationStatus(for: .event)
-        return s == .fullAccess || s == .authorized
+        if #available(iOS 17.0, macOS 14.0, *), s == .fullAccess { return true }
+        return s == .authorized
     }
     private func reminderAccessGranted() -> Bool {
         let s = EKEventStore.authorizationStatus(for: .reminder)
-        return s == .fullAccess || s == .authorized
+        if #available(iOS 17.0, macOS 14.0, *), s == .fullAccess { return true }
+        return s == .authorized
     }
 
     // MARK: Calendar — create/update/delete

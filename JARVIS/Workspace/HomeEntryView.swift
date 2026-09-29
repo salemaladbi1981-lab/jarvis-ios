@@ -24,6 +24,7 @@ struct HomeEntryView: View {
     @State private var sendError: String?
     @State private var retryText = ""
     @State private var isSending = false
+    @State private var showVoiceSettings = false
     @Environment(\.scenePhase) private var scenePhase
     private let api: JarvisAPI
 
@@ -149,9 +150,20 @@ struct HomeEntryView: View {
                 .padding(16)
             }
             .navigationTitle("جارفس")
-            .navigationDestination(item: $newConv) { c in
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button { showVoiceSettings = true } label: {
+                        Image(systemName: "slider.horizontal.3")
+                    }
+                    .accessibilityLabel("إعدادات الصوت")
+                }
+            }
+            .compatNavigationDestination(item: $newConv) { c in
                 ConversationView(api: api, conversationId: c.id, initialText: c.initialText)
             }
+        }
+        .sheet(isPresented: $showVoiceSettings) {
+            VoiceSettingsView()
         }
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 0) {
@@ -202,7 +214,7 @@ struct HomeEntryView: View {
             await voiceVM.load()
             voiceVM.handleAppIntentStart()
         }
-        .onChange(of: scenePhase) { _, phase in
+        .compatOnChange(of: scenePhase) { phase in
             if phase == .background { voiceVM.handleAppBackgrounded() }
         }
         .sheet(isPresented: $showAttachments) {
@@ -235,7 +247,7 @@ struct HomeEntryView: View {
         }
         #endif
         .photosPicker(isPresented: $showPhotoPicker, selection: $photoItem, matching: .images)
-        .onChange(of: photoItem) { _, item in
+        .compatOnChange(of: photoItem) { item in
             guard let item else { return }
             Task {
                 if let data = try? await item.loadTransferable(type: Data.self) {
@@ -244,7 +256,7 @@ struct HomeEntryView: View {
             }
         }
         .photosPicker(isPresented: $showVideoPicker, selection: $videoItem, matching: .videos)
-        .onChange(of: videoItem) { _, item in
+        .compatOnChange(of: videoItem) { item in
             guard let item else { return }
             Task {
                 if let data = try? await item.loadTransferable(type: Data.self) {

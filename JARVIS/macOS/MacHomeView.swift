@@ -9,6 +9,7 @@ struct MacHomeView: View {
     @StateObject private var vm = HomeViewModel()
     @EnvironmentObject private var enrollment: EnrollmentManager
     @State private var selectedTab = "home"
+    @State private var showVoiceSettings = false
 
     /// نفس مسار الدردشة عبر iOS: عميل موثّق يضرب /conversations/{id}/chat (= brain_tools + الوكلاء).
     private var api: JarvisAPI {
@@ -39,6 +40,20 @@ struct MacHomeView: View {
             } else {
                 ScrollView {
                     VStack(spacing: JarvisSpacing.lg) {
+                        HStack {
+                            Spacer()
+                            Button {
+                                showVoiceSettings = true
+                            } label: {
+                                Image(systemName: "slider.horizontal.3")
+                                    .font(.system(size: 15, weight: .medium))
+                                    .foregroundColor(JarvisColor.text_muted)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("إعدادات الصوت")
+                        }
+                        .padding(.top, JarvisSpacing.sm)
+
                         Text("JARVIS")
                             .font(.custom("CormorantGaramond-SemiBold", size: 30))
                             .tracking(4)
@@ -81,6 +96,9 @@ struct MacHomeView: View {
                 .ignoresSafeArea()
         )
         .task { await vm.load() }
+        .sheet(isPresented: $showVoiceSettings) {
+            VoiceSettingsView()
+        }
     }
 
     private var macSidebar: some View {

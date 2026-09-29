@@ -5,6 +5,7 @@ import Combine
 /// (matches MOBILE IMAGE A — header composition is not mirrored by RTL).
 struct HeaderView: View {
     @StateObject private var location = LocationManager()
+    @State private var showVoiceSettings = false
 
     var body: some View {
         HStack(alignment: .center) {
@@ -20,6 +21,15 @@ struct HeaderView: View {
                 LiveClockView()
             }
             Spacer()
+            Button {
+                showVoiceSettings = true
+            } label: {
+                Image(systemName: "slider.horizontal.3")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(JarvisColor.text_muted)
+            }
+            .accessibilityLabel("إعدادات الصوت")
+            .padding(.trailing, 10)
             Text("JARVIS")
                 .font(.custom("CormorantGaramond-SemiBold", size: 22))
                 .tracking(3)
@@ -27,6 +37,9 @@ struct HeaderView: View {
         }
         .environment(\.layoutDirection, .leftToRight)
         .onAppear { location.requestWhenNeeded() }
+        .sheet(isPresented: $showVoiceSettings) {
+            VoiceSettingsView()
+        }
     }
 }
 

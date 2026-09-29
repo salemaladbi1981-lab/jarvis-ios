@@ -70,9 +70,14 @@ final class VoiceAudioEngine {
     private(set) var converterErrors = 0
     private(set) var scheduleErrors = 0
 
+    /// صيغة التشغIل للـ mixer — float32 غير متداخل (iOS 16 يرفض ربط int16 المتداخل بالـ mixer).
+    private let playbackFormat: AVAudioFormat
+
     init() {
         format = AVAudioFormat(commonFormat: .pcmFormatInt16,
                                sampleRate: 24000, channels: 1, interleaved: true)!
+        playbackFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32,
+                                       sampleRate: 24000, channels: 1, interleaved: false)!
     }
 
     func start() throws {
@@ -98,10 +103,13 @@ final class VoiceAudioEngine {
         #endif
 
         // Output graph
+        onDiagnostics?("preAttach")
         engine.attach(player)
-        engine.connect(player, to: engine.mainMixerNode, format: format)
+        onDiagnostics?("preConnect fmt sr=\(playbackFormat.sampleRate) ch=\(playbackFormat.channelCount) inter=\(playbackFormat.isInterleaved) float")
+        engine.connect(player, to: engine.mainMixerNode, format: playbackFormat)
         player.volume = 1.0
         engine.mainMixerNode.outputVolume = 1.0
+        onDiagnostics?("preVoiceProcessing")
 
         // AEC: فعّل voice processing على الـ I/O node قبل start (Apple official path)
         do {
@@ -115,7 +123,13 @@ final class VoiceAudioEngine {
         // Input tap (AEC-applied)
         let input = engine.inputNode
         let hwFormat = input.outputFormat(forBus: 0)
-        converter = AVAudioConverter(from: hwFormat, to: format)!
+        onDiagnostics?("preTap hwRate=\(hwFormat.sampleRate) ch=\(hwFormat.channelCount) common=\(hwFormat.commonFormat.rawValue)")
+        guard hwFormat.sampleRate > 0, hwFormat.channelCount > 0,
+              let conv = AVAudioConverter(from: hwFormat, to: format) else {
+            onDiagnostics?("start FAILED: bad hwFormat/converter (rate=\(hwFormat.sampleRate) ch=\(hwFormat.channelCount))")
+            throw NSError(domain: "jarvis.audio", code: 1, userInfo: [NSLocalizedDescriptionKey: "audio_input_unavailable"])
+        }
+        converter = conv
         input.installTap(onBus: 0, bufferSize: 2048, format: hwFormat) { [weak self] buffer, _ in
             guard let self, let conv = self.converter else { return }
             if let data = self.convert(buffer, using: conv) {
@@ -291,7 +305,7 @@ final class VoiceAudioEngine {
     private func pump(forceTail: Bool = false) {
         while scheduledBuffers < maxScheduledAhead {
             guard let chunk = nextBuffer(forceTail: forceTail) else { break }
-            guard let buffer = Self.toBuffer(chunk.data, format: format) else {
+            guard let buffer = Self.toBuffer(chunk.data, playbackFormat: playbackFormat) else {
                 converterErrors += 1
                 continue
             }
@@ -413,14 +427,15 @@ final class VoiceAudioEngine {
         return (sum / Double(count)).squareRoot()
     }
 
-    private static func toBuffer(_ data: Data, format: AVAudioFormat) -> AVAudioPCMBuffer? {
+    /// يبني buffer تشغيل float32 من بايتات PCM16 (الخادم يرسل int16 24kHz؛ الـ mixer يريد float).
+    private static func toBuffer(_ data: Data, playbackFormat: AVAudioFormat) -> AVAudioPCMBuffer? {
         let frames = AVAudioFrameCount(data.count / MemoryLayout<Int16>.size)
-        guard frames > 0, let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames) else { return nil }
+        guard frames > 0, let buffer = AVAudioPCMBuffer(pcmFormat: playbackFormat, frameCapacity: frames) else { return nil }
         buffer.frameLength = frames
         data.withUnsafeBytes { raw in
             guard let base = raw.bindMemory(to: Int16.self).baseAddress,
-                  let dst = buffer.int16ChannelData?[0] else { return }
-            dst.update(from: base, count: Int(frames))
+                  let dst = buffer.floatChannelData?[0] else { return }
+            for i in 0..<Int(frames) { dst[i] = Float(base[i]) / 32768.0 }
         }
         return buffer
     }

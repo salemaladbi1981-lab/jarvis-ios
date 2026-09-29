@@ -20,6 +20,7 @@ import deliveries
 import auth
 import workspace
 import kill_switch
+import project_health as project_health_mod
 import conversation, messages
 import tg_inbound, deeplink
 import worker
@@ -143,6 +144,31 @@ class ApproveReq(BaseModel):
 @app.get("/health")
 def health():
     return {"ok": True, "provider": config.REALTIME_PROVIDER}
+
+
+@app.get("/project/health")
+def project_health(user_id: str = Depends(get_user_id), workspace_id: str = Depends(get_workspace)):
+    """Truthful project/runtime health surface for the owner dashboard.
+
+    Build/CI/test metadata is reported only when injected by the deployment/CI
+    environment. Missing evidence is returned as "unknown" rather than fabricated.
+    Runtime blockers and owner actions are sanitized before they leave the server.
+    """
+    tasks = tasks_mod.list_tasks(user_id, workspace_id)
+    pending_approvals = approval_store.list_pending(workspace_id)
+    cap_summary = capabilities.list_capabilities(summary=True)
+    capability_count = len(cap_summary) if isinstance(cap_summary, list) else 0
+    kill_switch_engaged = bool(kill_switch.engaged())
+
+    return project_health_mod.build_project_health(
+        tasks=tasks,
+        job_state_for=worker.job_state_for,
+        pending_approvals=pending_approvals,
+        capability_count=capability_count,
+        kill_switch_engaged=kill_switch_engaged,
+        provider=config.REALTIME_PROVIDER,
+        workspace_id=workspace_id,
+    )
 
 
 @app.get("/capabilities")
@@ -551,7 +577,7 @@ def conversations_get_or_create(req: ConversationReq, session: dict = Depends(ge
     if session.get("_token"):
         auth.set_session_conversation(session["_token"], conv["conversation_id"])
     audit.log("conversation", session_id=session["_token"], conversation_id=conv["conversation_id"],
-              event="created" if created else "resumed")
+              action="created" if created else "resumed")
     return {"ok": True, "created": created, "conversation": conv}
 
 @app.get("/conversations")
@@ -637,7 +663,23 @@ def approve(req: ApproveReq):
         raise HTTPException(403, r["reason"])
     return r
 
+@app.get("/voices")
+async def list_voices():
+    """أصوات TTS المتاحة لاختيار د. سالم (بدون تسريب voice_id للعميل)."""
+    import voices
+    return {"provider": "elevenlabs" if config.use_elevenlabs_tts() else "openai",
+            "default": voices.default_key(),
+            "voices": voices.list_voices()}
+
+
 @app.websocket("/realtime")
 async def realtime_ws(ws: WebSocket):
     await ws.accept()
-    await realtime.openai_realtime_proxy(ws, {})
+    # مفتاح الصوت (?voice=<key>) + النموذج (?model=multilingual|turbo|flash) من الإعدادات.
+    voice_key = ws.query_params.get("voice")
+    model_key = ws.query_params.get("model")
+    await realtime.openai_realtime_proxy(ws, {}, voice_key=voice_key, model_key=model_key)
+
+# Owner-only speaker verification, protected by existing session/workspace checks.
+import speaker_routes
+speaker_routes.install_routes(app, get_user_id, get_workspace)
