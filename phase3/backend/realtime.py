@@ -35,7 +35,18 @@ def _trace(tag, msg):
     print(f"[TRACE {tag}] {msg}", flush=True)
 
 
-async def openai_realtime_proxy(client_ws, session_config: dict):
+def scoped_tool_arguments(args, trusted_identity):
+    # Identity always comes from the authenticated socket, never model arguments.
+    keys = ("user_id", "workspace_id", "session_id", "conversation_id", "memory_namespace")
+    if not trusted_identity or any(not trusted_identity.get(key) for key in keys):
+        raise ValueError("authenticated_identity_required")
+    return {**args, **{key: trusted_identity[key] for key in keys}}
+
+
+async def openai_realtime_proxy(client_ws, session_config: dict, trusted_identity=None):
+    if not trusted_identity:
+        await client_ws.send_json({"type": "error", "error": "unauthorized"})
+        return
     if not config.OPENAI_API_KEY:
         await client_ws.send_json({"type": "error", "error": "no_openai_key"})
         return
@@ -71,6 +82,7 @@ async def openai_realtime_proxy(client_ws, session_config: dict):
         await upstream.send(json.dumps({"type": "session.update", "session": session}))
 
         def dispatch_tool(name, args):
+            args = scoped_tool_arguments(args, trusted_identity)
             # توزيع تنفيذ الأداة حسب البادئة — لا نص query داخل السجل.
             if name == "jarvis_brain":
                 return execute_brain_tool(name, args)
@@ -177,10 +189,12 @@ async def openai_realtime_proxy(client_ws, session_config: dict):
                     name = d.get("name", "")
                     try:
                         args = json.loads(d.get("arguments", "{}"))
+                        if not isinstance(args, dict):
+                            args = {}
                     except Exception:
                         args = {}
                     _trace("tool", f"call {name} (call_id={call_id[:12]})")
-                    specialist = runtime.agent_for_tool(name)
+                    specialist = runtime.agent_for_tool(name, args)
                     if specialist != active_agent["id"]:
                         await client_ws.send_text(json.dumps(
                             runtime.event_payload("handoff", specialist, tool=name, from_agent=active_agent["id"]),

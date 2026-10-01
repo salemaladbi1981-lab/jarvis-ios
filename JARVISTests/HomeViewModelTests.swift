@@ -17,8 +17,8 @@ final class HomeViewModelTests: XCTestCase {
         await vm.load()
 
         XCTAssertTrue(vm.homeDevices.isEmpty, "production launch must not expose synthetic smart-home devices")
-        XCTAssertEqual(vm.securityStatus?.systemsNormal, false, "production launch must not fabricate an all-normal security state")
-        XCTAssertEqual(vm.mediaTrack?.title, "", "production launch must not expose a synthetic now-playing track")
+        XCTAssertNil(vm.securityStatus, "production launch must not fabricate an all-normal security state")
+        XCTAssertNil(vm.mediaTrack, "production launch must not expose a synthetic now-playing track")
     }
 
     func testMeetingMetadataDoesNotRequestCaptureAuthorization() {

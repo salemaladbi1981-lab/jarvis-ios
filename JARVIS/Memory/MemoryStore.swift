@@ -10,9 +10,11 @@ final class MemoryStore {
         self.items = items
     }
 
+    #if DEBUG
     static func seeded() -> MemoryStore {
         MemoryStore(items: MemorySeed.defaultItems())
     }
+    #endif
 
     // MARK: Owner control — القراءة (المالك يرى ما يعرفه جارفس)
     func allItems(activeOnly: Bool = true) -> [MemoryItem] {

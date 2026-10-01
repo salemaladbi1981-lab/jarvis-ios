@@ -71,7 +71,10 @@ class AgentRuntime:
                 best_id, best_score = agent_id, score
         return best_id if best_score else "core_coordinator"
 
-    def agent_for_tool(self, tool_name: str) -> str:
+    def agent_for_tool(self, tool_name: str, args: dict | None = None) -> str:
+        if tool_name == "jarvis_agent":
+            requested = (args or {}).get("agent_id")
+            return requested if requested in self._agents else "core_coordinator"
         if tool_name in TOOL_OWNERS:
             return TOOL_OWNERS[tool_name]
         for prefix, agent_id in TOOL_PREFIX_OWNERS:

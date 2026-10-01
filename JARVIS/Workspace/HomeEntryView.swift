@@ -9,6 +9,8 @@ struct HomeEntryView: View {
     @StateObject private var voiceVM = HomeViewModel()
     @EnvironmentObject private var enrollment: EnrollmentManager
     @State private var newConv: ConvID?
+    @State private var showConnection = false
+    @State private var showMeetings = false
     @State private var composerText = ""
     @State private var showAttachments = false
     @State private var showCameraPhoto = false
@@ -36,8 +38,17 @@ struct HomeEntryView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(Date.now.formatted(.dateTime.weekday(.wide).day().month(.wide).locale(Locale(identifier: "ar_QA"))))
+                            .font(.caption).foregroundColor(JarvisColor.text_muted)
+                        Text("بماذا نبدأ؟")
+                            .font(.custom("IBMPlexSansArabic-Bold", size: 28, relativeTo: .title))
+                            .foregroundColor(JarvisColor.text_primary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 8)
                     // Concept 2: النواة السينمائية + زر المايك البارز (مرتبطان بحالة/مستوى الصوت الحقيقي)
-                    JarvisHeroView(vm: voiceVM)
+                    JarvisHeroView(vm: voiceVM, coreSize: 220)
                     JarvisMicControl(vm: voiceVM)
 
                     // نتيجة أدوات التقويم/التذكيرات (تُعرض هنا بدل الرد الصوتي الثاني — دماغ واحد)
@@ -60,16 +71,19 @@ struct HomeEntryView: View {
                         }
                     } label: {
                         HStack(spacing: 10) {
-                            Image(systemName: "plus.bubble.fill")
+                            if vm.isCreating { ProgressView().tint(JarvisColor.highlight_blue) }
+                            else { Image(systemName: "plus.bubble") }
                             Text("بدء محادثة جديدة")
                                 .font(.system(size: 16, weight: .semibold))
                         }
                         .foregroundColor(JarvisColor.text_primary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
-                        .background(JarvisColor.bg_1)
-                        .cornerRadius(14)
+                        .background(RoundedRectangle(cornerRadius: 18).fill(JarvisColor.bg_1))
+                        .overlay(RoundedRectangle(cornerRadius: 18).stroke(JarvisColor.primary_blue.opacity(0.22), lineWidth: 1))
                     }
+                    .buttonStyle(.plain)
+                    .disabled(vm.isCreating || isSending)
 
                     if let nce = vm.newConversationError {
                         Text(nce)
@@ -78,6 +92,9 @@ struct HomeEntryView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
 
+                    if let error = vm.loadError {
+                        Text(error).font(.caption).foregroundColor(JarvisColor.text_muted)
+                    }
                     if !vm.conversations.isEmpty {
                         section("المحادثات الأخيرة") {
                             ForEach(vm.conversations.prefix(5)) { c in
@@ -129,48 +146,82 @@ struct HomeEntryView: View {
                         .padding(.top, 24)
                     }
                 }
-                .padding(16)
+                .padding(.horizontal, 24)
+                .padding(.bottom, 24)
+                .frame(maxWidth: 720)
+                .frame(maxWidth: .infinity)
             }
-            .navigationTitle("جارفس")
+            .background(
+                RadialGradient(colors: [JarvisColor.bg_1, JarvisColor.bg_0], center: .top, startRadius: 30, endRadius: 600)
+                    .ignoresSafeArea()
+            )
+            .safeAreaInset(edge: .bottom) {
+                VStack(spacing: 0) {
+                    AttachmentPreviewBar(attachments: pendingAttachments) { id in
+                        pendingAttachments.removeAll { $0.id == id }
+                    }
+                    if let err = sendError {
+                        HStack {
+                            Text(err).font(.caption).foregroundColor(.red)
+                            Spacer()
+                            Button("إعادة المحاولة") {
+                                let t = retryText
+                                sendError = nil
+                                Task { await sendMessage(text: t) }
+                            }
+                            .font(.caption).foregroundColor(JarvisColor.highlight_blue)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 6)
+                    }
+                    WorkspaceComposerView(
+                        text: $composerText,
+                        hasAttachments: !pendingAttachments.isEmpty,
+                        disabled: isSending || vm.isCreating,
+                        onSend: {
+                            let t = composerText.trimmingCharacters(in: .whitespacesAndNewlines)
+                            guard !t.isEmpty || !pendingAttachments.isEmpty else { return }
+                            guard !isSending, !vm.isCreating else { return }
+                            Task { await sendMessage(text: t) }
+                        },
+                        onAttach: { showAttachments = true },
+                        onMic: { voiceVM.toggleVoice() }
+                    )
+                    .padding(.horizontal, 16)
+                }
+                .background(JarvisColor.bg_0.opacity(0.92))
+            }
+            .navigationTitle("")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(JarvisColor.bg_0, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("JARVIS")
+                        .font(.custom("CormorantGaramond-SemiBold", size: 22))
+                        .tracking(4)
+                        .foregroundColor(JarvisColor.highlight_blue)
+                }
+                ToolbarItem(placement: .secondaryAction) {
+                    Button { showMeetings = true } label: {
+                        Label("الاجتماعات", systemImage: "person.3.sequence")
+                    }
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Button { showConnection = true } label: {
+                        Image(systemName: "key.horizontal")
+                    }
+                    .accessibilityLabel("إعدادات الاتصال")
+                }
+            }
+            .refreshable { await vm.load() }
             .navigationDestination(item: $newConv) { c in
                 ConversationView(api: api, conversationId: c.id, initialText: c.initialText)
             }
         }
-        .safeAreaInset(edge: .bottom) {
-            VStack(spacing: 0) {
-                AttachmentPreviewBar(attachments: pendingAttachments) { id in
-                    pendingAttachments.removeAll { $0.id == id }
-                }
-                if let err = sendError {
-                    HStack {
-                        Text(err).font(.caption).foregroundColor(.red)
-                        Spacer()
-                        Button("إعادة المحاولة") {
-                            let t = retryText
-                            sendError = nil
-                            Task { await sendMessage(text: t) }
-                        }
-                        .font(.caption).foregroundColor(.blue)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 6)
-                }
-                WorkspaceComposerView(
-                    text: $composerText,
-                    hasAttachments: !pendingAttachments.isEmpty,
-                    onSend: {
-                        let t = composerText.trimmingCharacters(in: .whitespacesAndNewlines)
-                        guard !t.isEmpty || !pendingAttachments.isEmpty else { return }
-                        composerText = ""
-                        Task { await sendMessage(text: t) }
-                    },
-                    onAttach: { showAttachments = true },
-                    onMic: { voiceVM.toggleVoice() }
-                )
-                .padding(.horizontal, 16)
-            }
-            .background(JarvisColor.bg_0.opacity(0.92))
-        }
+        .tint(JarvisColor.highlight_blue)
         .background(
             LinearGradient(colors: [JarvisColor.bg_0, JarvisColor.bg_1], startPoint: .top, endPoint: .bottom)
                 .ignoresSafeArea()
@@ -185,8 +236,15 @@ struct HomeEntryView: View {
             await voiceVM.load()
             voiceVM.handleAppIntentStart()
         }
+        .onDisappear { voiceVM.handleAppBackgrounded() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .background { voiceVM.handleAppBackgrounded() }
+        }
+        .sheet(isPresented: $showMeetings) {
+            MeetingFoundationView()
+        }
+        .sheet(isPresented: $showConnection) {
+            PairingView().environmentObject(enrollment)
         }
         .sheet(isPresented: $showAttachments) {
             AttachmentMenu(
@@ -263,7 +321,7 @@ struct HomeEntryView: View {
             Text(title)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(JarvisColor.text_muted)
-            VStack(spacing: 0) { content() }
+            VStack(spacing: 8) { content() }
         }
     }
 
@@ -289,7 +347,9 @@ struct HomeEntryView: View {
                 .font(.system(size: 12))
                 .foregroundColor(JarvisColor.text_muted)
         }
-        .padding(.vertical, 10)
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: 16).fill(JarvisColor.bg_1.opacity(0.7)))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(JarvisColor.border.opacity(0.55), lineWidth: 1))
     }
 
     /// تشخيص مُمنهج على الشاشة (عبر -diagnostics) — يظهر حالة المصادقة/الـAPI/التنقل بدون Xcode console.
@@ -325,6 +385,10 @@ struct HomeEntryView: View {
                 // مسار الدردشة النصية الحقيقي — إنشاء محادثة ثم الانتقال لشاشة الدردشة (وليس routeVoiceTranscript)
                 if let c = await vm.newConversation() {
                     newConv = ConvID(id: c.id, initialText: text)
+                    composerText = ""
+                    sendError = nil
+                } else {
+                    sendError = vm.newConversationError
                 }
             }
             return
@@ -357,6 +421,7 @@ struct HomeEntryView: View {
             return
         }
         pendingAttachments = []
+        composerText = ""
         sendError = nil
         retryText = ""
     }
@@ -394,6 +459,8 @@ final class HomeEntryViewModel: ObservableObject {
     @Published var deliveries: [DeliveryItem] = []
     @Published var newConversationId: String?
     @Published var newConversationError: String?
+    @Published var loadError: String?
+    @Published private(set) var isCreating = false
     private let api: JarvisAPI
     init(api: JarvisAPI) { self.api = api }
 
@@ -406,24 +473,27 @@ final class HomeEntryViewModel: ObservableObject {
             conversations = c
             activeTasks = t.filter { ["QUEUED", "RUNNING"].contains(($0.jobState ?? $0.status ?? "").uppercased()) }
             deliveries = d
+            loadError = nil
         } catch {
-            conversations = []; activeTasks = []; deliveries = []
+            loadError = JarvisAPIError.message(for: error)
         }
     }
 
     /// إنشاء محادثة حقيقية عبر الـ backend — لا تبتلع الخطأ.
     @discardableResult
     func newConversation() async -> Conversation? {
+        guard !isCreating else { return nil }
+        isCreating = true
+        defer { isCreating = false }
         do {
-            let env: ConversationEnvelope = try await api.postObject("conversations", body: [:])
+            let env: ConversationEnvelope = try await api.postObject("conversations", body: ["create_new": true])
             let c = env.conversation
             newConversationId = c.id
             newConversationError = nil
             return c
         } catch {
-            let msg = "تعذّر بدء محادثة جديدة: \(error.localizedDescription)"
+            let msg = JarvisAPIError.message(for: error)
             newConversationError = msg
-            print("[JARVIS-HOME] newConversation failed: \(error)")
             return nil
         }
     }
@@ -433,4 +503,38 @@ struct ConvID: Identifiable, Hashable {
     let id: String
     let initialText: String?
     init(id: String, initialText: String? = nil) { self.id = id; self.initialText = initialText }
+}
+
+
+/// Honest availability screen shared by phone and desktop until an authorized provider is connected.
+struct MeetingFoundationView: View {
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    Label("التقاط الاجتماعات غير متصل", systemImage: "mic.slash")
+                        .font(.title3.weight(.semibold))
+                        .foregroundColor(JarvisColor.highlight_blue)
+                    Text("لا يوجد تسجيل نشط. سيحتاج الالتقاط إلى ربط خدمة معتمدة وموافقتك وموافقة المشاركين، مع مؤشر تسجيل ظاهر.")
+                        .foregroundColor(JarvisColor.text_muted)
+                    ForEach(["التفريغ", "الملخص", "القرارات", "المهام", "ملفات الاجتماع"], id: \.self) { title in
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(title).font(.headline)
+                            Text("لا توجد بيانات اجتماع محفوظة بعد")
+                                .font(.callout).foregroundColor(JarvisColor.text_muted)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading).padding(18)
+                        .background(RoundedRectangle(cornerRadius: 18).fill(JarvisColor.bg_1))
+                    }
+                }
+                .padding(24).frame(maxWidth: 640)
+            }
+            .frame(maxWidth: .infinity)
+            .background(JarvisColor.bg_0).foregroundColor(JarvisColor.text_primary)
+            .navigationTitle("الاجتماعات")
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("تم") { dismiss() } } }
+        }
+        .tint(JarvisColor.highlight_blue)
+    }
 }

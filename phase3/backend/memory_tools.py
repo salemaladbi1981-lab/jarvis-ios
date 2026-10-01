@@ -46,3 +46,31 @@ def execute_memory_tool(name, args):
         query_type=query_type,
     )
     return {"ok": True, "identity": ident, "query_type": query_type, **r}
+
+
+def personal_memory_queries(text):
+    """Narrow personal-recall intents; ordinary tasks still go to the brain."""
+    q = text.strip().casefold()
+    if any(phrase in q for phrase in ("what is my name", "what's my name", "وش اسمي", "ما اسمي", "تعرف اسمي")):
+        return ["الاسم", "اسمي", "name"]
+    if any(phrase in q for phrase in ("what do you know about me", "وش تعرف عني", "ماذا تعرف عني",
+                                     "what were we", "what did i tell", "وش كنا", "كنا نتكلم", "وش قلت لك")):
+        return ["what were we discussing"]
+    return None
+
+
+def answer_personal_memory(text, ident):
+    """Return only backend evidence, or an explicit miss. Never synthesize a fact."""
+    queries = personal_memory_queries(text)
+    if queries is None:
+        return None
+    snippets = []
+    for query in queries:
+        result = execute_memory_tool("jarvis_recall", {"query": query, **ident})
+        for evidence in result.get("evidence", []):
+            snippet = evidence.get("snippet")
+            if snippet and snippet not in snippets:
+                snippets.append(snippet)
+    if not snippets:
+        return "لا أملك معلومات محفوظة موثّقة تجيب عن ذلك في مساحة العمل الحالية."
+    return "من السجل المحفوظ في مساحة العمل الحالية:\n" + "\n".join("• " + s for s in snippets[:5])

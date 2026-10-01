@@ -1,150 +1,70 @@
 import SwiftUI
-import Foundation
 
-/// macOS Home — approved cinematic desktop direction (three-zone):
-/// Left: nav + connected provider cards (demo-only until live providers are wired)
-/// Center: JARVIS + Core/orbit + title + greeting + waveform/status + suggestions + voice
-/// Right: contextual modules (empty for now — no invented live data)
 #if os(macOS)
+/// Desktop companion uses the same authenticated workspace and cinematic Home.
 struct MacHomeView: View {
-    @StateObject private var vm = HomeViewModel()
-    @State private var selectedTab = "home"
+    @EnvironmentObject private var enrollment: EnrollmentManager
+    @State private var selectedTab: String? = "home"
+    @State private var showConnection = false
 
-    /// Synthetic provider data is permitted only for explicitly launched screenshot/demo sessions.
-    /// Normal production launches must never present mock home/security/media state as live truth.
-    private var demoMode: Bool {
-        ProcessInfo.processInfo.arguments.contains("-demo")
+    private var api: JarvisAPI {
+        enrollment.api ?? JarvisAPI(baseURL: JarvisConfig.baseURL,
+                                   sessionToken: JarvisConfig.injectedSessionToken ?? "")
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            // LEFT zone — nav + provider-backed cards
-            VStack(spacing: JarvisSpacing.md) {
-                macSidebar
-
-                if demoMode {
-                    SmartHomeCard(devices: vm.homeDevices)
-                        .onTapGesture { vm.requestAction(agentID: "core_home", action: "read-temperature") }
-
-                    if let status = vm.securityStatus {
-                        SecurityCard(status: status)
-                            .onTapGesture { vm.requestAction(agentID: "core_home", action: "unlock-door") }
-                    }
-
-                    if let track = vm.mediaTrack, !track.title.isEmpty {
-                        MediaCard(track: track)
-                    }
-                } else {
-                    providerUnavailableCard
-                }
-
-                Spacer()
-            }
-            .frame(width: 340)
-            .padding(JarvisSpacing.lg)
-            .background(JarvisColor.bg_0.opacity(0.5))
-
-            // CENTER zone — hero dominant
-            ScrollView {
-                VStack(spacing: JarvisSpacing.lg) {
+        NavigationSplitView {
+            VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: 5) {
                     Text("JARVIS")
                         .font(.custom("CormorantGaramond-SemiBold", size: 30))
                         .tracking(4)
                         .foregroundColor(JarvisColor.highlight_blue)
-
-                    JarvisHeroView(vm: vm, coreSize: 300)
-
-                    JarvisTitleGreetingView()
-
-                    JarvisWaveformStatusView(vm: vm)
-
-                    QuickSuggestions(commands: QuickCommand.productionCases) { cmd in
-                        Task { await vm.handleQuickCommand(cmd) }
-                    }
-
-                    VoiceInputBar(isListening: vm.isListening) { vm.toggleVoice() }
-
-                    if let approval = vm.pendingApproval {
-                        ApprovalCardView(vm: vm, action: approval)
-                    }
+                    Text("مساحتك الشخصية")
+                        .font(.caption).foregroundColor(JarvisColor.text_muted)
                 }
-                .padding(JarvisSpacing.xl)
-                .frame(maxWidth: .infinity)
-            }
+                .padding(.horizontal, 16)
+                .padding(.top, 24)
 
-            // RIGHT zone — contextual (empty, no invented live data)
-            VStack(spacing: JarvisSpacing.md) {
-                Text("جارفس")
-                    .font(.custom("IBMPlexSansArabic-Bold", size: 18))
-                    .foregroundColor(JarvisColor.text_secondary)
-                Spacer()
-            }
-            .frame(width: 240)
-            .padding(JarvisSpacing.lg)
-            .background(JarvisColor.bg_0.opacity(0.3))
-        }
-        .background(
-            LinearGradient(colors: [JarvisColor.bg_0, JarvisColor.bg_1], startPoint: .top, endPoint: .bottom)
-                .ignoresSafeArea()
-        )
-        .task { await vm.load() }
-    }
-
-    private var providerUnavailableCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("البيانات المباشرة غير متصلة", systemImage: "link.badge.plus")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(JarvisColor.text_secondary)
-            Text("لن يعرض جارفس حالة منزل أو أمان أو وسائط وهمية في وضع الإنتاج.")
-                .font(.system(size: 12))
-                .foregroundColor(JarvisColor.text_muted)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(JarvisSpacing.md)
-        .background(
-            RoundedRectangle(cornerRadius: JarvisRadius.control)
-                .fill(JarvisColor.bg_1.opacity(0.45))
-        )
-        .accessibilityLabel("البيانات المباشرة غير متصلة")
-    }
-
-    private var macSidebar: some View {
-        VStack(spacing: 6) {
-            ForEach(["home", "devices", "car", "more"], id: \.self) { id in
-                let (label, icon) = sideItem(id)
-                Button {
-                    selectedTab = id
-                } label: {
-                    HStack(spacing: JarvisSpacing.md) {
-                        Image(systemName: icon)
-                            .font(.system(size: 15))
-                            .frame(width: 20)
-                        Text(label)
-                            .font(.system(size: 14))
-                        Spacer()
-                    }
-                    .foregroundColor(selectedTab == id ? JarvisColor.highlight_blue : JarvisColor.text_muted)
-                    .padding(.horizontal, JarvisSpacing.md)
-                    .padding(.vertical, JarvisSpacing.sm)
-                    .background(
-                        RoundedRectangle(cornerRadius: JarvisRadius.control)
-                            .fill(selectedTab == id ? JarvisColor.primary_blue.opacity(0.12) : .clear)
-                    )
+                List(selection: $selectedTab) {
+                    Label("الرئيسية", systemImage: "circle.hexagongrid").tag("home")
+                    Label("المحادثات", systemImage: "bubble.left.and.bubble.right").tag("chat")
+                    Label("الوارد", systemImage: "tray").tag("inbox")
+                    Label("المهام", systemImage: "checklist").tag("tasks")
+                    Label("التسليمات", systemImage: "doc").tag("deliveries")
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(label)
-            }
-            Spacer()
-        }
-    }
+                .listStyle(.sidebar)
+                .scrollContentBackground(.hidden)
 
-    private func sideItem(_ id: String) -> (String, String) {
-        switch id {
-        case "home":    return ("الرئيسية", JarvisIconResolver.symbol(for: "nav.home"))
-        case "devices": return ("الأجهزة", JarvisIconResolver.symbol(for: "nav.devices"))
-        case "car":     return ("السيارة", JarvisIconResolver.symbol(for: "nav.car"))
-        default:        return ("المزيد", JarvisIconResolver.symbol(for: "nav.more"))
+                VStack(alignment: .leading, spacing: 12) {
+                    Label("خدمات الأجهزة غير متصلة", systemImage: "link.badge.plus")
+                        .font(.caption).foregroundColor(JarvisColor.text_muted)
+                    Button { showConnection = true } label: {
+                        Label("إعدادات الاتصال", systemImage: "key.horizontal")
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(JarvisColor.highlight_blue)
+                }
+                .padding(16)
+            }
+            .background(JarvisColor.bg_0)
+            .navigationSplitViewColumnWidth(min: 190, ideal: 225, max: 280)
+        } detail: {
+            Group {
+                switch selectedTab {
+                case "chat": ConversationListView(api: api)
+                case "inbox": InboxView(api: api)
+                case "tasks": TasksView(api: api)
+                case "deliveries": DeliveriesView(api: api)
+                default: HomeEntryView(api: api)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(JarvisColor.bg_0)
+        }
+        .tint(JarvisColor.highlight_blue)
+        .sheet(isPresented: $showConnection) {
+            PairingView().environmentObject(enrollment).frame(width: 460, height: 420)
         }
     }
 }

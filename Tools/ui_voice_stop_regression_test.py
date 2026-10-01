@@ -28,14 +28,16 @@ check("Core: coreScale يستخدم micP/outP", 'listening * micP' in core and '
 check("Waveform: perceptual level", 'Level.perceptual' in wave)
 
 # 2) UI touch/scroll لا يوقف الصوت
-check("HomeViewModel: stopListening مرة واحدة فقط (في toggleVoice)", vm.count('stopListening') == 1)
+check("HomeViewModel: stopListening for manual stop and terminal error only", vm.count('stopListening') == 2)
+check("Background invalidates pending voice startup", 'voiceStartGeneration += 1' in vm and 'voiceStartTask?.cancel()' in vm)
+check("Permission completion cannot restart background audio", 'guard !Task.isCancelled, generation == voiceStartGeneration' in vm)
 _bg = vm.find('func handleAppBackgrounded')
 check("HomeViewModel: disconnect في background handling (handleAppBackgrounded)",
       _bg >= 0 and 'disconnect(' in vm[_bg:])
 check("HomeViewModel: interrupt() يدوي فقط داخل toggleVoice (مرة واحدة)", vm.count('.interrupt(') == 1)
 check("HomeViewModel: لا flush في UI handlers", 'flush(' not in vm)
 check("VoiceInputBar في iPad/macOS (منفصل عن HomeView بعد refactor)",
-      'VoiceInputBar' in ipad and 'VoiceInputBar' in mac)
+      'VoiceInputBar' in ipad and 'HomeEntryView(api: api)' in mac)
 
 # 3) AVAudioSession interruption/route handling
 check("VoiceAudioEngine: interruption observer", 'interruptionNotification' in vae and 'handleInterruption' in vae)
@@ -46,7 +48,7 @@ check("VoiceAudioEngine: لا flush على interruption (نحفظ playback)", 'n
 
 # 4) UNAVAILABLE مخفي
 check("QuickCommand: productionCases (verified only)", 'productionCases' in qc and 'capabilityStatus == .verified' in qc)
-for name, f in [("HomeView", home), ("MacHomeView", mac), ("iPadLandscapeView", ipad)]:
+for name, f in [("HomeView", home), ("iPadLandscapeView", ipad)]:
     check(f"{name}: productionCases بدل allCases", 'QuickCommand.productionCases' in f and 'QuickCommand.allCases' not in f)
 
 print(f"\n== RESULT: {PASS} PASS / {FAIL} FAIL ==")

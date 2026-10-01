@@ -300,3 +300,88 @@ public protocol MeetingInputProvider {
     var mode: MeetingInputMode { get }
     var supportsLiveCapture: Bool { get }
 }
+// MARK: - Meeting artifacts (storage contracts; no capture implementation)
+
+/// Identity is supplied by the authenticated backend, never inferred from a transcript.
+public struct MeetingScope: Codable, Equatable, Hashable {
+    public var userID: String
+    public var workspaceID: String
+}
+
+public struct MeetingTranscriptSegment: Codable, Equatable, Identifiable {
+    public var id: String
+    public var speaker: String?
+    public var startSeconds: Double
+    public var endSeconds: Double
+    public var text: String
+}
+
+/// Summaries, decisions and actions retain references to their actual source segments.
+public struct MeetingFinding: Codable, Equatable, Identifiable {
+    public var id: String
+    public var text: String
+    public var sourceSegmentIDs: [String]
+}
+
+public struct MeetingActionItem: Codable, Equatable, Identifiable {
+    public var id: String
+    public var finding: MeetingFinding
+    public var assignee: String?
+    public var dueAt: Date?
+    public var completed: Bool
+}
+
+public struct MeetingArtifactReference: Codable, Equatable, Identifiable {
+    public enum Kind: String, Codable { case transcript, summary, decisions, actionItems, authorizedRecording }
+    public var id: String
+    public var kind: Kind
+    /// Opaque backend attachment ID, not an arbitrary device path or public URL.
+    public var attachmentID: String
+}
+
+public enum MeetingRecordError: Error, Equatable {
+    case invalidIdentity, wrongScope, invalidTranscript, duplicateIdentity, missingEvidence
+}
+
+public struct MeetingRecord: Codable, Equatable, Identifiable {
+    public var id: String { session.id }
+    public var scope: MeetingScope
+    public var session: MeetingSessionDescriptor
+    public var transcript: [MeetingTranscriptSegment]
+    public var summary: [MeetingFinding]
+    public var decisions: [MeetingFinding]
+    public var actionItems: [MeetingActionItem]
+    public var artifacts: [MeetingArtifactReference]
+
+    /// Validate after decoding and before persistence. This does not replace backend authorization.
+    public func validate(for expectedScope: MeetingScope) throws {
+        let identities = [id, scope.userID, scope.workspaceID]
+        guard identities.allSatisfy({ !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else {
+            throw MeetingRecordError.invalidIdentity
+        }
+        guard scope == expectedScope else { throw MeetingRecordError.wrongScope }
+        let groups = [transcript.map(\.id), summary.map(\.id), decisions.map(\.id), actionItems.map(\.id), artifacts.map(\.id)]
+        guard groups.allSatisfy({ Set($0).count == $0.count && $0.allSatisfy { !$0.isEmpty } }) else {
+            throw MeetingRecordError.duplicateIdentity
+        }
+        guard transcript.allSatisfy({ $0.startSeconds.isFinite && $0.endSeconds.isFinite &&
+            $0.startSeconds >= 0 && $0.endSeconds >= $0.startSeconds &&
+            !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else {
+            throw MeetingRecordError.invalidTranscript
+        }
+        let segmentIDs = Set(transcript.map(\.id))
+        let findings = summary + decisions + actionItems.map(\.finding)
+        guard findings.allSatisfy({ !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+            !$0.sourceSegmentIDs.isEmpty && Set($0.sourceSegmentIDs).isSubset(of: segmentIDs) }) else {
+            throw MeetingRecordError.missingEvidence
+        }
+    }
+}
+
+/// Implementations must authenticate every operation, scope reads/writes on the server,
+/// validate records, and treat repeated saves of the same record ID as updates.
+/// No local seeded store or recording fallback is provided.
+public protocol MeetingRecordStore {
+    func load(id: String, scope: MeetingScope) async throws -> MeetingRecord?
+    func save(_ record: MeetingRecord, scope: MeetingScope) async throws
+}

@@ -25,7 +25,7 @@ check("ConversationView يقبل initialText ويرسله تلقائياً", 'in
 # 2) New conversation → visible error + logging
 check("زر بدء محادثة ينتقل فوراً (newConv = ConvID(id: c.id))", 'newConv = ConvID(id: c.id)' in home)
 check("newConversation يرجع Conversation? (لا ابتلاع)", 'func newConversation() async -> Conversation?' in home)
-check("newConversation يسجّل الخطأ", 'print("[JARVIS-HOME] newConversation failed' in home)
+check("newConversation يعرض خطأ مصنّفًا دون تفاصيل حساسة", 'JarvisAPIError.message(for: error)' in home)
 check("newConversation يعرض الخطأ (newConversationError)", 'newConversationError' in home and 'if let nce = vm.newConversationError' in home)
 check("لا catch {} صامت في newConversation", 'catch {}' not in home)
 

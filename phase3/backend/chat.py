@@ -67,11 +67,45 @@ def _verify_attachments(attachments, user_id, workspace_id) -> bool:
     return True
 
 
-def stream_chat(conversation_id: str, text: str, ident: dict, attachments=None, stream_source=None):
+def stream_chat(conversation_id: str, text: str, ident: dict, attachments=None, stream_source=None,
+                client_msg_id=None):
+    # Verify ownership before looking up a receipt, including on replay.
+    if not conversation.ConversationStore().get(conversation_id, ident["user_id"], ident["workspace_id"]):
+        yield _evt("error", {"error_type": "auth_error", "message": "conversation_not_found"})
+        return
+    if not client_msg_id:
+        yield from _execute_chat(conversation_id, text, ident, attachments, stream_source)
+        return
+    import chat_requests
+    scope, state, events = chat_requests.claim(ident, conversation_id, client_msg_id, text, attachments)
+    if state == "complete":
+        yield from events
+        return
+    if state != "new":
+        error = {"running": "request_in_progress", "interrupted": "request_interrupted",
+                 "conflict": "request_conflict"}[state]
+        yield _evt("error", {"error_type": error, "message": error})
+        return
+    terminal = False
+    try:
+        for event in _execute_chat(conversation_id, text, ident, attachments, stream_source):
+            events.append(event)
+            terminal = event["event"] in ("message_complete", "error")
+            chat_requests.record(scope, events, "complete" if terminal else "running")
+            yield event
+    finally:
+        if not terminal:
+            chat_requests.record(scope, events, "interrupted")
+
+
+def _execute_chat(conversation_id: str, text: str, ident: dict, attachments=None, stream_source=None):
     """SSE generator + persistence. stream_source(text, ident, attachments) → iterable من dicts
     بنوع content_delta/tool_call/citation. قابل للحقن للاختبار."""
     user_id = ident["user_id"]
     workspace_id = ident["workspace_id"]
+    ident = dict(ident, conversation_id=conversation_id,
+                 memory_namespace=conversation.memory_namespace_for(user_id, workspace_id, conversation_id),
+                 session_id=ident.get("session_id") or conversation_id)
 
     # auth + conversation ownership
     conv = conversation.ConversationStore().get(conversation_id, user_id, workspace_id)
@@ -160,7 +194,11 @@ def hermes_stream_source(text, ident):
     ملاحظة: الـcontent يُبثّ كقطعة واحدة في هذه النسخة (Hermes /v1/chat/completions
     لا يعيد stream نصيًا عبر هذا المسار)؛ citations/tool_calls تُملأ عند توفر مصدر منظم.
     """
-    import brain_tools
+    import brain_tools, memory_tools
+    recall = memory_tools.answer_personal_memory(text, ident)
+    if recall is not None:
+        yield {"type": "content_delta", "delta": recall}
+        return
     r = brain_tools.execute_brain_tool("jarvis_brain", {"query": text, **ident})
     if not r.get("ok"):
         raise RuntimeError(r.get("error", "provider_error"))

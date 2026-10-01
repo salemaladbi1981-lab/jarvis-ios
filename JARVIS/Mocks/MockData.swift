@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 
 /// Concrete demo providers for P2.2 screenshots / explicitly launched demo mode.
@@ -30,10 +31,10 @@ struct MockSmartHomeProvider: SmartHomeProvider {
 }
 
 struct MockSecurityProvider: SecurityProvider {
-    func status() async -> SecurityStatus {
+    func status() async -> SecurityStatus? {
         guard DemoProviderGate.enabled else {
             // Conservative unknown/unavailable representation: never fabricate "all normal".
-            return SecurityStatus(systemsNormal: false, doorsLocked: false, camerasActive: false)
+            return nil
         }
         return SecurityStatus(systemsNormal: true, doorsLocked: true, camerasActive: true)
     }
@@ -65,9 +66,9 @@ struct MockTaskProvider: TaskProvider {
 }
 
 struct MockMediaProvider: MediaProvider {
-    func nowPlaying() async -> MediaTrack {
+    func nowPlaying() async -> MediaTrack? {
         guard DemoProviderGate.enabled else {
-            return MediaTrack(title: "", artist: "", current: "", duration: "")
+            return nil
         }
         return MediaTrack(title: "Blinding Lights", artist: "The Weeknd", current: "2:06", duration: "3:20")
     }
@@ -98,3 +99,5 @@ final class MockVoiceProvider: VoiceProvider {
 
     func stop() { isListening = false }
 }
+
+#endif

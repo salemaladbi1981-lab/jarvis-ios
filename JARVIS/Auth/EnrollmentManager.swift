@@ -14,7 +14,11 @@ final class EnrollmentManager: ObservableObject {
 
     init(baseURL: URL) {
         self.baseURL = baseURL
+        #if DEBUG
+        self.sessionToken = JarvisConfig.injectedSessionToken ?? KeychainStore.load()
+        #else
         self.sessionToken = KeychainStore.load()
+        #endif
         self.isEnrolled = sessionToken != nil
         if let t = sessionToken {
             wire(t)

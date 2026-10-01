@@ -4,8 +4,8 @@ import UIKit
 #endif
 
 /// Chooses the correct Home layout per platform and orientation.
-/// iOS: single-column (iPhone / iPad portrait) vs iPad two-zone landscape.
-/// macOS: three-zone MacHomeView.
+/// iOS: the same production workspace in every orientation; Home adapts its width.
+/// macOS: shared workspace with a native navigation sidebar.
 struct AdaptiveRootView: View {
     private let forceLandscape = ProcessInfo.processInfo.arguments.contains("-landscape")
 
@@ -21,14 +21,7 @@ struct AdaptiveRootView: View {
         #if os(macOS)
         MacHomeView()
         #else
-        GeometryReader { geo in
-            let isLandscape = geo.size.width > geo.size.height
-            if isIpad && (isLandscape || forceLandscape) {
-                iPadLandscapeView()
-            } else {
-                RootView()
-            }
-        }
+        RootView()
         .onAppear {
             LaunchTiming.mark("adaptiveRoot onAppear")
             if forceLandscape { forceLandscapeOrientation() }

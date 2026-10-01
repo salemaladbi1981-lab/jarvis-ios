@@ -30,7 +30,7 @@ check("زر بدء محادثة ينتقل (newConv = ConvID(id: c.id))", 'newCo
 
 # 4) send button + Enter + no-dup
 check("إرسال عبر sendMessage", 'onSend:' in composer and 'func sendMessage' in home)
-check("Enter مربوط (.onSubmit + submitLabel .send)", '.onSubmit(onSend)' in composer and '.submitLabel(.send)' in composer)
+check("Enter مربوط (.onSubmit + submitLabel .send)", '.onSubmit' in composer and 'if !disabled' in composer and '.submitLabel(.send)' in composer)
 check("no duplicate sends (isSending guard)", 'guard !isSending else { return }' in home)
 
 print(f"\n== RESULT: {PASS} PASS / {FAIL} FAIL ==")

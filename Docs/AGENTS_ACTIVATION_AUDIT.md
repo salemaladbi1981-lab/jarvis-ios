@@ -1,71 +1,55 @@
-# JARVIS — Agents Activation Audit
+# AGENTS_ACTIVATION_AUDIT
 
-Date: 2026-09-20
-Branch: `chatgpt-write-test`
+Audit date: 2026-09-20. Scope: all 21 IDs in the app/backend registry and execution profiles. This is code evidence, not a claim that remote providers or credentials were tested live tonight.
 
-## Executive result
+- **EXISTS:** same ID in app registry, backend registry, and execution profile.
+- **UI_VISIBLE:** “Active orbit” means visible only when actual runtime events arrive; no always-on catalog or fabricated activity.
+- **ROUTABLE:** explicit `jarvis_agent(agent_id)` is supported for all IDs. Local keyword routing remains an observation-only six-agent subset.
+- **BACKEND_SUPPORTED:** execution profile plus real `agent_runner.run_agent` HTTP delegation exists.
+- **HAS_REAL_TOOLS:** local provider handlers actually exist; abstract profile labels such as `scenes` or `video-production` do not count as tools.
+- **EXECUTABLE:** “Conditional” requires a reachable configured Hermes backend and provider authorization. No live credential-dependent execution was attempted.
+- **MOCK_ONLY:** no production agent is intentionally powered by fake success after the integrity fixes. Unavailable is not mock execution.
+- **NEEDS_ACTIVATION:** “Provider” requires real domain integration; “Verify” requires deployment/provider verification rather than invented plumbing.
 
-The repository contains 21 declared specialist profiles, but **declared is not the same as active or tool-verified**.
+| Agent | EXISTS | UI_VISIBLE | ROUTABLE | BACKEND_SUPPORTED | HAS_REAL_TOOLS | EXECUTABLE | MOCK_ONLY | NEEDS_ACTIVATION | Evidence / limitation |
+|---|---|---|---|---|---|---|---|---|---|
+| `core_coordinator` (Coordinator) | Yes | Active orbit | Yes, explicit | Yes, profile/delegation | Yes, limited | Conditional | No | Verify | Email reads, maps, memory, brain delegation |
+| `core_watcher` (Watcher) | Yes | Active orbit | Yes, explicit | Yes, profile/delegation | Unverified remote only | Conditional | No | Provider | No persistent monitoring scheduler or alert provider wired. |
+| `core_producer` (Producer) | Yes | Active orbit | Yes, explicit | Yes, profile/delegation | Yes, limited | Conditional | No | Verify | YouTube search/details/transcript/playback handoff; not video production |
+| `core_dealmaker` (Dealmaker) | Yes | Active orbit | Yes, explicit | Yes, profile/delegation | Unverified remote only | Conditional | No | Provider | Advisory prompt only; no investment or transaction tools. |
+| `core_guardian` (Guardian) | Yes | Active orbit | Yes, explicit | Yes, profile/delegation | Unverified remote only | Conditional | No | Provider | No connected security or reputation provider. |
+| `core_writer` (Writer) | Yes | Active orbit | Yes, explicit | Yes, profile/delegation | Yes, limited | Conditional | No | Verify | Email draft/send; explicit confirmation gate |
+| `core_reviewer` (Reviewer) | Yes | Active orbit | Yes, explicit | Yes, profile/delegation | Unverified remote only | Conditional | No | Provider | Text review prompt; real media inspection tools unverified. |
+| `core_home` (Home) | Yes | Active orbit | Yes, explicit | Yes, profile/delegation | Unverified remote only | Conditional | No | Provider | Smart-home/scenes unavailable; fabricated handlers removed. |
+| `sys_builder` (Builder) | Yes | Active orbit | Yes, explicit | Yes, profile/delegation | Unverified remote only | Conditional | No | Provider | Hermes delegation exists; build/file tools inside remote Hermes unverified. |
+| `sys_coach` (Coach) | Yes | Active orbit | Yes, explicit | Yes, profile/delegation | Unverified remote only | Conditional | No | Provider | Advisory prompt; no live health/fitness provider. |
+| `sys_circle` (Circle) | Yes | Active orbit | Yes, explicit | Yes, profile/delegation | Yes, limited | Conditional | No | Verify | Telegram search/read/draft/send; confirmation gate |
+| `sys_server` (Server) | Yes | Active orbit | Yes, explicit | Yes, profile/delegation | Unverified remote only | Conditional | No | Provider | Advisory prompt; no generic infrastructure mutation or health handler verified. |
+| `sys_architect` (Architect) | Yes | Active orbit | Yes, explicit | Yes, profile/delegation | Unverified remote only | Conditional | No | Verify | Architecture prompt; no verified topology/control provider. |
+| `ct_account` (Account Manager) | Yes | Active orbit | Yes, explicit | Yes, profile/delegation | Unverified remote only | Conditional | No | Verify | Brief/clarification prompt; EventKit is a separate client capability. |
+| `ct_creative` (Creative Director) | Yes | Active orbit | Yes, explicit | Yes, profile/delegation | Unverified remote only | Conditional | No | Verify | Concept prompt; image-generation execution unverified. |
+| `ct_director` (Director) | Yes | Active orbit | Yes, explicit | Yes, profile/delegation | Unverified remote only | Conditional | No | Provider | Shot-list/framing prompt; no video-production execution verified. |
+| `ct_scriptwriter` (Scriptwriter) | Yes | Active orbit | Yes, explicit | Yes, profile/delegation | Unverified remote only | Conditional | No | Verify | Script/dialogue/hook prompt via existing Hermes agent runner. |
+| `ct_prompteng` (Prompt Engineer) | Yes | Active orbit | Yes, explicit | Yes, profile/delegation | Unverified remote only | Conditional | No | Verify | Prompt-writing role; generation-provider execution unverified. |
+| `ct_motion` (Motion Designer) | Yes | Active orbit | Yes, explicit | Yes, profile/delegation | Unverified remote only | Conditional | No | Provider | Motion/pacing advice; no rendering integration verified. |
+| `ct_qc` (QC) | Yes | Active orbit | Yes, explicit | Yes, profile/delegation | Unverified remote only | Conditional | No | Provider | QA prompt; no connected visual QA pipeline verified. |
+| `ct_mkt` (Marketing Reviewer) | Yes | Active orbit | Yes, explicit | Yes, profile/delegation | Yes, limited | Conditional | No | Verify | Instagram profile/insights/media reads; not publishing |
 
-Current safe conclusion:
+## Low-risk activation completed
 
-- 21/21 specialist profiles are structurally declared in `phase3/backend/agent_profiles.py` and the shared registry.
-- Background task execution has an explicit specialist path: `selected_agent` -> `worker._run_agent()` -> `agent_runner.run_agent()` -> Hermes.
-- Without `selected_agent`, background tasks intentionally fall back to `core_coordinator`.
-- Inline text chat currently delegates through `brain_tools.jarvis_brain`; it does not prove that a named specialist profile was selected.
-- `agent_tools.py` declares a `jarvis_agent` tool, but repository evidence does not prove that this tool is part of the active inline-chat provider toolset.
-- The iOS `AgentRouter` provides deterministic local labels/routes for a small subset, but that is not backend execution verification.
-- Enforcement around `agent_runner` is **request-level**. It validates requested tool/capability labels before the Hermes call, but it is not native per-agent Hermes tool enforcement.
-- Therefore broad automatic activation of all 21 agents is **not approved by this audit**.
+`AgentRuntime.agent_for_tool("jarvis_agent", args)` now resolves the requested registered specialist. Previously every explicit specialist call appeared as the coordinator. The same validated ID drives `handoff` and `started` events, so the existing client orbit can show the real specialist. Unknown IDs still resolve safely to the coordinator and the execution handler rejects unknown profiles. No new provider capability was invented or enabled.
 
-## Activation truth table
+`tests_agent_activation.py` checks all 21 profiles/registries, all 21 explicit routes and runtime payloads, invalid IDs, and existing provider routes (four tests). Registries remain identical.
 
-| Layer | Current state | What it proves | What it does not prove |
-| --- | --- | --- | --- |
-| Shared/Backend Registry | 21 profiles declared | IDs, roles, declared capabilities/tool labels exist | Real executable tools or successful runs |
-| iOS AgentRegistry | Registry can be loaded and displayed | UI metadata is present | Server-side execution |
-| iOS AgentRouter | Deterministic routing for a limited subset | Local routing decision can be made | Backend agent was actually run |
-| `agent_runtime.py` | Can score/route across registry data | A candidate agent can be selected | Production path uses that decision |
-| Task worker | Explicit `selected_agent` is honored | Named specialist can be passed to runner | Agent is verified or safe to auto-select |
-| `agent_runner.py` | Profile prompt + declared allowlists + audit/state | Request boundary checks and persistent run evidence | Native Hermes tool restriction |
-| Inline chat | `jarvis_brain` Hermes path | Real brain delegation exists | Named specialist activation |
-| Persistent state | `agent_state.mark_verified()` after success | A specific agent completed a recorded execution | All tools/capabilities of that agent are verified |
+## Material constraints
 
-## Concrete risk found
+- `agent_runner.ENFORCEMENT_TYPE` remains `request-level`. Profile allowlists do not prove enforcement inside remote Hermes. Restrict and verify the deployed Hermes tool profile before enabling sensitive autonomous execution.
+- Native device/home/security/media actions remain unavailable. Approving a UI card cannot manufacture a connected provider.
+- Text-only prompts are useful specialist roles, but are not evidence of operational monitoring, transactions, video rendering, device control, or an external service integration.
+- Meeting Agent is not registered among these 21 agents. Any foundation added tonight must remain explicitly unavailable until its authorized capture/storage/execution contract is implemented.
 
-The strongest blocker to broad activation is enforcement scope. `agent_runner.ENFORCEMENT_TYPE` is explicitly `request-level`. The runner can reject a requested tool/capability that is outside a profile allowlist, but the Hermes runtime itself is not proven to receive a per-agent native tool allowlist. Treating all declared tool labels as real executable bindings would therefore overstate capability and weaken the existing governance model.
+Sources: `JARVIS/Resources/AGENT-REGISTRY.json`, `JARVIS/Agents/AgentRouter.swift`, `JARVIS/Core/JarvisHeroView.swift`, `phase3/backend/AGENT-REGISTRY.json`, `agent_profiles.py`, `agent_runtime.py`, `agent_runner.py`, `realtime.py`, and provider dispatch modules.
 
-## Low-risk activation plumbing implemented
+## Machine-readable activation policy
 
-`phase3/backend/agent_activation.py` now exposes a conservative inventory model that:
-
-- distinguishes `declared` from `verified_explicit`;
-- reports explicit task-selection wiring without calling it verification;
-- keeps automatic routing and safe auto-activation disabled;
-- reports enforcement truthfully as `request-level`;
-- marks native Hermes tool enforcement as unavailable;
-- exposes the last persistent execution evidence only when it exists;
-- labels profile tools as **declared tool labels**, not executable proof.
-
-Portable regression coverage in `Tools/agent_activation_audit_test.py` prevents future changes from silently claiming automatic/live activation without evidence.
-
-## Activation policy after this audit
-
-1. Keep broad automatic specialist routing OFF.
-2. Explicit specialist selection may continue through the existing task-worker path.
-3. A specialist may be promoted from `declared` to `verified_explicit` only after a successful persisted execution record.
-4. A tool should not be described as agent-verified merely because its name appears in a profile allowlist.
-5. Future automatic routing requires either native Hermes per-agent tool enforcement or an equally strong execution boundary with concrete tool bindings and regression evidence.
-6. Sensitive/external actions remain behind the existing approval/tool-guard policy regardless of agent identity.
-
-## Next safe activation candidates
-
-The next candidates should be agents whose work can be completed without consequential external actions (for example writing/review/creative planning) **after** their real execution path is tested. Device control, outbound messaging, finance, home actions, infrastructure mutation, or other consequential agents should remain non-automatic until their concrete tools, approval path, and enforcement are proven individually.
-
-## Status
-
-Phase 2 audit: **COMPLETE**.
-
-Broad agent activation: **BLOCKED BY DESIGN** pending stronger tool enforcement/evidence.
-
-Low-risk activation observability/scaffolding: **IMPLEMENTED**.
+The reconciled `phase3/backend/agent_activation.py` inventory distinguishes declared routes from verified real tools. Registry membership alone does not enable execution. Unknown verification remains activation-required; no unsupported tool is activated by this audit. Its regression checks are in `Tools/agent_activation_audit_test.py`.

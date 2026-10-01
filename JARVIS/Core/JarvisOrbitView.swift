@@ -9,7 +9,7 @@ struct JarvisOrbitView: View {
     var onTapAgent: (AgentOrbitItem) -> Void = { _ in }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { timeline in
+        TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: reduceMotion || orbit.items.isEmpty)) { timeline in
             let t = reduceMotion ? 0.0 : timeline.date.timeIntervalSinceReferenceDate
             Canvas { ctx, size in
                 draw(canvas: &ctx, size: size, time: t)

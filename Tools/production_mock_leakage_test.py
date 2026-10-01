@@ -12,17 +12,14 @@ checks = {
     "demo providers require explicit -demo launch": 'ProcessInfo.processInfo.arguments.contains("-demo")' in mock,
     "smart-home synthetic reads are gated": 'guard DemoProviderGate.enabled else { return [] }' in mock,
     "mock controls cannot report production success": mock.count('DemoProviderGate.enabled') >= 7,
-    "security provider does not fabricate normal production state": 'systemsNormal: false, doorsLocked: false, camerasActive: false' in mock,
+    "security provider does not fabricate normal production state": 'func status() async -> SecurityStatus?' in mock and 'return nil' in mock,
     "mock voice refuses production activation": 'disabledOutsideDemoMode' in mock,
     "calendar tools default to real EventKit": 'init(useMock: Bool = false)' in calendar,
     "home calendar explicitly requests real path": 'CalendarTools(useMock: false)' in home,
-    "mac provider cards require explicit demo mode": (
-        'ProcessInfo.processInfo.arguments.contains("-demo")' in mac_home
-        and 'if demoMode {' in mac_home
-    ),
+    "mac uses the shared real workspace": 'HomeEntryView(api: api)' in mac_home,
     "mac view has no synthetic security fallback": 'SecurityStatus(systemsNormal: true' not in mac_home,
     "mac view has no synthetic media fallback": 'Blinding Lights' not in mac_home,
-    "mac production path states provider unavailability": 'البيانات المباشرة غير متصلة' in mac_home,
+    "mac production path states provider unavailability": 'خدمات الأجهزة غير متصلة' in mac_home,
 }
 
 failed = [name for name, ok in checks.items() if not ok]

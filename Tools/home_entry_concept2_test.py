@@ -17,7 +17,7 @@ check("RootView.tabs → HomeEntryView (التبويب الرئيسي)", 'HomeEn
 check("RootView لا يرجع إلى HomeView القديم", 'HomeView(' not in root)
 
 # 2) HomeEntryView يحتوي النواة السينمائية
-check("HomeEntryView → JarvisHeroView (النواة)", 'JarvisHeroView(vm: voiceVM)' in home)
+check("HomeEntryView → JarvisHeroView (النواة)", 'JarvisHeroView(vm: voiceVM,' in home)
 
 # 3) زر المايك البارز تحت النواة
 check("HomeEntryView → JarvisMicControl (المايك)", 'JarvisMicControl(vm: voiceVM)' in home)

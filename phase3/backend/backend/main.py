@@ -34,9 +34,9 @@ gateway.register(Tool("capability-status", "حالة القدرات", ["sys_serv
     {"type":"object"}, "low", "none"), safe_tools.capability_status)
 
 # Calendar/Reminders read-only tools (mock in backend; EventKit runs client-side)
-def cal_today(params): return {"events": [{"time":"09:00","title":"Marketing Meeting — 09:00"}], "mock": True}
-def cal_next(params): return {"event": {"time":"11:30","title":"Project Review — 11:30"}, "mock": True}
-def rem_upcoming(params): return {"reminders": [{"title":"Review document"}], "mock": True}
+def cal_today(params): return {"ok": False, "error": "device_calendar_required"}
+def cal_next(params): return {"ok": False, "error": "device_calendar_required"}
+def rem_upcoming(params): return {"ok": False, "error": "device_calendar_required"}
 gateway.register(Tool("calendar.today", "أحداث اليوم", ["ct_account"],
     "read today's calendar events", {"type":"object","properties":{}}, {"type":"object"}, "low", "none"), cal_today)
 gateway.register(Tool("calendar.next_event", "الموعد الجاي", ["ct_account"],
@@ -46,7 +46,7 @@ gateway.register(Tool("reminders.upcoming", "التذكيرات القادمة",
 
 # register a high-risk control tool (handler refuses without approval gate)
 def unlock_door(params):
-    return {"door": params.get("door", "front"), "state": "unlocked", "mock": True}
+    return {"ok": False, "error": "not_connected"}
 gateway.register(Tool("unlock-door", "فتح الباب", ["core_home"],
     "unlock a door (requires approval)", {"type":"object","properties":{"door":{"type":"string"}}},
     {"type":"object"}, "high", "action-specific"), unlock_door)

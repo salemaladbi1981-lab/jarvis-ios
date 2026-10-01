@@ -1,0 +1,37 @@
+name: Work branch verification
+on:
+  push:
+    branches: [chatgpt-write-test]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: work-branch-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install fastapi 'httpx<0.28' pydantic Pillow
+      - run: python Tools/verify_overnight.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: portable-regression-evidence
+          path: build/overnight
+  apple:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shared Swift regression tests
+        run: swift test
+      - name: iPhone simulator build
+        run: xcodebuild build -project JARVIS.xcodeproj -scheme JARVIS -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build/ios CODE_SIGNING_ALLOWED=NO
+      - name: Mac companion build
+        run: xcodebuild build -project JARVIS.xcodeproj -target 'JARVIS Mac' -sdk macosx CODE_SIGNING_ALLOWED=NO
+      - name: Native macOS unit tests
+        run: xcodebuild test -project JARVIS.xcodeproj -scheme JARVISTestsMac -destination 'platform=macOS' -derivedDataPath build/mac-tests CODE_SIGNING_ALLOWED=NO

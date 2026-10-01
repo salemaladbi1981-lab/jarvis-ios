@@ -1,6 +1,5 @@
 import SwiftUI
 
-// MARK: - Shared card chrome
 struct JarvisCard<Content: View>: View {
     @ViewBuilder var content: Content
     var body: some View {
@@ -16,121 +15,85 @@ struct DemoBadge: View {
         Text("تجريبي")
             .font(.system(size: 11, weight: .semibold))
             .foregroundColor(JarvisColor.warning_demo)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
+            .padding(.horizontal, 8).padding(.vertical, 3)
             .background(Capsule().fill(JarvisColor.warning_demo.opacity(0.12)))
     }
 }
 
-// MARK: - Smart Home card (2×2 grid)
+struct UnavailableCapability: View {
+    let message: String
+    var body: some View {
+        Label(message, systemImage: "link.badge.plus")
+            .font(.system(size: 13))
+            .foregroundColor(JarvisColor.text_muted)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
 struct SmartHomeCard: View {
     let devices: [SmartDevice]
     var body: some View {
         JarvisCard {
             VStack(alignment: .leading, spacing: JarvisSpacing.md) {
-                HStack {
-                    Text("المنزل")
-                        .font(.system(size: JarvisSpacing.lg, weight: .bold))
-                        .foregroundColor(JarvisColor.text_primary)
-                    Spacer()
-                    DemoBadge()
-                }
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: JarvisSpacing.md) {
-                    ForEach(devices) { d in
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(d.name)
-                                .font(.system(size: 13))
-                                .foregroundColor(JarvisColor.text_muted)
-                            Text(d.value)
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundColor(JarvisColor.text_primary)
+                Label("المنزل", systemImage: "house")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(JarvisColor.text_primary)
+                if devices.isEmpty {
+                    UnavailableCapability(message: "المنزل الذكي غير متصل")
+                } else {
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: JarvisSpacing.md) {
+                        ForEach(devices) { device in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(device.name).font(.caption).foregroundColor(JarvisColor.text_muted)
+                                Text(device.value).font(.body).foregroundColor(JarvisColor.text_primary)
+                            }.frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(JarvisSpacing.md)
-                        .background(RoundedRectangle(cornerRadius: JarvisRadius.control).fill(JarvisColor.bg_0.opacity(0.5)))
                     }
                 }
-            }
+            }.frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }
 
-// MARK: - Security card
 struct SecurityCard: View {
-    let status: SecurityStatus
+    let status: SecurityStatus?
     var body: some View {
         JarvisCard {
             VStack(alignment: .leading, spacing: JarvisSpacing.md) {
-                HStack {
-                    Label("الأمان", systemImage: JarvisIconResolver.symbol(for: "sec.shield"))
-                        .font(.system(size: JarvisSpacing.lg, weight: .bold))
-                        .foregroundColor(JarvisColor.text_primary)
-                    Spacer()
-                    DemoBadge()
-                }
-                Text("جميع الأنظمة طبيعية")
-                    .font(.system(size: 13))
-                    .foregroundColor(JarvisColor.success)
-                HStack(spacing: JarvisSpacing.lg) {
-                    statusRow(icon: "sec.lock", label: "الأبواب مقفلة", ok: status.doorsLocked)
-                    statusRow(icon: "sec.camera", label: "الكاميرات تعمل", ok: status.camerasActive)
+                Label("الأمان", systemImage: "shield")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(JarvisColor.text_primary)
+                if let status {
+                    Text(status.systemsNormal ? "الأنظمة طبيعية" : "تحتاج الأنظمة إلى مراجعة")
+                    Label(status.doorsLocked ? "الأبواب مقفلة" : "الأبواب غير مقفلة", systemImage: status.doorsLocked ? "lock" : "lock.open")
+                    Label(status.camerasActive ? "الكاميرات تعمل" : "الكاميرات غير نشطة", systemImage: "video")
+                } else {
+                    UnavailableCapability(message: "نظام الأمان غير متصل — الحالة غير معروفة")
                 }
             }
-        }
-    }
-    private func statusRow(icon: String, label: String, ok: Bool) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: JarvisIconResolver.symbol(for: icon))
-                .font(.system(size: 13))
-                .foregroundColor(JarvisColor.primary_blue)
-            Text(label)
-                .font(.system(size: 12))
-                .foregroundColor(JarvisColor.text_secondary)
+            .font(.system(size: 13))
+            .foregroundColor(JarvisColor.text_secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }
 
-// MARK: - Media card
 struct MediaCard: View {
-    let track: MediaTrack
+    let track: MediaTrack?
     var body: some View {
         JarvisCard {
             VStack(alignment: .leading, spacing: JarvisSpacing.md) {
-                HStack { DemoBadge(); Spacer() }
-                HStack(spacing: JarvisSpacing.md) {
-                    RoundedRectangle(cornerRadius: JarvisRadius.control)
-                        .fill(LinearGradient(colors: [JarvisColor.primary_blue, JarvisColor.bg_1], startPoint: .topLeading, endPoint: .bottomTrailing))
-                        .frame(width: 56, height: 56)
-                        .overlay(Text("BL").font(.system(size: 20, weight: .bold)).foregroundColor(.white.opacity(0.9)))
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(track.title)
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundColor(JarvisColor.text_primary)
-                        Text(track.artist)
-                            .font(.system(size: 12))
-                            .foregroundColor(JarvisColor.text_muted)
-                        Text("\(track.current) / \(track.duration)")
-                            .font(.system(size: 11))
-                            .foregroundColor(JarvisColor.text_muted.opacity(0.7))
-                    }
-                    Spacer()
+                Label("الوسائط", systemImage: "music.note")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(JarvisColor.text_primary)
+                if let track {
+                    Text(track.title).font(.body).foregroundColor(JarvisColor.text_primary)
+                    Text(track.artist).font(.caption).foregroundColor(JarvisColor.text_muted)
+                    Text("\(track.current) / \(track.duration)").font(.caption)
+                } else {
+                    UnavailableCapability(message: "لا يوجد مشغّل وسائط متصل")
                 }
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(JarvisColor.primary_blue.opacity(0.15)).frame(height: 4)
-                        Capsule().fill(JarvisColor.primary_blue).frame(width: geo.size.width * 0.6, height: 4)
-                    }
-                }
-                .frame(height: 4)
-                HStack(spacing: JarvisSpacing.xl) {
-                    Spacer()
-                    Image(systemName: JarvisIconResolver.symbol(for: "media.previous")).font(.system(size: 16)).foregroundColor(JarvisColor.text_primary)
-                    Image(systemName: JarvisIconResolver.symbol(for: "media.play")).font(.system(size: 20)).foregroundColor(JarvisColor.text_primary)
-                    Image(systemName: JarvisIconResolver.symbol(for: "media.next")).font(.system(size: 16)).foregroundColor(JarvisColor.text_primary)
-                    Spacer()
-                }
-                .accessibilityLabel("أزرار التحكم بالموسيقى")
-            }
+            }.frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }

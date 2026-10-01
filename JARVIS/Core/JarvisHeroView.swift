@@ -45,10 +45,10 @@ struct JarvisTitleGreetingView: View {
             Text("جارفس")
                 .font(.custom("IBMPlexSansArabic-Bold", size: 30))
                 .foregroundColor(JarvisColor.text_primary)
-            Text("مساء الخير يا دكتور.")
+            Text("جاهز عندما تحتاجني")
                 .font(.system(size: 16))
                 .foregroundColor(JarvisColor.text_secondary)
-            Text("كل شيء تحت السيطرة.")
+            Text("تحدث، اكتب، أو ابدأ فكرة جديدة.")
                 .font(.system(size: 13))
                 .foregroundColor(JarvisColor.text_muted)
         }
@@ -127,17 +127,18 @@ struct JarvisMicControl: View {
                         .fill(coreColor.opacity(0.14))
                         .frame(width: 96, height: 96)
                     Circle()
-                        .fill(coreColor.opacity(0.30))
+                        .fill(LinearGradient(colors: [coreColor.opacity(0.85), coreColor.opacity(0.35)], startPoint: .topLeading, endPoint: .bottomTrailing))
                         .frame(width: 74, height: 74)
                     Image(systemName: iconName)
                         .font(.system(size: 30, weight: .medium))
-                        .foregroundColor(.white)
+                        .foregroundColor(JarvisColor.text_primary)
                 }
                 .shadow(color: coreColor.opacity(isActive ? 0.55 : 0.20), radius: isActive ? 24 : 10, x: 0, y: 0)
                 .overlay(Circle().stroke(coreColor.opacity(isActive ? 0.6 : 0.28), lineWidth: 1.5))
             }
             .buttonStyle(.plain)
             .accessibilityLabel(micLabel)
+            .accessibilityHint("اضغط لبدء الصوت أو إيقافه. أثناء الرد، اضغط للمقاطعة اليدوية.")
 
             Text(micLabel)
                 .font(.system(size: 13, weight: .medium))
@@ -164,7 +165,7 @@ struct JarvisMicControl: View {
         case .thinking: return "أفكر…"
         case .speaking: return "اضغط للمقاطعة"
         case .executing: return "أُنفّذ…"
-        case .alert: return "حدث خطأ"
+        case .alert: return "اضغط لإعادة المحاولة"
         case .approval: return "بانتظار موافقتك"
         }
     }

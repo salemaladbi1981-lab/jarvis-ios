@@ -20,7 +20,7 @@ public struct SmartDevice: Identifiable {
 
 // MARK: - Security
 public protocol SecurityProvider {
-    func status() async -> SecurityStatus
+    func status() async -> SecurityStatus?
     func execute(action: String) async throws -> Bool
 }
 
@@ -54,7 +54,7 @@ public struct TaskItem: Identifiable {
 
 // MARK: - Media
 public protocol MediaProvider {
-    func nowPlaying() async -> MediaTrack
+    func nowPlaying() async -> MediaTrack?
     func send(command: String) async throws -> Bool  // previous / play / next
 }
 
@@ -90,4 +90,23 @@ public protocol AgentStateProvider {
     var activeGroup: String { get }
     func setState(_ s: JarvisState)
     func setGroup(_ g: String)
+}
+
+/// Production defaults until authorized integrations are connected.
+/// Absence is distinct from an unlocked door, a stopped player, or an empty home.
+enum ProviderUnavailable: Error { case notConnected }
+
+struct UnavailableSmartHomeProvider: SmartHomeProvider {
+    func readDevices() async -> [SmartDevice] { [] }
+    func control(device: String, action: String) async throws -> Bool { throw ProviderUnavailable.notConnected }
+}
+
+struct UnavailableSecurityProvider: SecurityProvider {
+    func status() async -> SecurityStatus? { nil }
+    func execute(action: String) async throws -> Bool { throw ProviderUnavailable.notConnected }
+}
+
+struct UnavailableMediaProvider: MediaProvider {
+    func nowPlaying() async -> MediaTrack? { nil }
+    func send(command: String) async throws -> Bool { throw ProviderUnavailable.notConnected }
 }
