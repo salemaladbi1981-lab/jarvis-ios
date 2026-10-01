@@ -1,0 +1,35 @@
+commit_sha	subject
+ae28e8e46ee7d51ab6c8a63ffc20e3576e5b1e7c	fix: stabilize authenticated chat streaming and voice recovery
+36a7ec0d335c7b864ac4acbe00b0ea4bca536d12	fix: remove fabricated production provider and card state
+c76479419634be64a421cacf5ca450ea21dca1dd	fix: isolate production memory and authenticate voice identity
+b4c90e5d8b7ba6c5492bb9774c6fa260611dc289	fix: route specialist runtime events and audit all agents
+6f63199c86b43bb7c33a279fb7efd0e2d8a54230	fix(chat): harden SSE auth errors, timeout and retry dedup
+dc26fc8845731e0936160fcd202d0f552159b556	docs(stability): record Phase 1 gate and CI requirements
+0c64b240a9136880595d787404b065a09ca40a45	fix(stability): gate demo providers out of production behavior
+47cff88e19b6a94a0dd9ae3ded78300804234c03	test(stability): prevent production mock-provider leakage regressions
+ac94d8a43afc6065abcd21ba88fdad74be764aaa	test(stability): verify default launch cannot expose demo provider data
+59072e9f957c82157929f96acbf7cd77fd877f21	fix(api): enforce auth timeout and HTTP validation on every request
+c2693e772ffd2b438d33c6f040d42396c62bd6fb	fix(auth): harden enrollment transport and keychain persistence
+b245c27cfd51b5c40c7e4012290dfd26e9a1d6e5	feat(agents): add conservative activation inventory
+9f5717529e6bf78dbb189636b2ed4b497d71af0c	test(agents): guard activation claims and verification state
+efc5a6ee73a5a9ff2e6c7473798d4b38ad8ff605	docs(agents): complete activation audit with enforcement boundary
+24541db6f989dced438fe91a4dabf31848126d7d	feat(meetings): add consent-gated shared meeting foundation
+705fc1988ba57f69b066cc0de01e85cab9f7c3ed	test(meetings): enforce authorization and consent gates
+59e8db996c20d9b88fc601afb3652273f48a12cb	docs(release): define Build 5 readiness and remaining gates
+4e16a55f1a145e25496485c7a68c0c50a8e999b7	feat(meetings): enforce shared meeting session lifecycle
+0c039d787939df4e0dad97113a0a1fed3b0ed958	docs(release): record green CI and meeting lifecycle gate
+1a3a881e979bb475730bf0765083e3da8d710eeb	fix(mac): stop production fallback mock leakage
+7d781e14fd4b13562288c04bbf7197c478ee8c04	test(mac): guard against production mock UI fallbacks
+1fbe9cf94513f62f9d27eb9808cfaabde9d271ec	feat(meetings): add consent-safe session coordinator
+df0d254557039421141cb633ad7b26d7927d3eec	fix(meetings): stop live sessions on consent revocation
+4983f4aa4138074debbbb6314966214fa1c366ad	feat: polish cinematic workspace and share it with Mac companion
+a8c10b3a3007dd17e64332857d2b1cbdd0acc28f	ci: verify sprint changes on the authorized work branch
+fbf323b6f5f9acfe8147d3e3d37372998a06252f	merge: reconcile work-branch stability and meeting consent safeguards
+b4b5c84c37bac731a260e220058cdf4e415a7e4b	feat: define scoped meeting artifacts and honest availability screen
+ad5c91fcf9e71dc49d15e71b86e597611ee06d17	Integrate verified overnight stability, memory isolation, cinematic workspace and meeting foundation
+407207abfae23493610d6c4b72261dd67b112571	merge: record verified GitHub publication without rewriting local history
+f7772be0b90d5a609df375e280eabc7245a13192	fix: enable native iOS regression gate and unique task notifications
+fc43c39438c73f464df24d9013baff7efa98760a	fix: enable native iOS regression gate and unique task notifications
+7b4fb7b3502a8f04691cbea5ffc647d273fa5222	fix: exclude recall questions and assistant guesses from identity evidence
+b00cb921b5995217ddd35e0b41ae80ae27d5e227	fix: exclude recall questions and assistant guesses from identity evidence
+28000a16358e1d2678b4135bae099a31c2948457	merge: reconcile final verified work-branch publication
