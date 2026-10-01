@@ -90,6 +90,28 @@ class ProductionMemoryTests(unittest.TestCase):
             self.assertNotIn('scoped-personal-answer-502', result[0]['delta'])
             self.assertIn('لا أملك', result[0]['delta'])
 
+    def test_persisted_recall_questions_are_not_personal_facts(self):
+        ident = self.ident(user='fresh-recall-owner')
+        conv = conversation.ConversationStore().create(ident['user_id'], ident['workspace_id'])
+        cid = conv['conversation_id']
+        for _ in range(2):
+            list(chat.stream_chat(cid, 'what is my name', ident))
+            saved = messages.MessageStore().list(cid)
+            self.assertIn('لا أملك معلومات محفوظة', saved[-1]['content'])
+        messages.MessageStore().add(cid, 'assistant', 'Your name is fabricated-canary',
+                                    user_id=ident['user_id'], workspace_id=ident['workspace_id'])
+        list(chat.stream_chat(cid, 'what is my name', ident))
+        self.assertIn('لا أملك معلومات محفوظة', messages.MessageStore().list(cid)[-1]['content'])
+
+    def test_user_stated_identity_remains_retrievable_after_question(self):
+        ident = self.ident(user='real-fact-owner')
+        conv = conversation.ConversationStore().create(ident['user_id'], ident['workspace_id'])
+        cid = conv['conversation_id']
+        messages.MessageStore().add(cid, 'user', 'My name is user-stated-canary',
+                                    user_id=ident['user_id'], workspace_id=ident['workspace_id'])
+        list(chat.stream_chat(cid, 'what is my name', ident))
+        self.assertIn('user-stated-canary', messages.MessageStore().list(cid)[-1]['content'])
+
     def test_voice_socket_requires_session_and_rejects_locked_workspace(self):
         client = TestClient(app)
         with self.assertRaises(WebSocketDisconnect) as rejected:

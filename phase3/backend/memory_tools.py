@@ -69,6 +69,16 @@ def answer_personal_memory(text, ident):
         result = execute_memory_tool("jarvis_recall", {"query": query, **ident})
         for evidence in result.get("evidence", []):
             snippet = evidence.get("snippet")
+            if evidence.get("source") == "conversation_log":
+                # The current user turn is already persisted before retrieval.
+                # A recall question (or our previous recall response) is not a stored fact.
+                if not snippet or personal_memory_queries(snippet) is not None:
+                    continue
+                if snippet.startswith(("من السجل المحفوظ", "لا أملك معلومات محفوظة")):
+                    continue
+                # A model's prior claim about a name is not user-provided identity evidence.
+                if queries == ["الاسم", "اسمي", "name"] and evidence.get("role") != "user":
+                    continue
             if snippet and snippet not in snippets:
                 snippets.append(snippet)
     if not snippets:

@@ -1,4 +1,4 @@
-# Production memory audit — 2026-09-20
+# Production memory audit — 2026-09-20, reverified 2026-10-01
 
 ## Verified in code and isolated tests
 
@@ -8,7 +8,7 @@
 - Narrow personal-recall questions (name, previous discussion) read backend memory evidence directly. A miss returns an explicit no-stored-information answer; it does not ask a model to guess.
 - `jarvis_recall` reads persisted memory and message records. All conversation-log evidence requires both user and workspace ownership. Owner legacy USER.md and flat memory files are available only in PERSONAL.
 - Voice sockets require an enrolled session. Tool identity fields override model arguments using the server-authenticated identity, including workspace and namespace.
-- `tests_memory_production.py`: nine executable tests cover isolated real temporary stores, identity forgery, socket authorization, stable namespaces, no seeded fallback, and direct personal-question routing. `tests_memory_isolation.py` also passes.
+- `tests_memory_production.py`: eleven executable tests cover isolated real temporary stores, identity forgery, socket authorization, stable namespaces, no seeded fallback, and direct personal-question routing. `tests_memory_isolation.py` also passes.
 
 ## Deployment and physical verification still required
 
@@ -17,3 +17,5 @@ These checks verify repository code, not the currently deployed backend or its s
 Legacy Hermes `state.db` rows without explicit workspace ownership are deliberately excluded. Migrate those rows only after establishing their provenance. No production memory file, credential, or database was modified during this sprint.
 
 Broader semantic memory questions still use Hermes under the scoped session namespace. The remote Hermes tool implementation and isolation require deployment-side verification; prompt instructions alone are not proof of remote enforcement.
+
+The real Swift-to-HTTP probe additionally exposed and now guards against treating a persisted recall question as its own answer. Personal-name evidence excludes prior assistant claims; repeated recall prompts and generated recall summaries do not become facts. A genuine user-stated identity remains retrievable. The probe in `Tests/Integration/ChatHTTPProbe.swift` requires an explicitly configured localhost test session, creates a disposable conversation and checks the streamed memory miss plus duplicate-free refresh.
