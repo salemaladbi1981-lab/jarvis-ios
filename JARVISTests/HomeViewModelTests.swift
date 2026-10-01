@@ -21,6 +21,15 @@ final class HomeViewModelTests: XCTestCase {
         XCTAssertNil(vm.mediaTrack, "production launch must not expose a synthetic now-playing track")
     }
 
+    @MainActor
+    func testNotificationIdentifiersDoNotReplaceOtherTaskNotifications() {
+        let first = NotificationManager.makeNotificationIdentifier()
+        let second = NotificationManager.makeNotificationIdentifier()
+        XCTAssertNotEqual(first, second)
+        XCTAssertTrue(first.hasPrefix("jarvis-"))
+        XCTAssertNotNil(UUID(uuidString: String(first.dropFirst(7))))
+    }
+
     func testMeetingMetadataDoesNotRequestCaptureAuthorization() {
         let decision = MeetingCapturePolicy.evaluate(
             inputMode: .metadataOnly,

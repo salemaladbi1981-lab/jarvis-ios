@@ -7,6 +7,13 @@
       </BuildActionEntry>
     </BuildActionEntries>
   </BuildAction>
+  <TestAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.DebuggerFoundation.Launcher.LLDB" shouldUseLaunchSchemeArgsEnv="YES">
+    <Testables>
+      <TestableReference skipped="NO">
+        <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="A6F4EE0F5949DF936F2CC9E7" BuildableName="JARVISTests.xctest" BlueprintName="JARVISTests" ReferencedContainer="container:JARVIS.xcodeproj"/>
+      </TestableReference>
+    </Testables>
+  </TestAction>
   <LaunchAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.DebuggerFoundation.Launcher.LLDB" launchStyle="0" useCustomWorkingDirectory="NO" ignoresPersistentStateOnLaunch="NO" debugDocumentVersioning="YES" debugServiceExtension="internal" allowLocationSimulation="YES">
     <BuildableProductRunnable runnableDebuggingMode="0">
       <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="313D1D8C940A691E75ECFB5A" BuildableName="JARVIS.app" BlueprintName="JARVIS" ReferencedContainer="container:JARVIS.xcodeproj"/>

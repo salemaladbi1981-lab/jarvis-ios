@@ -52,10 +52,12 @@ final class NotificationManager: NSObject, ObservableObject {
         content.userInfo = ["jarvis_deep_link": target.url]
 
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: max(1, delaySeconds), repeats: false)
-        let request = UNNotificationRequest(identifier: "jarvis-\\(UUID().uuidString)", content: content, trigger: trigger)
+        let request = UNNotificationRequest(identifier: Self.makeNotificationIdentifier(), content: content, trigger: trigger)
         UNUserNotificationCenter.current().add(request)
         Task { await self.refreshStatus() }
     }
+
+    static func makeNotificationIdentifier() -> String { "jarvis-\(UUID().uuidString)" }
 
     /// إزالة الإشعارات المعلّقة (عند فتح العنصر مباشرة أو عند الإلغاء).
     func cancelPending() {
@@ -83,14 +85,14 @@ final class NotificationManager: NSObject, ObservableObject {
 
 extension NotificationManager: UNUserNotificationCenterDelegate {
     /// تقديم الإشعار في المقدمة (foreground) — بدون إسقاطه بصمت.
-    func userNotificationCenter(_ center: UNUserNotificationCenter,
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
                                 willPresent notification: UNNotification,
                                 withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
         completionHandler([.banner, .sound])
     }
 
     /// ضغطة الإشعار (مقدمة/خلفية/تطبيق مقتول) → deep-link للعنصر الصحيح.
-    func userNotificationCenter(_ center: UNUserNotificationCenter,
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
                                 didReceive response: UNNotificationResponse,
                                 withCompletionHandler completionHandler: @escaping () -> Void) {
         let info = response.notification.request.content.userInfo

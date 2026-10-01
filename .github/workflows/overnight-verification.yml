@@ -31,6 +31,8 @@ jobs:
         run: swift test
       - name: iPhone simulator build
         run: xcodebuild build -project JARVIS.xcodeproj -scheme JARVIS -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build/ios CODE_SIGNING_ALLOWED=NO
+      - name: Native iOS unit tests
+        run: bash Tools/run_ios_tests.sh
       - name: Mac companion build
         run: xcodebuild build -project JARVIS.xcodeproj -target 'JARVIS Mac' -sdk macosx CODE_SIGNING_ALLOWED=NO
       - name: Native macOS unit tests
